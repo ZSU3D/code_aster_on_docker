@@ -50,7 +50,7 @@ subroutine hujmat(fami, kpg, ksp, mod, imat,&
     integer :: ndt, ndi, nvi, imat, kpg, ksp
     real(kind=8) :: materf(22, 2), tempf, nu21, nu31, nu32
     character(len=16) :: phenom
-    character(len=8) :: mod, nomc(25)
+    character(len=8) :: mod, nomc(24)
     character(len=*) :: fami
     integer :: icodre
     integer :: cerr(24)
@@ -90,7 +90,6 @@ subroutine hujmat(fami, kpg, ksp, mod, imat,&
     nomc(22)= 'RI_CYC  '
     nomc(23)= 'DILA    '
     nomc(24)= 'PTRAC   '
-    nomc(25)= 'DFUNC   '
 !af fin
 !
     materf(:,:)=0.d0

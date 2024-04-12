@@ -1,0 +1,269 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: irmela.zentner at edf.fr
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',))
+#
+#
+#################################################
+#
+###########################################################################
+# D : SIMULATION POUR DSP COMPATIBLE AVEC UN SPECTRA : FIT EN MOYENNE
+###########################################################################
+#
+##
+###############################
+# DEFINITION DE DU SPECTRE CIBLE
+##############################
+
+SRO_NGA=DEFI_FONCTION(  NOM_PARA='FREQ',  INTERPOL='LOG',PROL_DROITE='CONSTANT',
+                          VALE=(0.1000,  0.0080,
+                                0.1333,  0.0127,0.2000, 0.0245,0.2500, 0.0303, 0.3333,  0.0414,0.5000, 0.0666,
+                                0.6667, 0.0922,1.0000,  0.1415,1.3333,  0.1843,2.0000,  0.2650, 2.5000,  0.3033, 3.3333,
+                                0.3430, 4.0000,  0.3647,5.0000, 0.3916,6.6667, 0.3807,10.0000, 0.3183,12.5000, 0.2648,20.0000, 
+                                0.2056,25.0000, 0.1901,33.3333, 0.1719, 50.0000, 0.1618,  100.0000, 0.1593,) )
+
+###UN_SIGMA
+SIG_NGA=DEFI_FONCTION(  NOM_PARA='FREQ',  INTERPOL='LIN',PROL_DROITE='CONSTANT',
+                          VALE=(  0.1000, 0.0182, 0.1333,0.0272,  0.2000,0.0494,  0.2500,0.0579,  0.3333, 0.0791,  0.5000,0.1267,  0.6667,0.1742,
+                                  1.0000, 0.2637,    1.3333, 0.3397,  2.0000, 0.4782,   2.5000,0.5432,   3.3333, 0.6112,  4.0000, 0.6468,
+                                  5.0000,  0.6930,   6.6667, 0.6778,  10.0000, 0.5653,  12.5000, 0.4671,  20.0000,  0.3545,   25.0000, 0.3248,   33.3333, 0.2902,
+                                  50.0000,    0.2697, 100.0000,    0.2653,) )
+
+
+
+L_FREQ = DEFI_LIST_REEL(DEBUT=0.05,
+              INTERVALLE=(  _F(JUSQU_A=1.0, PAS=0.1,), _F(JUSQU_A=10., PAS=1.,),
+                           _F(JUSQU_A=30.0, PAS=5.0,), _F(JUSQU_A=60.0, PAS=10.,),
+                        ) );
+
+L_FREQ2 = DEFI_LIST_REEL(DEBUT=0.05, INTERVALLE=(_F(JUSQU_A=0.1, PAS=0.01,),_F(JUSQU_A=60.0, PAS=0.01,),) );
+
+amor=0.05
+TSM=10.00
+amo_sro=0.05
+ZPA=0.1593 
+ZPA_50=0.1618
+SA_25=0.1901
+tini=2.5
+SA_1=0.1415
+SA_013=0.0127
+############################################
+## on teste NBTIR>1, NB_ITER=30, COEF_CORR
+#############################################
+
+nbtir=5
+fc=0.05
+
+ACCE1a=GENE_ACCE_SEISME( INFO =2,
+              INIT_ALEA=200000,
+              PAS_INST = 0.01, PESANTEUR =9.81,DUREE_PHASE_FORTE =TSM, NB_TIRAGE = nbtir,
+              NB_POIN = 2**11, FREQ_FILTRE = fc, FREQ_CORNER = fc,
+              SPEC_MOYENNE  = _F(SPEC_OSCI  =SRO_NGA, AMOR_REDUIT=amor, METHODE='NIGAM',
+                                       LIST_FREQ = L_FREQ2, NB_ITER = 23),
+               MODULATION      = _F(TYPE="GAMMA",INST_INI=tini, ),)
+
+
+
+ACCE1b=GENE_ACCE_SEISME( INFO =2,
+              INIT_ALEA=100000,
+              PAS_INST = 0.01, PESANTEUR =9.81,DUREE_PHASE_FORTE =TSM, NB_TIRAGE = nbtir,
+              NB_POIN = 2**11, FREQ_FILTRE = fc, FREQ_CORNER = fc, COEF_CORR = 0.5,
+              SPEC_MOYENNE  = _F(SPEC_OSCI  =SRO_NGA, AMOR_REDUIT=amor, METHODE='NIGAM',
+                                LIST_FREQ = L_FREQ2, NB_ITER = 30, ERRE_ZPA=(0.2,),
+                                            ERRE_RMS=(0.4, ),  ERRE_MAX=(0.4, ),),
+               MODULATION      = _F(TYPE="GAMMA",INST_INI=tini, ),)
+
+pga = 0.1593*9.81
+pp1s = 0.2653*9.81
+pm1s = 0.09565*9.81
+
+IMPR_ACCE_SEISME(TABLE=ACCE1a, TITRE = 'test1',
+                 NOCI_REFE=_F(AMAX = (pm1s,pga,pp1s), 
+                              VMAX = (0.09,0.2,1.5),
+                             DMAX = (0.05, 0.09,0.12),
+                              ),
+                 SPEC_OSCI = SRO_NGA,
+                 LIST_FREQ = L_FREQ,
+                 DUREE = 16.,
+                 )
+
+
+IMPR_ACCE_SEISME(TABLE=ACCE1b, TITRE = 'test2',
+                 NOCI_REFE=_F(INTE_ARIAS = (2e-3,1,2e2),
+                              DUREE_PHASE_FORTE = (TSM/1.5,TSM,TSM*1.5),
+                              VITE_ABSO_CUMU = (2e-3,1,2e2),
+                              ACCE_SUR_VITE = (2e-3,1,2e2),
+                              ),
+                 SPEC_OSCI = SRO_NGA,
+                 FREQ_MIN = 1.,
+                 FREQ_MAX = 10.,
+                 )
+
+
+# Calcul spectre median 
+FONC1a=[None]*(nbtir)
+SRO1a=[None]*(nbtir)
+FONC1b=[None]*(nbtir)
+SRO1b=[None]*(nbtir)
+l_SROa=[]
+l_SROb=[]
+for ii in range(nbtir):
+   nacc=ii+1
+   FONC1a[ii]=RECU_FONCTION(  TABLE=ACCE1a,
+                        FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',
+                                       VALE_I = nacc),
+                        NOM_PARA_TABL='FONCTION',)
+   FONC1b[ii]=RECU_FONCTION(  TABLE=ACCE1b,
+                        FILTRE=  (_F(  NOM_PARA = 'NUME_ORDRE',  VALE_I = nacc),
+                                _F(NOM_PARA = 'NOM_PARA',    VALE_K = 'ACCE1'),),
+                        NOM_PARA_TABL='FONCTION',)
+
+   SRO1a[ii]=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONC1a[ii], LIST_FREQ = L_FREQ, 
+                          NORME=9.81, AMOR_REDUIT=(amo_sro,),),);
+   SRO1b[ii]=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONC1b[ii], LIST_FREQ = L_FREQ, 
+                          NORME=9.81, AMOR_REDUIT=(amo_sro,),),);  
+
+   l_SROa.append(SRO1a[ii])
+   l_SROb.append(SRO1b[ii])
+
+SRO_MOYa=CALC_FONCTION(MOYENNE =_F(FONCTION=l_SROa,) )
+SRO_MOYb=CALC_FONCTION(MOYENNE =_F(FONCTION=l_SROb,) )
+FONC1b2 = RECU_FONCTION(  TABLE=ACCE1b,
+                        FILTRE=  (_F(  NOM_PARA = 'NUME_ORDRE',  VALE_I = nacc),
+                                _F(NOM_PARA = 'NOM_PARA',    VALE_K = 'ACCE2'),),
+                        NOM_PARA_TABL='FONCTION',)
+SRO1b2 = CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONC1b2, LIST_FREQ = L_FREQ, 
+                          NORME=9.81, AMOR_REDUIT=(amo_sro,),),);  
+############################################
+## TESTS
+#############################################
+#
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.15563398683657,
+                         VALE_REFE=ZPA_50    ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 50.0),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYa,),
+                        _F(VALE_CALC= 0.18913892453564 ,
+                         VALE_REFE=SA_25  ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 25.0),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYa,),
+                        _F(VALE_CALC=0.01215463249075 ,
+                         VALE_REFE=SA_013  ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 0.1333),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYa,),
+                         ),)
+
+#
+TEST_FONCTION(VALEUR=(_F(VALE_CALC= 0.15927310026065,
+                         VALE_REFE=ZPA_50    ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 50.0),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYb,),
+                        _F(VALE_CALC= 0.18642720679308 ,
+                         VALE_REFE=SA_25  ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 25.0),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYb,),
+                        _F(VALE_CALC= 0.01247499243006 ,
+                         VALE_REFE=SA_013  ,                        
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 0.1333),
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=0.1,
+                         FONCTION=SRO_MOYb,),
+                        _F(VALE_CALC = 0.21690395991178 ,                         
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 25),
+                         FONCTION= SRO1b2,),
+                        _F(VALE_CALC = 0.16567083333271 ,                         
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 50.),
+                         FONCTION= SRO1b2,),
+                         ),)
+
+############################################
+## on valide ici par rapport spec_mediane : 
+#         meme resultat si pas d'iterations
+#############################################
+
+nbtir=20
+fc=0.05
+ACCE2=GENE_ACCE_SEISME( INFO =2, INIT_ALEA=200000,
+              PAS_INST  = 0.01, PESANTEUR =9.81,DUREE_PHASE_FORTE = TSM,
+              NB_TIRAGE = nbtir, NB_POIN = 2**11, FREQ_CORNER=fc, FREQ_FILTRE=fc,
+              SPEC_MOYENNE = _F(SPEC_OSCI = SRO_NGA, AMOR_REDUIT =amor, FREQ_PAS=0.01, METHODE='NIGAM'),
+              MODULATION   = _F(TYPE="GAMMA",INST_INI=tini, ),)
+
+
+FONC2=RECU_FONCTION( TABLE=ACCE2,
+                      FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',  VALE_I = 1), 
+                      NOM_PARA_TABL='FONCTION',)
+
+SRO2=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONC2, LIST_FREQ = L_FREQ, METHODE='NIGAM',
+                      NORME=9.81, AMOR_REDUIT=(amo_sro,),),);  
+
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.17101427,                   
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 50.0),
+                         FONCTION=SRO2,),
+                        _F(VALE_CALC= 0.19656362  ,                       
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 25.0),
+                         FONCTION=SRO2,),
+                        _F(VALE_CALC=0.03592224     ,                       
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 0.5),
+                         FONCTION=SRO2,),
+                         ),)
+
+#### TEST informatique de HARMO avec SPEC_MOYENNE
+
+L_FREQ3 = DEFI_LIST_REEL(DEBUT=1., INTERVALLE=(_F(JUSQU_A=10., PAS=1.,),_F(JUSQU_A=30.0, PAS=10.,),) );
+
+ACCE1c=GENE_ACCE_SEISME( INFO =2,
+              INIT_ALEA=200000,
+              PAS_INST = 0.01, PESANTEUR =9.81, DUREE_PHASE_FORTE =5., NB_TIRAGE = 2,
+              NB_POIN = 2**10, FREQ_FILTRE = fc, FREQ_CORNER = fc,
+              SPEC_MOYENNE  = _F(SPEC_OSCI  = SRO_NGA, AMOR_REDUIT=amor, METHODE='HARMO',
+                                       LIST_FREQ = L_FREQ, NB_ITER = 2),
+               MODULATION      = _F(TYPE="GAMMA", INST_INI=tini, ),)
+
+FONC1c = RECU_FONCTION( TABLE = ACCE1c,
+                        FILTRE =  (_F(  NOM_PARA = 'NUME_ORDRE',  VALE_I = 1), ),
+                        NOM_PARA_TABL='FONCTION',)
+
+SRO1c=CALC_FONCTION(SPEC_OSCI=_F(FONCTION = FONC1c, LIST_FREQ = L_FREQ3, METHODE='NIGAM',
+                      NORME = 9.81, AMOR_REDUIT=(amo_sro,),),);  
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.22198952965851,                   
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 20.0),
+                         FONCTION=SRO1c,),
+                        _F(VALE_CALC= 0.35266209711274  ,                       
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 10.0),
+                         FONCTION=SRO1c,),
+                        _F(VALE_CALC=0.16620490973161     ,                       
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 1.),
+                         FONCTION=SRO1c,),
+                         ),)
+
+FIN( )

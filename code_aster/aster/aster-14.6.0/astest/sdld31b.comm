@@ -1,0 +1,414 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI',),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('RESSORT','MASS',),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='DIS_T',),);
+omega0 = 18.8495559215;
+
+KK = (omega0 * omega0);
+
+AM = (0.001 * omega0);
+
+HYHY = 0.001;
+
+mass = 1.0;
+
+omegex = (1.1 * omega0);
+
+F = 1.0;
+
+
+# SOLUTION ANALYTIQUE (CF : VIBRATION PROBLEMS IN ENGINEERING - WEAVER, TIMOSHENKO, YOUNG)
+
+omegaa = sqrt(((omega0 ** 2) - (AM ** 2)));
+
+NNN = (((F / mass) * ((omega0 ** 2) - (omegex ** 2))) / ((((omega0 ** 2) - (omegex ** 2)) ** 2) + ((4.0 * (AM ** 2)) * (omegex ** 2))));
+
+MMM = (((((-2 * AM) * omegex) * F) / mass) / ((((omega0 ** 2) - (omegex ** 2)) ** 2) + ((4.0 * (AM ** 2)) * (omegex ** 2))));
+
+C1 = -(MMM);
+
+C2 = (-(((omegex * NNN) + (AM * MMM))) / omegaa);
+
+solex = FORMULE(VALE='exp(-AM*INST)*(C1*cos(omegaa*INST)+C2*sin(omegaa*INST)) + MMM*cos(omegex*INST)+NNN*sin(omegex*INST)',
+                AM=AM,
+                C1=C1,
+                omegaa=omegaa,
+                C2=C2,
+                MMM=MMM,
+                omegex=omegex,
+                NNN=NNN,
+                NOM_PARA='INST',)
+
+
+
+# CARACTERISTIQUES DU MASSE-RESSORT
+
+CARA_ELE=AFFE_CARA_ELEM(MODELE=MO,
+                        DISCRET=(_F(REPERE='GLOBAL',
+                                    AMOR_HYST=HYHY,
+                                    CARA='K_T_D_L',
+                                    GROUP_MA='RESSORT',
+                                    VALE=(KK,KK,KK,),),
+                                 _F(REPERE='GLOBAL',
+                                    AMOR_HYST=HYHY,
+                                    CARA='M_T_L',
+                                    GROUP_MA='RESSORT',
+                                    VALE=(0,0,0,0,0,0,0,0,0,
+                                    0,0,0,0,0,0,0,0,0,0,0,0,),),
+                                 _F(REPERE='GLOBAL',
+                                    CARA='A_T_D_L',
+                                    GROUP_MA='RESSORT',
+                                    VALE=(AM,AM,AM,),),
+                                 _F(CARA='M_T_D_N',
+                                    GROUP_MA='MASS',
+                                    VALE=mass,),),);
+
+MATE_BID=DEFI_MATERIAU(ELAS=_F(E=20000.,
+                               NU=0.49999,
+                               RHO=7900.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(GROUP_MA='RESSORT',
+                            MATER=MATE_BID,),);
+pasdt = 1.e-4;
+
+tfin = 2.0;
+
+tpst1 = 0.5;
+
+tpst2 = 0.7;
+
+tpst3 = 1.0;
+
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=tfin,
+                                    PAS=pasdt,),);
+
+LIAISON=AFFE_CHAR_MECA(MODELE=MO,
+                       DDL_IMPO=(_F(GROUP_NO='A',
+                                    DX=0.,
+                                    DY=0.,
+                                    DZ=0.,),
+                                 _F(GROUP_NO='B',
+                                    DX=0.,
+                                    DY=0.,),),);
+
+TRACTION=AFFE_CHAR_MECA(MODELE=MO,
+                        FORCE_NODALE=_F(GROUP_NO='B',
+                                        FZ=F,),);
+OMEGA = (omega0 * 1.1);
+
+
+SINOMEGT = FORMULE(VALE='sin(OMEGA*INST)',
+                   OMEGA=OMEGA,
+                   NOM_PARA='INST',)
+
+FSIN=CALC_FONC_INTERP(FONCTION=SINOMEGT,
+                      LIST_PARA=L_INST,
+                      NOM_RESU='ALPHA',
+                      NOM_PARA='INST',
+                      INTERPOL='LIN',
+                      TITRE='SINUS OMEGA T',);
+
+ROLEX=CALC_FONC_INTERP(FONCTION=solex,
+                       LIST_PARA=L_INST,
+                       NOM_PARA='INST',
+                       INTERPOL='LIN',);
+
+ASSEMBLAGE(MODELE=MO,
+                CARA_ELEM=CARA_ELE,
+                CHARGE=LIAISON,
+                NUME_DDL=CO('NUDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('MASS'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('RIGI'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('RIGHYST'),
+                              OPTION='RIGI_MECA_HYST',),
+                           _F(MATRICE=CO('AMOR'),
+                              OPTION='AMOR_MECA',),),
+                VECT_ASSE=(_F(VECTEUR=CO("VRACTION"),OPTION='CHAR_MECA',CHARGE=TRACTION),),);
+
+
+AMO2=COMB_MATR_ASSE(COMB_R=_F(MATR_ASSE=AMOR,
+                              COEF_R=2.,),);
+
+# CALCUL DES MODES AVEC AMORTISSEMENT HYSTERETIQUE + VISQUEUX
+
+MOSOREN=CALC_MODES(MATR_RIGI=RIGHYST,
+                   OPTION='CENTRE',
+                   CALC_FREQ=_F(NMAX_FREQ=1,
+                                FREQ=10.,
+                                ),
+                   MATR_AMOR=AMOR,
+                   MATR_MASS=MASS,
+                   SOLVEUR=_F(ELIM_LAGR='NON'),
+                   SOLVEUR_MODAL=_F(APPROCHE='REEL',),
+                   )
+
+FRESOR=RECU_TABLE(CO=MOSOREN,
+                  NOM_PARA=('FREQ','AMOR_REDUIT',),);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=2.99999999999,
+           VALE_REFE=3.0,
+           NOM_PARA='FREQ',
+           TABLE=FRESOR,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=0.0009999995,
+           VALE_REFE=1.E-3,
+           NOM_PARA='AMOR_REDUIT',
+           TABLE=FRESOR,)
+
+# CALCUL DES MODES AVEC AMORTISSEMENT VISQUEUX (LANCZOS, APPROCHE COMPLEXE)
+
+MOLANCZ=CALC_MODES(MATR_RIGI=RIGI,
+                   OPTION='CENTRE',
+                   CALC_FREQ=_F(NMAX_FREQ=1,
+                                FREQ=3.,
+                                ),
+                   MATR_AMOR=AMO2,
+                   MATR_MASS=MASS,
+                   SOLVEUR_MODAL=_F(APPROCHE='COMPLEXE',
+                                    METHODE='TRI_DIAG',
+                                    ),
+                   )
+
+FRELAN=RECU_TABLE(CO=MOLANCZ,
+                  NOM_PARA=('FREQ','AMOR_REDUIT',),);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=2.99999849999,
+           VALE_REFE=3.0,
+           NOM_PARA='FREQ',
+           TABLE=FRELAN,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=0.001,
+           VALE_REFE=1.E-3,
+           NOM_PARA='AMOR_REDUIT',
+           TABLE=FRELAN,)
+
+# CALCUL DES MODES NORMAUX (NON AMORTIS)
+
+MODES=CALC_MODES(MATR_RIGI=RIGI,
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=1,
+                              FREQ=3.,
+                              ),
+                 MATR_MASS=MASS,
+                 SOLVEUR_MODAL=_F(APPROCHE='COMPLEXE',
+                                  ),
+                 )
+
+PROJ_BASE(BASE=MODES,
+                STOCKAGE='DIAG',
+                MATR_ASSE_GENE=(_F(MATRICE=CO('PMASS'),
+                                   MATR_ASSE=MASS,),
+                                _F(MATRICE=CO('PRIGI'),
+                                   MATR_ASSE=RIGI,),
+                                _F(MATRICE=CO('PAMO2'),
+                                   MATR_ASSE=AMO2,),),
+                VECT_ASSE_GENE=_F(VECTEUR=CO('PRACTION'),
+                                  VECT_ASSE=VRACTION, TYPE_VECT='FORC'),);
+
+
+# TRANSITOIRE - METHODE EULER
+
+TRANGE=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                       MATR_MASS=PMASS,
+                       MATR_RIGI=PRIGI,
+                       AMOR_MODAL=_F(AMOR_REDUIT=HYHY,),
+                       SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                       INCREMENT=_F(INST_FIN=tfin,
+                                    PAS=pasdt,),
+                       EXCIT=_F(VECT_ASSE_GENE=PRACTION,
+                                FONC_MULT=FSIN,),
+                       ARCHIVAGE=_F(INST=(tpst1, tpst2, tpst3),PAS_ARCH=10),
+                       );
+
+BTRANGE=RECU_FONCTION(RESU_GENE=TRANGE,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DZ',
+                      GROUP_NO='B',);
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.01078498050573,
+                         VALE_REFE=solex(tpst1,),
+                         VALE_PARA=tpst1,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANGE,),
+                      _F(VALE_CALC=-3.744962434751E-03,
+                         VALE_REFE=solex(tpst2,),
+                         VALE_PARA=tpst2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-3,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANGE,),
+                      _F(VALE_CALC=-0.01256376884684,
+                         VALE_REFE=solex(tpst3,),
+                         VALE_PARA=tpst3,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-3,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANGE,),
+                      ),
+              )
+
+# TEST DE REST_GENE_PHYS
+
+TRANSI=REST_GENE_PHYS(RESU_GENE=TRANGE,
+                      NOM_CHAM='DEPL',);
+
+BTRANSI=RECU_FONCTION(RESULTAT=TRANSI,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DZ',
+                      GROUP_NO='B',);
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.01078498050573,
+                         VALE_REFE=solex(tpst1,),
+                         VALE_PARA=tpst1,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANSI,),
+                      _F(VALE_CALC=-3.744962434751E-03,
+                         VALE_REFE=solex(tpst2,),
+                         VALE_PARA=tpst2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-3,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANSI,),
+                      _F(VALE_CALC=-0.01256376884684,
+                         VALE_REFE=solex(tpst3,),
+                         VALE_PARA=tpst3,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-3,
+                         NOM_PARA='INST',
+                         FONCTION=BTRANSI,),
+                      ),
+              )
+
+# TRANSITOIRE - METHODE DE NEWMARK
+
+NEWTRANG=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                         MATR_MASS=PMASS,
+                         MATR_RIGI=PRIGI,
+                         AMOR_MODAL=_F(AMOR_REDUIT=HYHY,),
+                         INCREMENT=_F(INST_FIN=tfin,
+                                      PAS=pasdt,),
+                         EXCIT=_F(VECT_ASSE_GENE=PRACTION,
+                                  FONC_MULT=FSIN,),
+                         ARCHIVAGE=_F(INST=(tpst1, tpst2, tpst3),PAS_ARCH=10),
+                         );
+
+BNEWTRAN=RECU_FONCTION(RESU_GENE=NEWTRANG,
+                       NOM_CHAM='DEPL',
+                       NOM_CMP='DZ',
+                       GROUP_NO='B',);
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.01079639373628,
+                         VALE_REFE=solex(tpst1,),
+                         VALE_PARA=tpst1,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-2,
+                         NOM_PARA='INST',
+                         FONCTION=BNEWTRAN,),
+                      _F(VALE_CALC=-3.777604369249E-03,
+                         VALE_REFE=solex(tpst2,),
+                         VALE_PARA=tpst2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-2,
+                         NOM_PARA='INST',
+                         FONCTION=BNEWTRAN,),
+                      _F(VALE_CALC=-0.01260003866495,
+                         VALE_REFE=solex(tpst3,),
+                         VALE_PARA=tpst3,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-2,
+                         NOM_PARA='INST',
+                         FONCTION=BNEWTRAN,),
+                      ),
+              )
+
+# TRANSITOIRE - METHODE DE DEVOLEGAERE
+
+DEVTRANG=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='DEVOGE', PAS_MINI=pasdt, PAS_MAXI=pasdt),
+                         MATR_MASS=PMASS,
+                         MATR_RIGI=PRIGI,
+                         AMOR_MODAL=_F(AMOR_REDUIT=HYHY,),
+                         INCREMENT=_F(INST_FIN=tfin,
+                                      PAS=pasdt,),
+                         EXCIT=_F(VECT_ASSE_GENE=PRACTION,
+                                  FONC_MULT=FSIN,),
+                         ARCHIVAGE=_F(INST=(tpst1, tpst2, tpst3),PAS_ARCH=10),
+                   )
+
+BDEVTRAN=RECU_FONCTION(RESU_GENE=DEVTRANG,
+                       NOM_CHAM='DEPL',
+                       NOM_CMP='DZ',
+                       GROUP_NO='B',);
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.01078498804642,
+                         VALE_REFE=solex(tpst1,),
+                         VALE_PARA=tpst1,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         NOM_PARA='INST',
+                         FONCTION=BDEVTRAN,),
+                      _F(VALE_CALC=-3.745072274667E-03,
+                         VALE_REFE=solex(tpst2,),
+                         VALE_PARA=tpst2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         NOM_PARA='INST',
+                         FONCTION=BDEVTRAN,),
+                      _F(VALE_CALC=-0.01256390155277,
+                         VALE_REFE=solex(tpst3,),
+                         VALE_PARA=tpst3,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         NOM_PARA='INST',
+                         FONCTION=BDEVTRAN,),
+                      ),
+              )
+
+FIN();

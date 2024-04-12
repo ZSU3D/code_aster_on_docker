@@ -1,0 +1,96 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#
+# MODELISATION : DST
+# MAILLE       : TRIA3
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',
+              ),)
+
+ma=LIRE_MAILLAGE(FORMAT='MED',);
+
+mod=AFFE_MODELE(MAILLAGE=ma,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DST',),);
+
+mate=DEFI_MATERIAU(ELAS=_F(E=29e6,
+                           NU=.22,),);
+
+chmate=AFFE_MATERIAU(MAILLAGE=ma,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=mate,),);
+
+cara=AFFE_CARA_ELEM(MODELE=mod,
+                    COQUE=_F(GROUP_MA='Poutre',
+                             EPAIS=0.32,),);
+
+CLIM=AFFE_CHAR_CINE(MODELE=mod,
+                    MECA_IMPO=_F(GROUP_MA='Encas',
+                                 DX=0.,
+                                 DY=0.,
+                                 DZ=0.,
+                                 DRX=0.,
+                                 DRY=0.,
+                                 DRZ=0.,),);
+
+PY=AFFE_CHAR_MECA(MODELE=mod,
+                  FORCE_NODALE=_F(GROUP_NO='A',
+                                  FY=1000,),);
+
+PZ=AFFE_CHAR_MECA(MODELE=mod,
+                  FORCE_NODALE=_F(GROUP_NO='A',
+                                  FZ=1000,),);
+
+Resu_PY=MECA_STATIQUE(MODELE=mod,
+                      CHAM_MATER=chmate,
+                      CARA_ELEM=cara,
+                      EXCIT=(_F(CHARGE=CLIM,),
+                             _F(CHARGE=PY,),),);
+
+Resu_PZ=MECA_STATIQUE(MODELE=mod,
+                      CHAM_MATER=chmate,
+                      CARA_ELEM=cara,
+                      EXCIT=(_F(CHARGE=CLIM,),
+                             _F(CHARGE=PZ,),),);
+
+TEST_RESU(RESU=_F(RESULTAT=Resu_PY,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  GROUP_NO='A',
+                  VALE_REFE=1.754,
+                  PRECISION=0.15,
+                  REFERENCE='AUTRE_ASTER',
+                  VALE_CALC=1.5070458300811,),);
+
+TEST_RESU(RESU=_F(RESULTAT=Resu_PZ,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  GROUP_NO='A',
+                  VALE_REFE=5.424,
+                  PRECISION=0.015,
+                  REFERENCE='AUTRE_ASTER',
+                  VALE_CALC=5.4683772037812,),);
+
+FIN();

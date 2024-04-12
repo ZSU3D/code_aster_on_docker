@@ -1,0 +1,214 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# FISSUREE (FISSURE INCLINEE A 30 DEGRES)
+# ETUDE A PARTIR DE LA SOLUTION ANALYTIQUE SINGULIERE EN MODE MIXTE
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# EMPLOI DE FORMULE POUR DEFINIR LA SOLUTION ANALYTIQUE SINGULIERE
+# EN DEPLACEMENT SUR LE POURTOUR (RAYON R=100MM)
+#   NU = 0.3
+#
+K1=2.
+
+K2=1.
+
+KDP=1.8
+
+KCP=2.7/1.3
+
+A0=8.6602540379999E-01
+
+A1=0.5
+
+UXTEST = FORMULE(VALE='atan2(-X*A1+Y*A0,X*A0+Y*A1)',
+                 A1=A1,
+                 A0=A0,
+                 NOM_PARA=['X', 'Y'],)
+
+UXDP = FORMULE(VALE="""
+2.593124823E-5 *
+        ( K1*cos(atan2(-X*A1+Y*A0,X*A0+Y*A1)*0.5)
+            *(KDP-cos(atan2(-X*A1+Y*A0,X*A0+Y*A1)))
+         +K2* sin(atan2(-X*A1+Y*A0,X*A0+Y*A1)*0.5)
+            *(KDP+2.0+cos(atan2(-X*A1+Y*A0,X*A0+Y*A1))))
+                 """,
+               K1=K1,
+               A1=A1,
+               A0=A0,
+               KDP=KDP,
+               K2=K2,
+               NOM_PARA=['X', 'Y'],)
+
+UYDP = FORMULE(VALE="""
+2.593124823E-5 *
+      (   K1* sin(atan2(-X*A1+Y*A0,X*A0+Y*A1)*0.5)
+            *(KDP-cos(atan2(-X*A1+Y*A0,X*A0+Y*A1)))
+         -K2* cos(atan2(-X*A1+Y*A0,X*A0+Y*A1)*0.5)
+            *(KDP-2.0+cos(atan2(-X*A1+Y*A0,X*A0+Y*A1))))
+                 """,
+               K1=K1,
+               A1=A1,
+               A0=A0,
+               KDP=KDP,
+               K2=K2,
+               NOM_PARA=['X', 'Y'],)
+
+U1DP = FORMULE(VALE="""
+A0*UXDP(X,Y)- A1*UYDP(X,Y)
+                 """,
+               A0=A0,
+               UXDP=UXDP,
+               A1=A1,
+               UYDP=UYDP,
+               NOM_PARA=['X', 'Y'],)
+
+U2DP = FORMULE(VALE="""
++A1*UXDP(X,Y)+ A0*UYDP(X,Y)
+                 """,
+               A1=A1,
+               UXDP=UXDP,
+               A0=A0,
+               UYDP=UYDP,
+               NOM_PARA=['X', 'Y'],)
+
+# ---------------------------------------------------------------------
+M=LIRE_MAILLAGE(FORMAT='MED',)
+
+M=DEFI_GROUP( reuse=M,  MAILLAGE=M,
+                 CREA_GROUP_NO=_F( GROUP_MA = 'CC') )
+
+MA=DEFI_MATERIAU(ELAS=_F( E = 200000.,  NU = 0.3, RHO = 0., ALPHA = 0.00005))
+
+CM=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(  TOUT = 'OUI',
+                        MATER = MA) )
+
+FOND=DEFI_FOND_FISS( MAILLAGE=M,SYME='NON',
+                       FOND_FISS=_F( GROUP_NO = 'O'),
+                        LEVRE_SUP=_F(GROUP_MA='LEVRE_SUP',),
+                        LEVRE_INF=_F(GROUP_MA='LEVRE_INF',),
+                       )
+
+#---------------------------------------------------------------------
+#          MODELISATION ET CALCUL EN DEFORMATIONS PLANES
+#---------------------------------------------------------------------
+LINST = DEFI_LIST_REEL   ( DEBUT      =  0.,
+                           INTERVALLE =_F (JUSQU_A= 1.0, NOMBRE = 1   )
+                                         );
+
+MODP = [None]*2
+CHDP = [None]*2
+ELADP = [None]*2
+THETA = [None]*2
+GDP = [None]*2
+K1K2 = [None]*2
+
+MODP[0]=AFFE_MODELE( MAILLAGE=M,
+                  AFFE=_F(  TOUT = 'OUI',
+                         MODELISATION = 'D_PLAN_INCO_UPG',
+                         PHENOMENE = 'MECANIQUE') )
+
+MODP[1]=AFFE_MODELE( MAILLAGE=M,
+                  AFFE=_F(  TOUT = 'OUI',
+                         MODELISATION = 'D_PLAN_INCO_UPG',
+                         PHENOMENE = 'MECANIQUE') )
+
+for i in range(2):
+   CHDP[i]=AFFE_CHAR_MECA_F(MODELE=MODP[i],
+                      DDL_IMPO=_F( GROUP_NO = 'CC',
+                                DX = U1DP,
+                                DY = U2DP) )
+
+   ELADP[i] = STAT_NON_LINE (  MODELE     =   MODP[i],
+                        CHAM_MATER=CM,
+                        EXCIT=_F( CHARGE = CHDP[i]),
+                        COMPORTEMENT  =_F ( RELATION     = 'ELAS',
+                                         DEFORMATION  = 'PETIT',
+                                         TOUT         = 'OUI'    ),
+                        INCREMENT  =_F ( LIST_INST    = LINST, ),
+                        CONVERGENCE = _F(
+                              RESI_GLOB_MAXI=1e-07,
+                              ITER_GLOB_MAXI = 15,
+                  ),
+                        NEWTON     =_F ( REAC_INCR    = 1 ,REAC_ITER=0))
+
+   GDP[i]=CALC_G(RESULTAT=ELADP[i],
+                 INST = 1,
+                 THETA=_F(
+                          R_INF=10.,
+                          FOND_FISS=FOND,
+                          R_SUP=20.,))
+
+   K1K2[i]=CALC_G(RESULTAT=ELADP[i],
+                  INST = 1,
+                  THETA=_F(FOND_FISS=FOND,
+                           R_INF = 10.,
+                           R_SUP = 20.),
+                  OPTION='CALC_K_G')
+
+#--------------------------------------------------------------------
+#            TEST DES RESULTATS DE G, K1 ET K2   EN DP
+#--------------------------------------------------------------------
+
+
+   TEST_TABLE(TABLE=GDP[i],
+              NOM_PARA='G',
+              VALE_CALC=2.3048695705621E-05,
+              VALE_REFE=2.275E-5,
+              REFERENCE='NON_DEFINI',
+
+              PRECISION=2.E-2)
+
+   TEST_TABLE(TABLE=K1K2[i],
+              NOM_PARA='K1',
+              VALE_CALC=2.0343525448787,
+              VALE_REFE=2.E0,
+              REFERENCE='NON_DEFINI',
+
+              PRECISION=2.E-2)
+
+   TEST_TABLE(TABLE=K1K2[i],
+              NOM_PARA='K2',
+              VALE_CALC=0.93364105730086,
+              VALE_REFE=1.E0,
+              REFERENCE='NON_DEFINI',
+
+              PRECISION=0.07)
+
+   TEST_TABLE(TABLE=K1K2[i],
+              NOM_PARA='G',
+              VALE_CALC=2.3048695705621E-05,
+              VALE_REFE=2.275E-5,
+              REFERENCE='NON_DEFINI',
+
+              PRECISION=2.E-2)
+
+   TEST_TABLE(TABLE=K1K2[i],
+              NOM_PARA='G_IRWIN',
+              VALE_CALC=2.2796755348333E-05,
+              VALE_REFE=2.275E-5,
+              REFERENCE='NON_DEFINI',
+
+              PRECISION=2.E-2)
+
+FIN()
+#

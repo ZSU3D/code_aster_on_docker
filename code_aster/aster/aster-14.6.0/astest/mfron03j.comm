@@ -1,0 +1,666 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: david.haboussa at edf.fr
+# Comparaison entre la loi GdefMonoCrystal (MFront) et la loi MONOCRISTAL
+# (ECOULEMENT='MONO_VISC1',ECRO_ISOT='MONO_ISOT1',ECRO_CINE='MONO_CINE1',)
+# (Code_Aster) en grande deformation (SIMO_MIEHE) sur un point materiel
+# Validation basée sur EPZZ, SIZZ, GAMMA_1, GAMMA_9, GAMMA_12.
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+import numpy as NP
+
+CREA_LIB_MFRONT(UNITE_MFRONT=38,UNITE_LIBRAIRIE=40)
+CREA_LIB_MFRONT(UNITE_MFRONT=39,UNITE_LIBRAIRIE=41)
+
+
+N__=    10.  ;
+K__=    25.0   ;
+C__=     14363.   ;
+R_0__ = 66.62;
+Q__=     11.43 ;
+B__=     2.1 ;
+D__=     494. ;
+H1__=    1;
+H2__=    1.;
+H3__=    0.6;
+H4__=    12.3;
+H5__=    1.6;
+H6__=    1.8;
+
+
+aniso=0
+
+if aniso :
+    C11=244000.
+    C12=96000.
+    C44=74000.
+    y1111=C11
+    y1122=C12
+    y1212=C44
+    G=y1212
+
+    # Correspondance avec ELAS_ORTH : la matrice d'elasticite vaut
+    # pour une elasticite orthotrope cubique
+    #H11=H22=H33=E*(1-Nu**2)/(1-3*Nu**2-2*Nu**3)
+    #H44=H55=H66=y1212=G_LT
+    # donc NU_LT=1/(1+y1111/y1122)
+
+    Nu=1.0/(1.0+y1111/y1122)
+    E_L=y1111*(1.0-3.0*Nu**2-2.0*Nu**3)/(1.0-Nu**2)
+else :
+    G       = 80000. ;
+    Nu       = 0.3    ;
+    E_L       =  G*2*(1.+Nu)   ;
+
+MATA=DEFI_MATERIAU(
+                     ELAS=_F(E=E_L, NU=Nu,),
+                      #ELAS_ORTH =_F(E_L  =E_L,
+                                    #E_T  =E_L,
+                                    #E_N  =E_L,
+                                    #NU_LT=Nu,
+                                    #NU_LN=Nu,
+                                    #NU_TN=Nu,
+                                    #G_LT =y1212,
+                                    #G_LN =y1212,
+                                    #G_TN =y1212,
+                                 #),
+
+                    MONO_VISC1=_F(N=N__,
+                                  K=K__,
+                                  C=C__,),
+                    MONO_ISOT1=_F(R_0=R_0__,
+                                  Q=Q__,
+                                  B=B__,
+                                  H1=H1__,
+                                  H2=H2__,
+                                  H3=H3__,
+                                  H4=H4__,
+                                  H5=H5__,
+                                  H6=H6__,),
+
+                    MONO_CINE1=_F(D=D__,),
+                    );
+
+COMPORA=DEFI_COMPOR(MONOCRISTAL=_F(MATER=MATA,
+                                   ECOULEMENT='MONO_VISC1',
+                                   ECRO_ISOT='MONO_ISOT1',
+                                   ECRO_CINE='MONO_CINE1',
+                                   ELAS='ELAS_ORTH',
+                                   FAMI_SYST_GLIS='OCTAEDRIQUE',),
+                                   );
+
+
+MATF=DEFI_MATERIAU(
+                  ELAS=_F(E=E_L, NU=Nu,),
+                  MFRONT=_F(LISTE_COEF=(E_L ,E_L ,E_L,Nu,Nu,Nu,G,G,G,N__,K__,C__, R_0__,Q__, B__,D__,
+                                    ),)
+                            ,)
+
+MAIL = LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MAIL = DEFI_GROUP(reuse = MAIL,
+                  MAILLAGE = MAIL,
+                  CREA_GROUP_MA=(_F(NOM='VOL' , TOUT='OUI', TYPE_MAILLE='3D',),
+                                 ),
+                                )
+
+MAIL = MODI_MAILLAGE(reuse = MAIL,
+                     MAILLAGE = MAIL,
+                     ORIE_PEAU_3D=_F(GROUP_MA=('Z0','Z1',),),
+                     );
+
+TROISD = AFFE_MODELE(MAILLAGE = MAIL,
+                     AFFE=(_F(
+                            #TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              GROUP_MA='VOL',
+                              MODELISATION='3D',
+                              ),
+                           _F(GROUP_MA=('PX1',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='DIS_T',),
+                           ),
+                   );
+
+
+CHMATA=AFFE_MATERIAU(MAILLAGE=MAIL,
+                  AFFE=_F(TOUT='OUI',
+                          MATER=MATA,),);
+
+CHMATF=AFFE_MATERIAU(MAILLAGE=MAIL,
+                  AFFE=_F(TOUT='OUI',
+                          MATER=MATF,),);
+
+TRAC=AFFE_CHAR_MECA(MODELE=TROISD,
+                    DDL_IMPO=(
+                              _F(GROUP_NO='ORIG', DX=0.0,DY=0.,DZ=0.),
+                              _F(GROUP_MA='Z0', DZ=0.0,),
+                              _F(GROUP_MA='Z1', DZ=1.0, ),
+                              ),
+                    INFO=1,
+                   );
+COEF=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,1.0,),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',
+                   );
+
+t1=0.01
+t2=0.02
+tmax=0.1
+
+
+
+LINSTDD=DEFI_LIST_REEL(DEBUT=0.0,
+                       INTERVALLE=(
+                                   _F(JUSQU_A=t1,
+                                      NOMBRE=5,),
+                                   _F(JUSQU_A=t2,
+                                      NOMBRE=5,),
+                                   _F(JUSQU_A=tmax,
+                                      NOMBRE=90,),
+                                  ),
+                      );
+
+
+LIS2DD=DEFI_LIST_INST(INFO=1,METHODE='MANUEL',
+                        DEFI_LIST=_F(LIST_INST=LINSTDD,),
+                        ECHEC=_F(SUBD_NIVEAU=10,
+                                 SUBD_PAS=10,
+                                 ),
+                        );
+
+
+NORME = FORMULE(VALE='sqrt(DX*DX+DY*DY+DZ*DZ)',
+                NOM_PARA=['DX', 'DY', 'DZ'],)
+
+# Calcul des angles d'Euler correspondant a une orientation cristallographique donnee
+
+h=-1
+k=2
+l=5
+
+#h=1
+#k=0
+#l=0
+
+phi1=0
+phi =NP.arccos(l / NP.sqrt( h*h + k*k + l*l) ) * 180. / NP.pi
+phi2=NP.arctan2( h / NP.sqrt( h*h + k*k ) , k / NP.sqrt( h*h + k*k ) )* 180. / NP.pi
+
+pena = 1.E4
+
+ORIEN=AFFE_CARA_ELEM(MODELE=TROISD,
+                     MASSIF=_F(GROUP_MA='VOL',ANGL_EULER=(phi1, phi, phi2),),
+                     DISCRET=_F(GROUP_MA=('PX1',),
+                                CARA='K_T_D_N',
+                                VALE=(0.,pena,0.,),),
+                     );
+
+
+
+SOLNL=STAT_NON_LINE(
+                    MODELE = TROISD,
+                    CHAM_MATER = CHMATA,
+                    CARA_ELEM = ORIEN,
+                    EXCIT=(_F(CHARGE=TRAC,
+                              FONC_MULT=COEF,),),
+                    COMPORTEMENT=(_F(
+                                  RELATION='MONOCRISTAL',
+                                  COMPOR=COMPORA,
+                                  DEFORMATION='SIMO_MIEHE',
+                                  ITER_INTE_MAXI=500,
+                                  ALGO_INTE='NEWTON_RELI',
+                                  ),
+                               _F(RELATION='ELAS',
+                                  GROUP_MA=('PX1'),),
+                              ),
+                     INCREMENT=(_F(LIST_INST=LIS2DD, ),),
+
+                     NEWTON=(_F(REAC_ITER=1,PREDICTION='EXTRAPOLE'
+                     ),),
+
+                     SUIVI_DDL=( _F(NOM_CMP    ='V8',
+                                   NOM_CHAM   ='VARI_ELGA',
+                                   GROUP_MA   ='VOL',
+                                   EVAL_ELGA  ='MAX',
+                                   EVAL_CHAM  ='MAX',),
+                               _F(NOM_CMP    ='SIZZ',
+                                  NOM_CHAM   ='SIEF_ELGA',
+                                  GROUP_MA   ='VOL',
+                                  EVAL_ELGA  ='MAX',
+                                  EVAL_CHAM  ='MAX',),
+                                 ),
+                    );
+
+
+SOLNL=CALC_CHAMP(reuse=SOLNL,RESULTAT=SOLNL,DEFORMATION=('EPSG_ELGA'))
+
+
+numpg=5
+
+epsDIR=RECU_FONCTION(RESULTAT=SOLNL,
+                   NOM_CHAM='EPSG_ELGA',
+                   NOM_CMP='EPZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+sigDIR=RECU_FONCTION(RESULTAT=SOLNL,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+nom_cas='traction_cube-1_2_5'
+
+DEFI_FICHIER(UNITE = 28,
+             FICHIER = 'REPE_OUT/epdir_'+ nom_cas + '.dat');
+
+IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            COURBE=(_F(FONCTION=epsDIR,
+                       COULEUR= 0,
+                       LEGENDE= 'Edir',),),
+            UNITE=28,
+            TITRE='Edir = f(INST)');
+
+DEFI_FICHIER(UNITE = 28,
+             ACTION = 'LIBERER');
+
+
+DEFI_FICHIER(UNITE = 28,
+                FICHIER = 'REPE_OUT/sigdir_'+ nom_cas + '.dat');
+
+IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            COURBE=(_F(FONC_X=epsDIR,
+                        FONC_Y=sigDIR,
+                        COULEUR= 0,
+                        LEGENDE= 'SIGdir',),),
+            UNITE=28,
+            TITRE='SIGdir = f(Edir)');
+
+DEFI_FICHIER(UNITE = 28,
+             ACTION = 'LIBERER');
+
+
+
+gamma=[None]*13
+
+system=['', 'B4', 'B2', 'B5', 'D4', 'D1', 'D6', 'A2', 'A6', 'A3', 'C5', 'C3', 'C1']
+
+DEFI_FICHIER(UNITE = 31,
+             FICHIER = 'REPE_OUT/gamma_eps_'+ nom_cas + '.dat');
+
+for i in range(1,13):
+
+
+    gamma[i]=RECU_FONCTION(RESULTAT=SOLNL,
+                   NOM_CHAM='VARI_ELGA',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   NOM_CMP='V'+str(8+3*(i-1)),
+                           INTERPOL='LIN');
+
+    IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            LEGENDE_X='\\f{Symbol}e\\f{}\sll',
+            LEGENDE_Y='\\f{Symbol}g',
+            COURBE=(
+                    _F(FONC_X=epsDIR,
+                       FONC_Y=gamma[i],
+                       COULEUR= i,
+                       MARQUEUR = i,
+                       FREQ_MARQUEUR = 10,
+                       LEGENDE= system[i],),),
+            UNITE=31,);
+
+DEFI_FICHIER(UNITE = 31,
+             ACTION = 'LIBERER');
+
+
+
+
+##############################################################
+# il faut initialiser Fe
+
+nb_syst=12
+
+liste_var = tuple(['V' + str(i) for i in range(1, nb_syst + 9 + 2*nb_syst +  6 +1)])
+liste_vale =  nb_syst*[0.0]+ 3*[1.] + 6*[0] + nb_syst*[0.0, 0.0] + 6*[0.0]
+
+VAIN11= CREA_CHAMP(OPERATION = 'AFFE', TYPE_CHAM = 'ELGA_VARI_R', MODELE = TROISD,
+                   AFFE=(_F(GROUP_MA = 'VOL', NOM_CMP = liste_var, VALE = liste_vale, ),
+                         _F(GROUP_MA = 'PX1', NOM_CMP = 'V1', VALE = 0, ),
+                        ),
+                   );
+
+
+SOLMF=STAT_NON_LINE(
+                    ETAT_INIT = _F(VARI=VAIN11,),
+                    MODELE = TROISD,
+                    CHAM_MATER = CHMATF,
+                    CARA_ELEM = ORIEN,
+                    EXCIT=(_F(CHARGE=TRAC,
+                              FONC_MULT=COEF,),),
+                    COMPORTEMENT=(
+
+                            _F( RELATION='MFRONT',
+                                NOM_ROUTINE='astergdefmonocrystal',
+                                UNITE_LIBRAIRIE=40,
+                                DEFORMATION='SIMO_MIEHE',
+                                RESI_INTE_MAXI=1.E-10,
+                                ITER_INTE_MAXI=100,
+                                GROUP_MA='VOL',
+                                ),
+
+                               _F(RELATION='ELAS',
+                                  GROUP_MA=('PX1'),),
+                              ),
+
+                     INCREMENT=(_F(LIST_INST=LIS2DD, ),),
+
+                     NEWTON=(_F(REAC_ITER=1,PREDICTION='EXTRAPOLE',  ),),
+
+                     SUIVI_DDL=( _F(NOM_CMP    ='V1',
+                                   NOM_CHAM   ='VARI_ELGA',
+                                   GROUP_MA   ='VOL',
+                                   EVAL_ELGA  ='MAX',
+                                   EVAL_CHAM  ='MAX',),
+                                _F(NOM_CMP    ='SIZZ',
+                                  NOM_CHAM   ='SIEF_ELGA',
+                                  GROUP_MA   ='VOL',
+                                  EVAL_ELGA  ='MAX',
+                                  EVAL_CHAM  ='MAX',),
+                                 ),
+                    );
+
+
+SOLMF=CALC_CHAMP(reuse=SOLMF,RESULTAT=SOLMF,DEFORMATION=('EPSG_ELGA'))
+
+
+numpg=5
+
+epsMF=RECU_FONCTION(RESULTAT=SOLMF,
+                   NOM_CHAM='EPSG_ELGA',
+                   NOM_CMP='EPZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+sigMF=RECU_FONCTION(RESULTAT=SOLMF,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+nom_cas='traction_cube-1_2_5-MF'
+
+DEFI_FICHIER(UNITE = 28,
+             FICHIER = 'REPE_OUT/epdir_'+ nom_cas + '.dat');
+
+IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            COURBE=(_F(FONCTION=epsMF,
+                       COULEUR= 0,
+                       LEGENDE= 'Edir',),),
+            UNITE=28,
+            TITRE='Edir = f(INST)');
+
+DEFI_FICHIER(UNITE = 28,
+             ACTION = 'LIBERER');
+
+
+DEFI_FICHIER(UNITE = 28,
+                FICHIER = 'REPE_OUT/sigMF_'+ nom_cas + '.dat');
+
+IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            COURBE=(_F(FONC_X=epsMF,
+                        FONC_Y=sigMF,
+                        COULEUR= 0,
+                        LEGENDE= 'sigMF',),),
+            UNITE=28,
+            TITRE='sigMF = f(Edir)');
+
+DEFI_FICHIER(UNITE = 28,
+             ACTION = 'LIBERER');
+
+
+
+gammf=[None]*13
+
+
+DEFI_FICHIER(UNITE = 31,
+             FICHIER = 'REPE_OUT/gamma_eps_'+ nom_cas + '.dat');
+
+for i in range(1,13):
+
+
+    gammf[i]=RECU_FONCTION(RESULTAT=SOLMF,
+                   NOM_CHAM='VARI_ELGA',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   NOM_CMP='V'+str(i),
+                           INTERPOL='LIN');
+
+    IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            LEGENDE_X='\\f{Symbol}e\\f{}\sll',
+            LEGENDE_Y='\\f{Symbol}g',
+            COURBE=(
+                    _F(FONC_X=epsMF,
+                       FONC_Y=gammf[i],
+                       COULEUR= 13+i,
+                       MARQUEUR = 13+i,
+                       FREQ_MARQUEUR = 1,
+                       LEGENDE= system[i],),),
+            UNITE=31,);
+
+DEFI_FICHIER(UNITE = 31,
+             ACTION = 'LIBERER');
+
+
+
+# test matrice jacobienne numérique
+
+SOLMFn=STAT_NON_LINE(
+                    ETAT_INIT = _F(VARI=VAIN11,),
+                    MODELE = TROISD,
+                    CHAM_MATER = CHMATF,
+                    CARA_ELEM = ORIEN,
+                    EXCIT=(_F(CHARGE=TRAC,
+                              FONC_MULT=COEF,),),
+                    COMPORTEMENT=(
+
+                            _F( RELATION='MFRONT',
+                                NOM_ROUTINE='astergdefmono_jacnum',
+                                UNITE_LIBRAIRIE=41,
+                                DEFORMATION='SIMO_MIEHE',
+                                RESI_INTE_MAXI=1.E-8,
+                                 GROUP_MA='VOL',
+                               ),
+
+                               _F(RELATION='ELAS',
+                                  GROUP_MA=('PX1'),),
+                              ),
+
+                     INCREMENT=(_F(LIST_INST=LIS2DD, ),),
+
+                     NEWTON=(_F(REAC_ITER=1,PREDICTION='EXTRAPOLE',  ),),
+
+                     SUIVI_DDL=( _F(NOM_CMP    ='V1',
+                                   NOM_CHAM   ='VARI_ELGA',
+                                   GROUP_MA   ='VOL',
+                                   EVAL_ELGA  ='MAX',
+                                   EVAL_CHAM  ='MAX',),
+                                _F(NOM_CMP    ='SIZZ',
+                                  NOM_CHAM   ='SIEF_ELGA',
+                                  GROUP_MA   ='VOL',
+                                  EVAL_ELGA  ='MAX',
+                                  EVAL_CHAM  ='MAX',),
+                                 ),
+                    );
+
+
+SOLMFn=CALC_CHAMP(reuse=SOLMFn,RESULTAT=SOLMFn,DEFORMATION=('EPSG_ELGA'))
+
+
+
+epsMFn=RECU_FONCTION(RESULTAT=SOLMFn,
+                   NOM_CHAM='EPSG_ELGA',
+                   NOM_CMP='EPZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+sigMFn=RECU_FONCTION(RESULTAT=SOLMFn,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   MAILLE='CUBE',
+                   POINT=numpg,
+                   INTERPOL='LIN');
+
+
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.10666524516254,
+                        VALE_PARA=tmax,
+                        NOM_PARA='INST',
+                        FONCTION=epsDIR,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=278.9784075357,
+                        VALE_PARA=tmax,
+                        NOM_PARA='INST',
+                        FONCTION=sigDIR,),
+              )
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.18838793303088,
+                        VALE_PARA=tmax,
+                        NOM_PARA='INST',
+                        FONCTION=gamma_1,),
+              )
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=3.978200332455E-03,
+                        VALE_PARA=tmax,
+                        NOM_PARA='INST',
+                        FONCTION=gamma_9,),
+              )
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=6.184097118002E-03,
+                        VALE_PARA=tmax,
+                        NOM_PARA='INST',
+                        FONCTION=gamma_12,),
+              )
+
+
+
+# TEST DES RESULTATS MFRONT
+
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.10666128863929,
+                        VALE_REFE=0.10666524516254,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        #PRECISION=1.E-3,
+                        NOM_PARA='INST',
+                        FONCTION=epsMF,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=278.9011406153,
+                        VALE_REFE=278.9784075357,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        #PRECISION=0.09,
+                        NOM_PARA='INST',
+                        FONCTION=sigMF,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.18805469100285,
+                        VALE_REFE=0.18838793303088,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        PRECISION=0.003,
+                        NOM_PARA='INST',
+                        FONCTION=gammf_1,),
+              )
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=4.258794162677E-03,
+                        VALE_REFE=3.978200332455E-03,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        PRECISION=0.08,
+                        NOM_PARA='INST',
+                        FONCTION=gammf_9,),
+              )
+
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=6.248249513246E-03,
+                        VALE_REFE=6.184097118002E-03,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        PRECISION=0.02,
+                        NOM_PARA='INST',
+                        FONCTION=gammf_12,),
+              )
+
+
+# TEST DES RESULTATS MFRONT jacobienne numérique
+
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.10666128866462,
+                        VALE_REFE=0.10666128863929,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        #PRECISION=1.E-3,
+                        NOM_PARA='INST',
+                        FONCTION=epsMFn,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=278.9011413607,
+                        VALE_REFE=278.9011406153,
+                        VALE_PARA=tmax,
+                        REFERENCE='AUTRE_ASTER',
+                        #PRECISION=0.09,
+                        NOM_PARA='INST',
+                        FONCTION=sigMFn,),
+              )
+
+
+
+FIN()

@@ -1,0 +1,584 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#       ELEMENT DE VOLUME EN TRACTION / TEMPERATURE VARIABLE
+#       MODELISATION B : ECROUISSAGE CINEMATIQUE LINEAIRE C_PLAN
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+TITRE='PHI2AS TEST1 ECR CINEMATIQUE LINEAIRE'
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+LINST=DEFI_LIST_REEL(   DEBUT=0.,INTERVALLE=(
+                             _F( JUSQU_A = 1.00,   NOMBRE = 1,   ),
+                             _F( JUSQU_A = 2.00,   NOMBRE = 40,   ))
+                         )
+
+COEF=DEFI_FONCTION(      NOM_PARA='INST',
+                            PROL_DROITE='LINEAIRE',
+                           PROL_GAUCHE='LINEAIRE',
+                          VALE=( 0.0,     0.0,
+                                 1.0,     1.0,
+                                 2.0,     1.0,))
+
+YOUNG=2.E5
+
+C_F = FORMULE(VALE='(1000.+2990.*TEMP) ',
+              NOM_PARA='TEMP',)
+
+H_F = FORMULE(VALE='YOUNG*C_F(TEMP)/(YOUNG+C_F(TEMP))',
+              YOUNG=YOUNG,
+              C_F=C_F,
+              NOM_PARA='TEMP',)
+
+SY_F = FORMULE(VALE='200.-1.7*TEMP',
+               NOM_PARA='TEMP',)
+
+TEMPE1=DEFI_LIST_REEL(  DEBUT=0.,
+              INTERVALLE=_F(  JUSQU_A = 100.,    NOMBRE = 100,  )
+                         )
+
+DSET=CALC_FONC_INTERP(    FONCTION=H_F,
+                           LIST_PARA=TEMPE1,
+                           NOM_PARA = 'TEMP', )
+
+SYT=CALC_FONC_INTERP(    FONCTION=SY_F,
+                         LIST_PARA=TEMPE1,
+                         NOM_PARA = 'TEMP', )
+
+ACIER=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                            ECRO_LINE_FO=_F( SY = SYT,
+                                          D_SIGM_EPSI = DSET,   )
+                          )
+
+# ECMI
+
+PRAG_F = FORMULE(VALE='(2. /3.) * C_F(TEMP)',
+                 C_F=C_F,
+                 NOM_PARA='TEMP',)
+
+PRAG=CALC_FONC_INTERP(FONCTION=PRAG_F,
+             LIST_PARA=TEMPE1,NOM_PARA ='TEMP', )
+
+ACIER2=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                            ECRO_LINE_FO=_F( SY = SYT,
+                                          D_SIGM_EPSI = DSET,   ),
+                                PRAGER_FO=_F( C = PRAG,  )
+                          )
+
+# CIN1_CHAB
+
+C_T=CALC_FONC_INTERP(    FONCTION=C_F,
+                  LIST_PARA=TEMPE1,NOM_PARA = 'TEMP', )
+
+D_T=DEFI_CONSTANTE( VALE=0.0)
+
+UN=DEFI_CONSTANTE( VALE=1.0)
+
+ZERO=DEFI_CONSTANTE( VALE=0.0)
+
+ACIER3=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                    CIN1_CHAB_FO=_F(
+                                 R_0 = SYT,
+                                 R_I = SYT,
+                                 B = ZERO,
+                                 C_I = C_T,
+                                 K = UN,
+                                 W = ZERO,
+                                 G_0 = D_T,
+                                 A_I = UN,
+                                    )
+                          )
+
+# CIN2_CHAB
+
+C2_F = FORMULE(VALE='0.5*C_F(TEMP)',
+               C_F=C_F,
+               NOM_PARA='TEMP',)
+
+C2_T=CALC_FONC_INTERP(    FONCTION=C2_F,
+                  LIST_PARA=TEMPE1,NOM_PARA = 'TEMP' )
+
+ACIER4=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                    CIN2_CHAB_FO=_F(
+                                 R_0 = SYT,
+                                 R_I = SYT,
+                                 B = ZERO,
+                                 C1_I = C2_T,
+                                 C2_I = C2_T,
+                                 K = UN,
+                                 W = ZERO,
+                                 G1_0 = D_T,
+                                 G2_0 = D_T,
+                                 A_I = UN,
+                                    )
+                          )
+
+
+MOMECA=AFFE_MODELE(
+
+               MAILLAGE=MA,
+
+                AFFE=_F(
+                TOUT = 'OUI',
+                PHENOMENE = 'MECANIQUE',
+                MODELISATION = 'TUYAU_3M',
+                )
+              )
+
+EP=0.01
+
+RMOY=0.2
+
+REXT=RMOY + (EP/2.)
+
+RINT=RMOY - (EP/2.)
+
+SURF=pi* (REXT*REXT-RINT*RINT)
+
+SIGYY=210.
+
+FTOT=SIGYY*SURF
+
+CAREL=AFFE_CARA_ELEM(  MODELE=MOMECA,
+                        POUTRE=_F( GROUP_MA = 'TOUT',
+                        SECTION = 'CERCLE',TUYAU_NCOU=1,
+           CARA = (   'R',  'EP', ),
+            VALE = (  REXT,  EP, ),
+            )
+                          )
+
+PRESSION=AFFE_CHAR_MECA(        MODELE=MOMECA,
+                            # PRES_REP :
+                            #      ( GROUP_MA : CD    PRES: -210. )
+
+                                  FORCE_NODALE=_F(  GROUP_NO = 'B',      FY = FTOT,  )
+                           )
+
+FTEMP=DEFI_FONCTION(
+                            NOM_PARA='INST',
+                             PROL_DROITE='LINEAIRE',
+                            PROL_GAUCHE='LINEAIRE',
+                           VALE=( 0.,  0.,
+                                  1., 0.,
+                                  2., 100.,)
+                          )
+
+CHP_TEMP=CREA_CHAMP(OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_F', MAILLAGE=MA,
+          AFFE=_F( TOUT = 'OUI', NOM_CMP = 'TEMP', VALE_F = FTEMP, ) )
+
+RTEMP=CREA_RESU( OPERATION='AFFE', TYPE_RESU='EVOL_THER', NOM_CHAM='TEMP',
+                 AFFE=_F( LIST_INST = LINST, CHAM_GD = CHP_TEMP )  )
+
+CHMATER=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER,  ),
+                            AFFE_VARC=  _F(TOUT='OUI',EVOL=RTEMP,
+                            NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=0.0),)
+
+CHMATER2=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER2,  ),
+                            AFFE_VARC=  _F(TOUT='OUI',EVOL=RTEMP,
+                            NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=0.0),)
+
+CHMATER3=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER3,  ),
+                            AFFE_VARC=  _F(TOUT='OUI',EVOL=RTEMP,
+                            NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=0.0),)
+
+CHMATER4=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER4,  ),
+                            AFFE_VARC=  _F(TOUT='OUI',EVOL=RTEMP,
+                            NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=0.0),)
+
+
+LIAISON=AFFE_CHAR_MECA(      MODELE=MOMECA,DDL_IMPO=(
+
+                               _F(  GROUP_NO = 'A',     DX = 0.,  DY = 0.,),
+                               _F(  GROUP_NO = 'B',     DX = 0.,  ),
+                   _F(   TOUT = 'OUI',  DZ = 0., DRX = 0., DRY = 0., DRZ = 0.,  ))
+                           )
+
+U2=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER2,
+                     CARA_ELEM=CAREL,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_ECMI_LINE', ),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ), ),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+CALC_CHAMP(reuse=U2, RESULTAT=U2, DEFORMATION=('EPSI_ELGA', 'EPME_ELGA', 'EPVC_ELGA', 'EPSP_ELGA'),)
+CALC_CHAMP(reuse=U2, RESULTAT=U2, DEFORMATION=('EPSI_ELNO', 'EPME_ELNO', 'EPVC_ELNO', 'EPSP_ELNO'),)
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=U2, NOM_CHAM=('SIEF_ELGA', 'EPSI_ELGA'),  INST=1.975))
+
+
+TEST_RESU(RESU=(
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSI_ELGA',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.00285967410177,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSI_ELGA',
+                   NOM_CMP='EPYY',
+                   VALE_CALC=0.000242662926729,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPVC_ELGA',
+                   NOM_CMP='EPTHER_L',
+                   VALE_CALC=9.75E-4,
+                   VALE_REFE=9.75E-4,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPME_ELGA',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.00188467410177,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPME_ELGA',
+                   NOM_CMP='EPYY',
+                   VALE_CALC=-0.000732337073271,
+                   MAILLE='M1',),
+                ),
+          )
+
+
+TEST_RESU(RESU=(
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=210.000002639,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=-3.04468612455E-06,
+                   MAILLE='M1',),
+                #_F(INST=1.975,
+                   #POINT=1,
+                   #SOUS_POINT=1,
+                   #RESULTAT=U2,
+                   #NOM_CHAM='SIEF_ELGA',
+                   #NOM_CMP='SIZZ',
+                   #VALE_CALC=0.,
+                   #MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSP_ELGA',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.0008346740840079708,
+                   MAILLE='M1',),
+                _F(INST=1.975,
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSP_ELGA',
+                   NOM_CMP='EPYY',
+                   VALE_CALC=-0.0004173370540890693,
+                   MAILLE='M1',),
+                ),
+          )
+
+
+
+
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=210.000000177,
+                   VALE_REFE=210.0,
+                   MAILLE='M1',),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011050000,
+                   VALE_REFE=0.011050000000000001,),
+                _F(GROUP_NO='B',
+                   INST=1.1000000000000001,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011150000,
+                   VALE_REFE=0.01115,),
+                _F(GROUP_NO='B',
+                   INST=2.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC= 2.85000004E-03,
+                   VALE_REFE=2.8500000000000001E-3,),
+                ),
+          )
+
+U=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER,
+                     CARA_ELEM=CAREL,
+                   COMPORTEMENT=_F( RELATION = 'VMIS_CINE_LINE',
+                             ),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ), ),
+                     INCREMENT=_F(  LIST_INST = LINST,
+                       ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 2,
+                              )
+
+                   )
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=209.999998912,
+                   VALE_REFE=210.0,
+                   MAILLE='M1',),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011049999,
+                   VALE_REFE=0.011050000000000001,),
+                _F(GROUP_NO='B',
+                   INST=1.1000000000000001,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011149999,
+                   VALE_REFE=0.01115,),
+                _F(GROUP_NO='B',
+                   INST=2.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC= 2.85000009E-03,
+                   VALE_REFE=2.8500000000000001E-3,),
+                ),
+          )
+
+U3=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER3,
+                     CARA_ELEM=CAREL,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_CIN1_CHAB',
+                             ),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ), ),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U3,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=210.000000000,
+                   VALE_REFE=210.0,
+                   MAILLE='M1',),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U3,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011050000,
+                   VALE_REFE=0.011050000000000001,),
+                _F(GROUP_NO='B',
+                   INST=1.1000000000000001,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U3,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011150000,
+                   VALE_REFE=0.01115,),
+                _F(GROUP_NO='B',
+                   INST=2.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U3,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC= 2.85000056E-03,
+                   VALE_REFE=2.8500000000000001E-3,),
+                ),
+          )
+
+U4=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER4,
+                     CARA_ELEM=CAREL,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_CIN2_CHAB',
+                             ),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ), ),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   RESULTAT=U4,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=210.000000000,
+                   VALE_REFE=210.0,
+                   MAILLE='M1',),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U4,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011050000,
+                   VALE_REFE=0.011050000000000001,),
+                _F(GROUP_NO='B',
+                   INST=1.1000000000000001,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U4,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011150000,
+                   VALE_REFE=0.01115,),
+                _F(GROUP_NO='B',
+                   INST=2.0,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U4,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC= 2.85000056E-03,
+                   VALE_REFE=2.8500000000000001E-3,),
+                ),
+          )
+
+FIN()
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#

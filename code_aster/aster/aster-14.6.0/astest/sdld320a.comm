@@ -1,0 +1,521 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__:SDLD320A
+# DYNAMIQUE TRANSITOIRE SUR BASE MODALE SYSTEME MASSE ET RESSORT
+# EXCITATION SINUSOIDALE
+#
+# IRCN   DATE 9/08/96   AUTEUR G.BECHEPAY - T.QUESNEL
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+#
+
+RESSORT0=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+#
+
+RESSORT=CREA_MAILLAGE(MAILLAGE=RESSORT0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='NOEUDS',   GROUP_NO = 'NOEUDS', ),
+        _F(NOM_GROUP_MA='P1',   NOEUD = 'P1', ),
+        _F(NOM_GROUP_MA='P2',   NOEUD = 'P2', ),
+        _F(NOM_GROUP_MA='P3',   NOEUD = 'P3', ),
+    ),
+)
+
+MODELE=AFFE_MODELE(MAILLAGE=RESSORT,
+                   AFFE=(_F(TOUT='OUI',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DIS_TR',),
+                         _F(GROUP_MA='NOEUDS',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DIS_TR',),),);
+
+#
+
+ELEMNT=AFFE_CARA_ELEM(MODELE=MODELE,
+                      DISCRET=(_F(CARA='K_TR_D_L',
+                                  MAILLE='E1',
+                                  VALE=(4.E9,4.E9,4.E9,4.E9,4.E9,4.E9,),),
+                               _F(CARA='M_TR_L',
+                                  MAILLE='E1',
+                                  VALE=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,),),
+                               _F(CARA='K_TR_D_L',
+                                  MAILLE='E2',
+                                  VALE=(5.33E8,5.33E8,5.33E8,5.33E8,5.33E8,5.33E8,),),
+                               _F(CARA='M_TR_L',
+                                  MAILLE='E2',
+                                  VALE=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                  0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,),),
+                               _F(CARA='A_TR_D_L',
+                                  MAILLE='E1',
+                                  VALE=(1.2566E6,0.,0.,0.,0.,0.,),),
+                               _F(CARA='A_TR_D_L',
+                                  MAILLE='E2',
+                                  VALE=(9.0478E6,0.,0.,0.,0.,0.,),),
+                               _F(CARA='M_TR_D_N',
+                                  GROUP_MA=('P2','P3',),
+                                  VALE=(12.E6,12.E6,12.E6,12.E6,0.,0.,0.,0.,0.,0.,),),
+                               _F(CARA='M_TR_D_N',
+                                  GROUP_MA='P1',
+                                  VALE=(1.E6,1.E6,1.E6,1.E6,0.,0.,0.,0.,0.,0.,),),),);
+
+#
+
+EFFORT=AFFE_CHAR_MECA(MODELE=MODELE,
+                      FORCE_NODALE=_F(NOEUD='P3',
+                                      FX=5.E4,),);
+
+#
+
+RIGIELEM=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                        MODELE=MODELE,
+                        CARA_ELEM=ELEMNT,);
+
+MASSELEM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                        MODELE=MODELE,
+                        CARA_ELEM=ELEMNT,);
+
+AMORELEM=CALC_MATR_ELEM(OPTION='AMOR_MECA',
+                        MODELE=MODELE,
+                        CARA_ELEM=ELEMNT,);
+
+EFFOELEM=CALC_VECT_ELEM(OPTION='CHAR_MECA',
+                        CHARGE=EFFORT,
+                        CARA_ELEM=ELEMNT,);
+
+#
+
+NUMEROTA=NUME_DDL(MATR_RIGI=RIGIELEM,);
+
+#
+
+MATRRIGI=ASSE_MATRICE(MATR_ELEM=RIGIELEM,
+                      NUME_DDL=NUMEROTA,);
+
+MATRMASS=ASSE_MATRICE(MATR_ELEM=MASSELEM,
+                      NUME_DDL=NUMEROTA,);
+
+MATRAMOR=ASSE_MATRICE(MATR_ELEM=AMORELEM,
+                      NUME_DDL=NUMEROTA,);
+
+VECTASS=ASSE_VECTEUR(VECT_ELEM=EFFOELEM,
+                     NUME_DDL=NUMEROTA,);
+
+#
+#
+# CALCUL DE LA BASE MODALE COMPLETE
+# ---------------------------------
+
+MODES=CALC_MODES(MATR_RIGI=MATRRIGI,
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=18,
+                              FREQ=200.,
+                              ),
+                 MATR_MASS=MATRMASS,
+                 SOLVEUR_MODAL=_F(METHODE='JACOBI',
+                                  NMAX_ITER_BATHE=30,
+                                  ),
+                 )
+
+
+#
+#
+# PROJECTION DANS LA BASE MODALE
+# ------------------------------
+
+PROJ_BASE(BASE=MODES,
+          STOCKAGE='PLEIN',
+          MATR_ASSE_GENE=(_F(MATRICE=CO('MASSEGEN'),
+                             MATR_ASSE=MATRMASS,),
+                          _F(MATRICE=CO('RIGIDGEN'),
+                             MATR_ASSE=MATRRIGI,),
+                          _F(MATRICE=CO('AMORTGEN'),
+                             MATR_ASSE=MATRAMOR,),),
+          VECT_ASSE_GENE=_F(VECTEUR=CO('EFFOGENE'),
+                            VECT_ASSE=VECTASS, TYPE_VECT='FORC'),);
+
+#
+# DEFINITION DE L'EXCITATION SINUSOIDALE
+# --------------------------------------
+
+SINOMEGT = FORMULE(VALE='sin(59.69026*INST) ',
+                   NOM_PARA='INST',)
+
+#
+pdt = 5.e-6
+
+# Interpolation -à priori - of the excitation function in order to speedup 
+# DYNA_VIBRA's resolution
+LIEXCIT=DEFI_LIST_REEL(DEBUT=0.,
+                       INTERVALLE=_F(JUSQU_A=5.+pdt,
+                                     PAS=pdt,),);
+
+#
+
+FONCMULT=CALC_FONC_INTERP(FONCTION=SINOMEGT,
+                          LIST_PARA=LIEXCIT,
+                          NOM_RESU='ALPHA',
+                          NOM_PARA='INST',
+                          INTERPOL='LIN',
+                          TITRE='SINUS OMEGA T',);
+
+#
+# DEFINITION DES INSTANTS DE CALCUL DE LA SOLUTION
+#-------------------------------------------------
+
+L_REELD = (0.09, 0.32, 1.18, 4.92);
+LISTRD=DEFI_LIST_REEL(VALE=L_REELD,);
+
+L_REELV = (0.05, 0.32, 1.18, 3.55);
+LISTRV=DEFI_LIST_REEL(VALE=L_REELV,);
+
+L_REELA = (0.09, 0.18, 0.55, 1.18, 4.92);
+LISTRA=DEFI_LIST_REEL(VALE=L_REELA,);
+
+L_RELAT = (0.18, 0.55, 0.82, 1.18, 1.92, 3.55, 4.92);
+LISTREL=DEFI_LIST_REEL(VALE=L_RELAT,);
+
+# Archive list
+listarch = list(set(list(L_REELD)+list(L_REELV)+list(L_REELA)+list(L_RELAT)))
+listarch.sort()
+
+DYNAMODA=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',
+                                         BETA=0.27,GAMMA=0.52),
+                         MATR_MASS=MASSEGEN,
+                         MATR_RIGI=RIGIDGEN,
+                         MATR_AMOR=AMORTGEN,
+                         INCREMENT=_F(INST_INIT=0.,
+                                      INST_FIN=5.,
+                                      PAS=pdt,),
+                         EXCIT=_F(VECT_ASSE_GENE=EFFOGENE,
+                                  FONC_MULT=FONCMULT,),
+                         ARCHIVAGE=_F(PAS_ARCH=1.e8, INST=listarch));
+
+#
+# RETOUR DANS L'ESPACE PHYSIQUE
+# -----------------------------
+
+DYNATRAN=REST_GENE_PHYS(RESU_GENE=DYNAMODA,
+                        LIST_INST=LISTRD,
+                        INTERPOL='LIN',
+                        NOM_CHAM='DEPL',);
+
+DYNATRAV=REST_GENE_PHYS(RESU_GENE=DYNAMODA,
+                        LIST_INST=LISTRV,
+                        INTERPOL='LIN',
+                        NOM_CHAM='VITE',);
+
+DYNATRAA=REST_GENE_PHYS(RESU_GENE=DYNAMODA,
+                        LIST_INST=LISTRA,
+                        INTERPOL='LIN',
+                        NOM_CHAM='ACCE',);
+
+DYNATRAR=REST_GENE_PHYS(RESU_GENE=DYNAMODA,
+                        LIST_INST=LISTREL,
+                        INTERPOL='LIN',
+                        NOM_CHAM='DEPL',);
+
+DYNATRAT=REST_GENE_PHYS(RESU_GENE=DYNAMODA,
+                        LIST_INST=LISTRD,
+                        NOM_CHAM='DEPL',
+                        GROUP_NO='NOEUDS',);
+
+#
+# VERIFICATION DE LA SOLUTION / VALEURS REFERENCES
+# ------------------------------------------------
+
+P3=RECU_FONCTION(RESULTAT=DYNATRAR,
+                 LIST_INST=LISTREL,
+                 NOM_CHAM='DEPL',
+                 NOM_CMP='DX',
+                 NOEUD='P3',);
+
+P1=RECU_FONCTION(RESULTAT=DYNATRAR,
+                 LIST_INST=LISTREL,
+                 NOM_CHAM='DEPL',
+                 NOM_CMP='DX',
+                 NOEUD='P1',);
+
+#
+# CALCUL DE LA FONCTION DEPLX EN P3 - DEPLX EN P1
+
+P3MP1=CALC_FONCTION(COMB=(_F(FONCTION=P3,
+                             COEF=1.,),
+                          _F(FONCTION=P1,
+                             COEF=-1.,),),);
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAN,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=6.73944583039E-06,
+                  VALE_REFE=6.7394999999999996E-06,
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAN,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.10194688041E-05,
+                  VALE_REFE=1.1019000000000001E-05,
+                  PRECISION=7.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAN,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=3.66816396476E-05,
+                  VALE_REFE=3.6683000000000001E-05,
+                  CRITERE='ABSOLU',
+                  PRECISION=1.E-7,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAN,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000166140288908,
+                  VALE_REFE=1.6615E-4,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAV,
+                  NOM_CHAM='VITE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000134247760429,
+                  VALE_REFE=1.3425000000000001E-4,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAV,
+                  NOM_CHAM='VITE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-6.41163650079E-05,
+                  VALE_REFE=-6.4110999999999997E-05,
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAV,
+                  NOM_CHAM='VITE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.6079067495E-05,
+                  VALE_REFE=1.6104E-05,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAV,
+                  NOM_CHAM='VITE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=4.42674770509E-05,
+                  VALE_REFE=4.4261999999999997E-05,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAA,
+                  NOM_CHAM='ACCE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00356994073406,
+                  CRITERE = 'ABSOLU',
+                  VALE_REFE=-3.5693999999999999E-3,
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAA,
+                  NOM_CHAM='ACCE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00439221735986,
+                  CRITERE = 'ABSOLU',
+                  VALE_REFE=-4.3924000000000003E-3,
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAA,
+                  NOM_CHAM='ACCE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00437646885645,
+                  VALE_REFE=4.3765999999999996E-3,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAA,
+                  NOM_CHAM='ACCE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00424572306147,
+                  VALE_REFE=4.2459000000000004E-3,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=5,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAA,
+                  NOM_CHAM='ACCE',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00422330795826,
+                  VALE_REFE=-4.2233000000000001E-3,
+                  CRITERE = 'ABSOLU',
+                  PRECISION=1.E-6,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.09,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=6.73944583039E-06,
+                  VALE_REFE=6.7394999999999996E-06,
+                  CRITERE=('RELATIF', 'ABSOLU'),
+                  PRECISION=1.E-4,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.32,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.10194688041E-05,
+                  VALE_REFE=1.1019000000000001E-05,
+                  CRITERE=('RELATIF', 'ABSOLU'),
+                  PRECISION=1.E-4, ),
+          )
+
+TEST_RESU(RESU=_F(INST=1.18,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=3.66816396476E-05,
+                  VALE_REFE=3.6683000000000001E-05,
+                  CRITERE='ABSOLU',
+                  PRECISION=1.E-7, ),
+          )
+
+TEST_RESU(RESU=_F(INST=4.92,
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=DYNATRAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='P3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000166140288906,
+                  VALE_REFE=1.6615E-4,
+                  CRITERE=('ABSOLU'),
+                  PRECISION=1.E-4, ),
+          )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=8.098570293387E-06,
+                         VALE_REFE=8.0986999999999992E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=0.18,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=-6.224785321241E-06,
+                         VALE_REFE=-6.2245999999999997E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=0.55,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=5.306504582729E-06,
+                         VALE_REFE=5.3063999999999997E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=0.82,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=-4.555148264757E-06,
+                         VALE_REFE=-4.5552E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=1.18,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=-3.041636223453E-06,
+                         VALE_REFE=-3.0415999999999998E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=1.92,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=1.844564263320E-06,
+                         VALE_REFE=1.8447999999999999E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=3.55,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      _F(VALE_CALC=1.483306415952E-06,
+                         VALE_REFE=1.4832E-06,
+                         REFERENCE='NON_DEFINI',
+                         VALE_PARA=4.92,
+                         PRECISION=1.E-2,
+                         FONCTION=P3MP1,),
+                      ),
+              )
+
+FIN();
+
+#

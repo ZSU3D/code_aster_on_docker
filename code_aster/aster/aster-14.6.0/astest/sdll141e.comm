@@ -1,0 +1,222 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# INCLINAISON DE 45 DEGRES
+# MASSE DE LA POUTRE REPRESENTEE PAR DES DISCRETS
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), DEBUG=_F(SDVERI='OUI'))
+
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=(_F(GROUP_MA='ROTOR',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='POU_D_E',),
+                         _F(GROUP_MA=('DISQUI','DISQUB',),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DIS_TR',),),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.0E11,
+                            NU=0.0,
+                            RHO=0.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='ROTOR',
+                            MATER=ACIER,),);
+
+CARELEM=AFFE_CARA_ELEM(MODELE=MODELE,
+                       POUTRE=_F(GROUP_MA='ROTOR',
+                                 SECTION='CERCLE',
+                                 CARA='R',
+                                 VALE=.025,),
+                       DISCRET=(_F(CARA='M_TR_D_N',
+                                   GROUP_MA='DISQUI',
+                                   REPERE='LOCAL',
+                                   VALE=(0.7657,2.393E-4,2.791E-4,2.791E-4,0.,0.,0.,0.,0.,0.,),),
+                                _F(CARA='K_TR_D_N',
+                                   GROUP_MA='DISQUI',
+                                   REPERE='LOCAL',
+                                   VALE=(0.,0.,0.,0.,0.,0.,),),
+                                _F(CARA='A_TR_D_N',
+                                   GROUP_MA='DISQUI',
+                                   REPERE='LOCAL',
+                                   VALE=(0.,0.,0.,0.,0.,0.,),),
+                                _F(CARA='M_TR_D_N',
+                                   GROUP_MA='DISQUB',
+                                   REPERE='LOCAL',
+                                   VALE=(0.3829,1.196E-4,1.395E-4,1.395E-4,0.,0.,0.,0.,0.,0.,),),),
+                       ORIENTATION=_F(GROUP_MA=('DISQUI','DISQUB',),
+                                      CARA='ANGL_NAUT',
+                                      VALE=(45.,0.,0.,),),);
+
+# CONDITIONS AUX LIMITES
+
+BLOQUAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                        DDL_IMPO=_F(GROUP_NO=('PALIER_A','PALIER_B',),
+                                    DX=0.,
+                                    DY=0.,
+                                    DZ=0.,),
+                        LIAISON_OBLIQUE=_F(GROUP_NO=('PALIER_A','PALIER_B',),
+                                           ANGL_NAUT=(45.,0.,0.,),
+                                           DRX=0.,),);
+
+#MATRICES ASSEMBLEES K, M ET C
+
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARELEM,
+                CHARGE=BLOQUAGE,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('RIGIDITE'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('MASSE'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('AMOR'),
+                              OPTION='AMOR_MECA',),),);
+
+GYELEM=CALC_MATR_ELEM(OPTION='MECA_GYRO',
+                      MODELE=MODELE,
+                      CHAM_MATER=CHMAT,
+                      CARA_ELEM=CARELEM,);
+
+GYASS=ASSE_MATRICE(MATR_ELEM=GYELEM,
+                   NUME_DDL=NUMEDDL,);
+
+MODES=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 OPTION='BANDE',
+                 CALC_FREQ=_F(FREQ=(3.,3000.,),
+                              ),
+                 MATR_MASS=MASSE,
+                 )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES,
+                   VALE_CALC=122.478931386,
+                   VALE_REFE=122.7475,
+                   PRECISION=3.0E-3,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES,
+                   VALE_CALC=486.695453117,
+                   VALE_REFE=490.9899,
+                   PRECISION=9.E-3,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES,
+                   VALE_CALC= 1.08326303E+03,
+                   VALE_REFE=1104.7273,
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES,
+                   VALE_CALC= 1.89739084E+03,
+                   VALE_REFE=1963.9596,
+                   PRECISION=0.04,),
+                ),
+          )
+
+OM = 10000.0;
+
+
+GYOM=COMB_MATR_ASSE(COMB_R=(_F(MATR_ASSE=GYASS,
+                               COEF_R=OM,),
+                            _F(MATR_ASSE=AMOR,
+                               COEF_R=1.,),),);
+
+MODEG=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 VERI_MODE=_F(SEUIL=1.E-3,
+                              ),
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=30,
+                              FREQ=1.,
+                              ),
+                 MATR_AMOR=GYOM,
+                 MATR_MASS=MASSE,
+                 SOLVEUR_MODAL=_F(COEF_DIM_ESPACE=4),
+                 )
+
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC=119.499007755,
+                   VALE_REFE=119.7548,
+                   PRECISION=4.0E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC=125.532394430,
+                   VALE_REFE=125.815,
+                   PRECISION=9.E-3,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC=474.924434541,
+                   VALE_REFE=479.0191,
+                   PRECISION=9.E-3,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC=498.746263953,
+                   VALE_REFE=503.25979999999998,
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC= 1.05730639E+03,
+                   VALE_REFE=1077.7931000000001,
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC= 1.10979928E+03,
+                   VALE_REFE=1132.3345999999999,
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC= 1.85245970E+03,
+                   VALE_REFE=1916.0764999999999,
+                   PRECISION=0.04,),
+                _F(NUME_ORDRE=9,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODEG,
+                   VALE_CALC= 1.98667036E+03,
+                   VALE_REFE=2013.0392999999999,
+                   PRECISION=0.02,),
+                ),
+          )
+
+FIN();

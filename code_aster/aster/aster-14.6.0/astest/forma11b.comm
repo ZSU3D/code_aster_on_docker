@@ -1,0 +1,208 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: emmanuel.boyere at edf.fr
+#-------------------------------------------------------------------
+#                 CORRIGE TP ANALYSE MODAL N2
+#                        MODES DE CORPS RIGIDE
+#
+# OBJECTIF POUR LA BASE DE CAS-TESTS ASTER: MODAL GENERALISE REEL.
+# INTERCOMPARAISON DES METHODES DE SOUS-ESPACES (SORENSEN, LANCZOS,
+# ET QZ).
+#-------------------------------------------------------------------
+
+#-------------------------------------------------------------------
+#                       CALCUL ASTER
+#-------------------------------------------------------------------
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# LECTURE MAILLAGE ET AFFECTATION MATERIAU/MODELE
+ACIER=DEFI_MATERIAU(ELAS=_F(E=1.E8,
+                            NU=0.3,
+                            RHO=1.E4,),);
+MAYA=LIRE_MAILLAGE(FORMAT='MED',);
+MATER=AFFE_MATERIAU(MAILLAGE=MAYA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=ACIER,),);
+STRUCTUR=AFFE_MODELE(MAILLAGE=MAYA,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D',),);
+
+# CALCULS DES MATRICES DE MASSE ET DE RIGIDITE
+K_ELEM=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                      MODELE=STRUCTUR,
+                      CHAM_MATER=MATER,);
+M_ELEM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=STRUCTUR,
+                      CHAM_MATER=MATER,);
+NUMERO=NUME_DDL(MATR_RIGI=K_ELEM,);
+K_ASSE=ASSE_MATRICE(MATR_ELEM=K_ELEM,
+                    NUME_DDL=NUMERO,);
+
+M_ASSE=ASSE_MATRICE(MATR_ELEM=M_ELEM,
+                    NUME_DDL=NUMERO,);
+
+#--------------------------------------------------------------------
+# ANALYSE MODALE
+# QUESTION 1: CALCUL BANDE AVEC SORENSEN
+
+MODE_SOB=CALC_MODES(MATR_RIGI=K_ASSE,
+                    
+                    OPTION='BANDE',SOLVEUR=_F(NPREC=9,),
+                    CALC_FREQ=_F(#SEUIL_FREQ=.1,
+                                 #NMAX_ITER_SHIFT=6,
+                                 FREQ=(-.3,2700.0,),
+                                 ),
+                    TITRE='1/ METHODE DE SORENSEN',
+                    MATR_MASS=M_ASSE,
+                    SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                     COEF_DIM_ESPACE=8,
+                                     ),
+                    )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODE_SOB,
+                  VALE_CALC=0.,
+                  VALE_REFE=0.,
+# ISSUE DE CALC_MODES - ON NE PEUT PAS CONTROLER CE ZERO A MIEUX QUE 1.E-3
+# A COMPARER A LA PREMIERE FREQUENCE NON NULLE QUI VAUT 2613 HZ
+                  PRECISION=5.E-03,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=7,
+                  PARA='FREQ',
+                  RESULTAT=MODE_SOB,
+                  VALE_CALC=2469.64060726,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+MODE_QZ=CALC_MODES(MATR_RIGI=K_ASSE,
+                   OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.0,2700.0,),
+                                ),
+                   TITRE='1/ METHODE QZ',
+                   MATR_MASS=M_ASSE,
+                   SOLVEUR_MODAL=_F(TYPE_QZ='QZ_QR',
+                                    METHODE='QZ',
+                                    ),
+                   )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=MODE_QZ,
+                  VALE_CALC=0.0,
+                  VALE_REFE=0.0,
+# ISSUE DE CALC_MODES - ON NE PEUT PAS CONTROLER CE ZERO A MIEUX QUE 1.E-3
+# A COMPARER A LA PREMIERE FREQUENCE NON NULLE QUI VAUT 2613 HZ
+                  CRITERE='ABSOLU',
+                  PRECISION=3.5E-3,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=16,
+                  PARA='FREQ',
+                  RESULTAT=MODE_QZ,
+                  VALE_CALC=2613.64123957,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+# IMPRESSIONS DES PARAMETRES EN SUS DANS .RESU
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MODE_SOB,
+                  TOUT_CHAM='NON',
+                  TOUT_PARA='OUI',),);
+
+# IMPRESSION FORMAT MED DES MODES PROPRES
+IMPR_RESU(FORMAT='MED',UNITE=55,
+          RESU=(_F(
+                   MAILLAGE=MAYA,),
+                _F(
+                   RESULTAT=MODE_SOB,),),);
+
+# AFFICHAGE GIBI INTERACTIF VIA PYTHON
+#os.system('cp %spost.dcas .' %directory)
+#os.system('/logiciels/aster/outils/gibi2000.x post.dcas')
+
+# FIN DE LA QUESTION 1.
+#FIN();
+
+# QUESTION 2: CALCUL BANDE AVEC LANCZOS SANS OU AVEC OPTION MODE RIGIDE
+
+#MODE_LAS=CALC_MODES(MATR_RIGI=K_ASSE,
+#                    MATR_MASS=M_ASSE,
+#                    SOLVEUR_MODAL(METHODE='TRI_DIAG',),
+#                    MODE_RIGIDE='NON',
+#                    OPTION='BANDE',
+#                    CALC_FREQ=_F(FREQ=(0.0,2800.0,),),
+#                    VERI_MODE=_F(STOP_ERREUR='NON',),
+#                    TITRE='2/ METHODE DE LANCZOS AVEC OPTION MODE RIGIDE',
+#                    );
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MODE_LAS,
+#                  TOUT_CHAM='NON',
+#                  TOUT_PARA='OUI',),);
+MODE_LAA=CALC_MODES(MATR_RIGI=K_ASSE,
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=(0.0,2800.0,),
+                                 ),
+                    TITRE='2/ METHODE DE LANCZOS AVEC OPTION',
+                    MATR_MASS=M_ASSE,
+                    SOLVEUR_MODAL=_F(MODE_RIGIDE='OUI',
+                                     METHODE='TRI_DIAG',
+                                     ),
+                    )
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MODE_LAA,
+                  TOUT_CHAM='NON',
+                  TOUT_PARA='OUI',),);
+
+TEST_RESU(RESU=_F(NUME_ORDRE=11,
+                  PARA='FREQ',
+                  RESULTAT=MODE_LAA,
+                  VALE_CALC=2470.84079534,
+                  ),
+          )
+
+# FIN DE LA QUESTION 2.
+#FIN();
+
+# QUESTION 3: CALCUL DES 16 PLUS PETITES AVEC SORENSEN
+# ON UTILISE "SEUIL_FREQ" POUR EVITER LE SOUCI AVEC LES CORPS RIGIDES
+
+MODE_SOP=CALC_MODES(MATR_RIGI=K_ASSE,
+                    OPTION='PLUS_PETITE',
+                    CALC_FREQ=_F(NMAX_FREQ=16,
+                                 SEUIL_FREQ=1.,
+                                 ),
+                    MATR_MASS=M_ASSE,
+                    SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                     ),
+                    )
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MODE_SOP,
+                  TOUT_CHAM='NON',
+                  TOUT_PARA='OUI',),);
+
+FIN();

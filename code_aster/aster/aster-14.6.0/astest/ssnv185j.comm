@@ -1,0 +1,248 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'),)
+
+# MODELISATION J : X-FEM PROPAGATION SIMPLEXE EN TRACTION
+
+#----------------------------------------------
+#                 MAILLAGE
+#----------------------------------------------
+
+PT1 = [ 0. ,  0. , 0. ]
+PT2 = [ 0. , 10. , 0. ]
+PT3 = [ 1. , 10. , 0. ]
+
+MAILLAG1=LIRE_MAILLAGE(FORMAT='MED',INFO=1,);
+
+MAILLAG1=DEFI_GROUP( reuse =MAILLAG1,
+                     MAILLAGE=MAILLAG1,
+                     CREA_GROUP_NO=( _F(NOM='NOEUD1',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT1,
+                                        PRECISION=1.E-6,
+                                        RAYON=1.E-6),
+                                     _F(NOM='NOEUD2',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT2,
+                                        PRECISION=1.E-6,
+                                        RAYON=1.E-6),
+                                     _F(NOM='NOEUD3',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT3,
+                                        PRECISION=1.E-6,
+                                        RAYON=1.E-6),
+                                    ),
+                      INFO=1, );
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO=_F(GROUP_MA='VOL',),);
+
+#----------------------------------------------
+#                   MODELE
+#----------------------------------------------
+
+MODELE = [None]*5
+
+MODELE[0]=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                      AFFE=(_F(GROUP_MA=('VOL',),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='3D',),
+                            _F(GROUP_MA=('SURFINF','SURFSUP',),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='3D',),),);
+
+MAILLAG1=MODI_MAILLAGE(reuse =MAILLAG1,
+                       MAILLAGE=MAILLAG1,
+                       ORIE_PEAU_3D=_F(GROUP_MA=('SURFSUP','SURFINF',),),
+                       );
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=205000.0E6
+nu=0.
+rho=7800.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=rho,),);
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELE[0],
+                       AFFE=_F(TOUT = 'OUI',
+                                MATER=ACIER,
+                                ),
+                             );
+
+#----------------------------------------------
+#                   FISSURE
+#----------------------------------------------
+
+# PARAMETRES DE LA FISSURE
+a=4.9
+b=10.
+LN = FORMULE(VALE='Z-15.',
+             NOM_PARA=['X', 'Y', 'Z'],)
+LT = FORMULE(VALE='b-a-Y',
+             b=b,
+             a=a,
+             NOM_PARA=['X', 'Y', 'Z'],)
+
+FISS = [None]*5
+
+FISS[0]=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                       DEFI_FISS=_F(FONC_LT=LT,FONC_LN=LN,),
+                       );
+
+#----------------------------------------------
+#                   CHARGEMENTS
+#----------------------------------------------
+
+PRES=-1.E6
+
+#----------------------------------------------
+#         PROPAGATION SUR 3 PAS DE TEMPS
+#----------------------------------------------
+
+CHXFEM = [None]*5
+CH1 = [None]*5
+CH2 = [None]*5
+RESU = [None]*5
+SIF = [None]*5
+LSN = [None]*5
+LST = [None]*5
+
+
+L_INS1=DEFI_LIST_REEL(DEBUT=0.0,INTERVALLE=_F(JUSQU_A=3.0,NOMBRE=3,),);
+RI = 1.
+RS = 2.
+
+for i in range(1,4) :
+
+   MODELE[i]=MODI_MODELE_XFEM(MODELE_IN=MODELE[0],FISSURE=FISS[i-1],INFO=1,);
+
+   CH1[i]=AFFE_CHAR_MECA(MODELE=MODELE[i],
+                      DDL_IMPO=(_F(GROUP_NO='NOEUD1',DX=0.0,DY=0.0,DZ=0.0,),
+                                _F(GROUP_NO='NOEUD2',DZ=0.0,),
+                                _F(GROUP_NO='NOEUD3',DX=0.0,DZ=0.0,),),);
+
+   CH2[i]=AFFE_CHAR_MECA(MODELE=MODELE[i],
+                      PRES_REP=_F(GROUP_MA=('SURFSUP','SURFINF',),PRES=PRES,),);
+
+   RESU[i]=MECA_STATIQUE(MODELE=MODELE[i],
+                         CHAM_MATER=CHAMPMA1,
+                         EXCIT=(
+                                _F(CHARGE=CH1[i],),
+                                _F(CHARGE=CH2[i],),),
+                         INFO=1,);
+
+   SIF[i]=CALC_G        (RESULTAT=RESU[i],
+                         OPTION='CALC_K_G',
+                         THETA=_F( FISSURE=FISS[i-1],),
+                         LISSAGE=_F( LISSAGE_THETA='LAGRANGE',
+                                     LISSAGE_G='LAGRANGE',),);
+
+   IMPR_TABLE(TABLE=SIF[i],);
+
+   if ( i != 3 ) :
+      FISS[i] = CO('FISS_%d'%(i))
+      PROPA_FISS(METHODE_PROPA='SIMPLEXE',
+                 MODELE=MODELE[i],
+                 FISSURE=_F(FISS_ACTUELLE=FISS[i-1],
+                            FISS_PROPAGEE=FISS[i],
+                            TABLE=SIF[i],
+                           ),
+                 RAYON=RS,
+                 ZONE_MAJ='TOUT',
+                 DA_MAX=0.501,
+                 INFO=1,
+                 COMP_LINE=_F(COEF_MULT_MINI=0.,
+                              COEF_MULT_MAXI=1.,),
+                 LOI_PROPA=_F(LOI='PARIS',
+                              C=1.0,
+                              M=0.5,
+                              MATER=ACIER,),
+                );
+
+#----------------------------------------------
+#         POST TRAITEMENT
+#----------------------------------------------
+#       SOLUTIONS ANALYTIQUES DE K1 :
+# POUR LE CHARGEMENT 1 : VOIR CHABOCHE P.53
+b=10
+afiss=[4.9 , 5.4 , 5.9 ]
+coef1 = [None]*5
+fab = [None]*5
+K1REF = [None]*5
+
+VAL_CALC=[ 10710766.2513,
+           10710766.2513,
+           13262852.7589,
+           13262852.7589]
+
+for i in range(1,3) :
+   coef1[i]=(pi*afiss[i-1])/(2.*b)
+   fab[i]=sqrt(tan(coef1[i])/coef1[i])*(0.752+0.37*(1.-sin(coef1[i]))**3+2.02*afiss[i-1]/b)/cos(coef1[i])
+   K1REF[i]=-PRES*sqrt(pi*afiss[i-1])*fab[i]
+
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='K1',
+              TYPE_TEST='MAX',
+              VALE_CALC=VAL_CALC[2*i-2], VALE_REFE=K1REF[i],
+              CRITERE='RELATIF',
+              PRECISION=0.05,    
+              REFERENCE='ANALYTIQUE',);
+
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='K1',
+              TYPE_TEST='MIN',
+              VALE_CALC=VAL_CALC[2*i-1], VALE_REFE=K1REF[i],
+              CRITERE='RELATIF',
+              PRECISION=0.05,    
+              REFERENCE='ANALYTIQUE',);
+
+#----------------------------------------------
+#         EDITION DE FICHIERS GMSH
+#----------------------------------------------
+
+MAXFEM = [None]*5
+MOVISU = [None]*5
+DEPL = [None]*5
+
+
+for i in range(1,4) :
+   MAXFEM[i]=POST_MAIL_XFEM(MODELE=MODELE[i],
+                             );
+
+   MOVISU[i]=AFFE_MODELE(MAILLAGE=MAXFEM[i],
+                         AFFE=_F(TOUT='OUI',
+                                 PHENOMENE='MECANIQUE',
+                                 MODELISATION='3D',),) 
+
+   DEPL[i]=POST_CHAM_XFEM(MODELE_VISU   = MOVISU[i],
+                          RESULTAT=RESU[i],
+                          );
+
+   DEFI_FICHIER(UNITE=30+i,);
+   IMPR_RESU(FORMAT='GMSH',
+             UNITE=30+i,
+             RESU=_F(RESULTAT=DEPL[i],),);
+
+
+FIN();

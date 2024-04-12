@@ -1,0 +1,425 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MELANGE D'ELEMNTS POUTRE, COQUE ET VOLUME
+# ELEMENTS  : MEPOUDE,DKQQU8 ET HEXA20
+# REFERENCE : ANALYTIQUE
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+ACIER=DEFI_MATERIAU(
+                         ELAS=_F(  RHO = 2400.,
+                           NU = 0.,
+                           E = 6.7E10))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MATER=AFFE_MATERIAU(    MAILLAGE=MAYA,AFFE=(
+                                 _F(  GROUP_MA = 'VOLUME',
+                                        MATER = ACIER),
+                                      _F(  GROUP_MA = 'POUTRE',
+                                        MATER = ACIER)))
+
+STRUC_1=AFFE_MODELE(    MAILLAGE=MAYA,AFFE=(
+                               _F(  GROUP_MA = 'VOLUME',
+                                      MODELISATION = '3D',
+                                      PHENOMENE = 'MECANIQUE'),
+                                    _F(  GROUP_MA = 'FACES',
+                                      MODELISATION = '3D',
+                                      PHENOMENE = 'MECANIQUE'),
+
+                                    _F(  GROUP_MA = 'POUTRE',
+                                      MODELISATION = 'POU_D_E',
+                                      PHENOMENE = 'MECANIQUE'))
+                       )
+
+CARA_1=AFFE_CARA_ELEM(      MODELE=STRUC_1,
+
+                                POUTRE=_F(
+                            GROUP_MA = 'POUTRE',
+                            SECTION = 'RECTANGLE',
+                            CARA = ( 'HY',  'HZ', ),
+                            VALE = ( 0.014,  0.014,  ))
+
+
+                          )
+
+FIXA_1=AFFE_CHAR_MECA(      MODELE=STRUC_1,
+                              DDL_IMPO=_F(  GROUP_NO = 'POINT_A',
+                                               DX = 0.,
+                                               DY = 0.),
+                              LIAISON_ELEM=_F(  OPTION = '3D_POU',
+                                             GROUP_MA_1 = 'FACES',
+                                             GROUP_NO_2 = 'NOE1')
+
+                          )
+
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITE ET DE MASSE
+
+K_EL_1=CALC_MATR_ELEM(        MODELE=STRUC_1,
+                                 CARA_ELEM=CARA_1,
+                                    CHARGE=FIXA_1,
+                                CHAM_MATER=MATER,
+                                   OPTION='RIGI_MECA' )
+
+M_EL_1=CALC_MATR_ELEM(        MODELE=STRUC_1,
+                                 CARA_ELEM=CARA_1,
+                                    CHARGE=FIXA_1,
+                                CHAM_MATER=MATER,
+                                   OPTION='MASS_MECA' )
+
+# NUMEROTATION
+
+NUMERO_1=NUME_DDL(    MATR_RIGI=K_EL_1 )
+
+# ASSEMBLAGE DES MATRICES DE RIGIDITE ET DE MASSE
+
+
+K_AS_1=ASSE_MATRICE(    MATR_ELEM=K_EL_1,
+                             NUME_DDL=NUMERO_1)
+
+M_AS_1=ASSE_MATRICE(    MATR_ELEM=M_EL_1,
+                             NUME_DDL=NUMERO_1 )
+
+# CALCUL DES MODES PAR SORENSEN + BANDE
+
+MODE_A_1=CALC_MODES(MATR_RIGI=K_AS_1,
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=( 10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_1,
+                    )
+
+
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_1,
+                   VALE_CALC=84.821272138,
+                   VALE_REFE=85.5,
+                   CRITERE='RELATIF',
+                   PRECISION=8.5000000000000006E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=7,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_1,
+                   VALE_CALC=275.271185695,
+                   VALE_REFE=277.0,
+                   CRITERE='RELATIF',
+                   PRECISION=7.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=9,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_1,
+                   VALE_CALC=573.389391156,
+                   VALE_REFE=577.89999999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=8.0000000000000002E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=11,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_1,
+                   VALE_CALC=977.033242591,
+                   VALE_REFE=988.20000000000005,
+                   CRITERE='RELATIF',
+                   PRECISION=0.012,),
+                _F(PARA='FREQ',
+                   NUME_MODE=13,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_1,
+                   VALE_CALC= 1.45397527E+03,
+                   VALE_REFE=1507.9000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=0.035999999999999997,),
+                ),
+          )
+
+# CALCUL DES MODES PAR JACOBI  + BANDE
+
+MODE_B_1=CALC_MODES(MATR_RIGI=K_AS_1,
+                    VERI_MODE=_F(SEUIL=1.E-3,
+                                 ),
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=( 10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_1,
+                    SOLVEUR_MODAL=_F(METHODE='JACOBI',
+                                     ),
+                    )
+
+
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_1,
+                   VALE_CALC=84.821272139,
+                   VALE_REFE=85.5,
+                   CRITERE='RELATIF',
+                   PRECISION=8.5000000000000006E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=7,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_1,
+                   VALE_CALC=275.271185695,
+                   VALE_REFE=277.0,
+                   CRITERE='RELATIF',
+                   PRECISION=7.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=9,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_1,
+                   VALE_CALC=573.389391156,
+                   VALE_REFE=577.89999999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=8.0000000000000002E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=11,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_1,
+                   VALE_CALC=977.033242591,
+                   VALE_REFE=988.20000000000005,
+                   CRITERE='RELATIF',
+                   PRECISION=0.012,),
+                _F(PARA='FREQ',
+                   NUME_MODE=13,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_1,
+                   VALE_CALC= 1.45397527E+03,
+                   VALE_REFE=1507.9000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=0.036999999999999998,),
+                ),
+          )
+
+# APPUI ELASTIQUE
+
+STRUC_2=AFFE_MODELE(    MAILLAGE=MAYA,AFFE=(
+                               _F(  GROUP_MA = 'VOLUME',
+                                      MODELISATION = '3D',
+                                      PHENOMENE = 'MECANIQUE'),
+                                    _F(  GROUP_MA = 'FACES',
+                                      MODELISATION = '3D',
+                                      PHENOMENE = 'MECANIQUE'),
+                                    _F(  GROUP_MA = 'FAC_RES',
+                                      MODELISATION = '3D',
+                                      PHENOMENE = 'MECANIQUE'),
+
+
+                                    _F(  GROUP_MA = 'POUTRE',
+                                      MODELISATION = 'POU_D_E',
+                                      PHENOMENE = 'MECANIQUE'),
+
+                                    _F(  GROUP_MA = 'RESSORT',
+                                      MODELISATION = 'DIS_TR',
+                                      PHENOMENE = 'MECANIQUE'))
+                       )
+
+CARA_2=AFFE_CARA_ELEM(      MODELE=STRUC_2,
+
+                                POUTRE=_F(
+                            GROUP_MA = 'POUTRE',
+                            SECTION = 'RECTANGLE',
+                            CARA = ( 'HY',  'HZ', ),
+                            VALE = ( 0.014,  0.014,  )),
+
+                               DISCRET=(_F(
+                            CARA = 'K_TR_D_N',
+                            GROUP_MA = 'RESSORT',
+                            REPERE = 'GLOBAL',
+                            VALE = ( 0.,18000.,0.,
+                                        0.,0.,0.,       )),
+                                          _F(
+                            CARA = 'M_TR_D_N',
+                            GROUP_MA = 'RESSORT',
+                            REPERE = 'GLOBAL',
+                  VALE = ( 0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,)),)
+
+
+                          )
+
+FIXA_2=AFFE_CHAR_MECA(      MODELE=STRUC_2,
+                              DDL_IMPO=_F(  GROUP_NO = 'POINT_A',
+                                               DX = 0.,
+                                               DY = 0.),LIAISON_ELEM=(
+                              _F(  OPTION = '3D_POU',
+                                             GROUP_MA_1 = 'FACES',
+                                             GROUP_NO_2 = 'NOE1'),
+                              _F(  OPTION = '3D_POU',
+                                             GROUP_MA_1 = 'FAC_RES',
+                                             GROUP_NO_2 = 'NO_RES'))
+
+                          )
+
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITE ET DE MASSE
+
+K_EL_2=CALC_MATR_ELEM(        MODELE=STRUC_2,
+                                 CARA_ELEM=CARA_2,
+                                    CHARGE=FIXA_2,
+                                CHAM_MATER=MATER,
+                                   OPTION='RIGI_MECA' )
+
+M_EL_2=CALC_MATR_ELEM(        MODELE=STRUC_2,
+                                 CARA_ELEM=CARA_2,
+                                    CHARGE=FIXA_2,
+                                CHAM_MATER=MATER,
+                                   OPTION='MASS_MECA' )
+
+# NUMEROTATION
+
+NUMERO_2=NUME_DDL(    MATR_RIGI=K_EL_2)
+
+# ASSEMBLAGE DES MATRICES DE RIGIDITE ET DE MASSE
+
+
+K_AS_2=ASSE_MATRICE(    MATR_ELEM=K_EL_2,
+                             NUME_DDL=NUMERO_2)
+
+M_AS_2=ASSE_MATRICE(    MATR_ELEM=M_EL_2,
+                             NUME_DDL=NUMERO_2 )
+
+# CALCUL DES MODES PAR SORENSEN + BANDE
+
+MODE_A_2=CALC_MODES(MATR_RIGI=K_AS_2,
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=( 10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_2,
+                    )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC=42.936699224,
+                   VALE_REFE=43.100000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=4.0000000000000001E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC=114.758739867,
+                   VALE_REFE=115.40000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=6.0000000000000001E-3,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC=284.893521255,
+                   VALE_REFE=286.5,
+                   CRITERE='RELATIF',
+                   PRECISION=6.0000000000000001E-3,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC=577.772094980,
+                   VALE_REFE=582.29999999999995,
+                   CRITERE='RELATIF',
+                   PRECISION=8.0000000000000002E-3,),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC=979.597191767,
+                   VALE_REFE=990.70000000000005,
+                   CRITERE='RELATIF',
+                   PRECISION=0.012,),
+                _F(NUME_ORDRE=10,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_A_2,
+                   VALE_CALC= 1.45511458E+03,
+                   VALE_REFE=1509.5999999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.036999999999999998,),
+                ),
+          )
+
+# CALCUL DES MODES PAR JACOBI  + BANDE
+
+MODE_B_2=CALC_MODES(MATR_RIGI=K_AS_2,
+                    VERI_MODE=_F(SEUIL=2.E-4,
+                                 ),
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=( 10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_2,
+                    SOLVEUR_MODAL=_F(METHODE='JACOBI',
+                                     PREC_JACOBI=1.E-4,
+                                     PREC_BATHE=1.E-12,
+                                     ),
+                    )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC=42.936699224,
+                   VALE_REFE=43.100000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=4.0000000000000001E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC=114.758739867,
+                   VALE_REFE=115.40000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=6.0000000000000001E-3,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC=284.893521255,
+                   VALE_REFE=286.5,
+                   CRITERE='RELATIF',
+                   PRECISION=6.0000000000000001E-3,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC=577.772094979,
+                   VALE_REFE=582.29999999999995,
+                   CRITERE='RELATIF',
+                   PRECISION=8.0000000000000002E-3,),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC=979.597191767,
+                   VALE_REFE=990.70000000000005,
+                   CRITERE='RELATIF',
+                   PRECISION=0.012,),
+                _F(NUME_ORDRE=10,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_B_2,
+                   VALE_CALC= 1.45511458E+03,
+                   VALE_REFE=1509.5999999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.036999999999999998,),
+                ),
+          )
+
+FIN()
+#

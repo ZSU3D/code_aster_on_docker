@@ -1,0 +1,273 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#----------------------------------------------
+#             MAILLAGE 
+#----------------------------------------------
+lx=1.
+lz=1.
+ly=1.
+MAILLAG1=LIRE_MAILLAGE(FORMAT='MED',INFO=1);
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO=(_F(GROUP_MA='SURFBAC'),
+                                   _F(GROUP_MA='SURFFRO'))
+                                   );
+                                   
+MAILLAG1=MODI_MAILLAGE(reuse =MAILLAG1,
+                       MAILLAGE=MAILLAG1,
+                       ORIE_PEAU_3D=_F(GROUP_MA=('SURFBAC','SURFFRO')),
+                       );
+
+#----------------------------------------------
+#                   MODELE ET FISSURE
+#----------------------------------------------
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                     AFFE=_F(GROUP_MA='VOL',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D'),
+                    );
+
+
+LN = FORMULE(VALE='Z-lz/2.',
+             lz=lz,
+             NOM_PARA=['X', 'Y', 'Z'],)
+LT = FORMULE(VALE='Y-ly/2.',
+             ly=ly,
+             NOM_PARA=['X', 'Y', 'Z'],)
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                    DEFI_FISS=_F(FONC_LT=LT,FONC_LN=LN),
+                    TYPE_ENRI_FOND='TOPOLOGIQUE',
+                    );
+
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,FISSURE=FISS,INFO=1);
+
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=100.0E6
+nu=0.
+rho=7800.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=rho));
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELEK,
+                       AFFE=_F(TOUT = 'OUI',
+                                MATER=ACIER,
+                                ),
+                             );
+
+
+#----------------------------------------------------------
+#                   CHARGEMENT : CHAMP AUXILIAIRE MODE III
+#----------------------------------------------------------
+
+
+CH=AFFE_CHAR_MECA(MODELE=MODELEK,
+                  DDL_IMPO =(_F(GROUP_NO='SURFBAC',DX=0.,DY=0.,DZ=0.),
+                             _F(TOUT='OUI',K1=0.,K2=0.,K3=0.)),
+                  FACE_IMPO=(_F(GROUP_MA='SURFFRO',DNOR=1.E-6)),            
+                  INFO=2,
+                  );
+
+
+#----------------------------------------------
+#                   RESOLUTION
+#----------------------------------------------
+
+L_INS1=DEFI_LIST_REEL(DEBUT=0.0,INTERVALLE=_F(JUSQU_A=1.0,NOMBRE=1));
+
+UTOT1=MECA_STATIQUE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMA1,
+                   EXCIT=(
+                          _F(CHARGE=CH),
+                          ),
+                   SOLVEUR=_F(   
+                            METHODE='MUMPS'),
+                   INFO=1,
+                   ); 
+# -------------------------------------------------------------   
+#            POST-TRAITEMENT POUR LA VISUALISATION X-FEM   
+# -------------------------------------------------------------   
+
+MA_XFEM=POST_MAIL_XFEM(
+                       MODELE        = MODELEK,
+                       INFO          = 2)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D')) 
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,
+                        
+                        INFO          = 2)
+
+#IMPR_RESU(FORMAT='RESULTAT',RESU=_F(MAILLAGE= MA_XFEM));
+#IMPR_RESU(FORMAT='GMSH',UNITE=82,RESU=_F(RESULTAT=RES_XFEM));
+
+
+DEPL_1 = CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                    OPERATION='EXTR',
+                    RESULTAT = RES_XFEM,
+                    NOM_CHAM='DEPL',
+                    NUME_ORDRE=1,
+                   );
+
+#IMPR_RESU(FORMAT='GMSH',UNITE=83,RESU=_F(RESULTAT=RES_XFEM));
+#IMPR_RESU(FORMAT='GMSH',UNITE=83,RESU=_F(CHAM_GD=DEPL_1));
+
+MA_XFEM=DEFI_GROUP(reuse =MA_XFEM,
+                    MAILLAGE=MA_XFEM,
+                    CREA_GROUP_NO=(
+                                   _F(NOM='SURFBAC',
+                                      OPTION='PLAN',
+                                      POINT=(0.,0.,0.),
+                                      VECT_NORMALE=(1.,0.,0.),
+                                      PRECISION=1.E-6),
+                                   _F(NOM='SURFFRO',
+                                      OPTION='PLAN',
+                                      POINT=(lx,0.,0.),
+                                      VECT_NORMALE=(1.,0.,0.),
+                                      PRECISION=1.E-6),
+                                      ));
+
+DEP_BACK= POST_RELEVE_T ( ACTION =_F(INTITULE  = 'DEPLACEMENT',
+                                    GROUP_NO  = 'SURFBAC',
+                                    CHAM_GD   = DEPL_1,
+                                    NOM_CMP   = ( 'DX','DY','DZ'),
+                                    OPERATION = 'EXTRACTION'));
+
+DEP_FRON= POST_RELEVE_T ( ACTION =_F(INTITULE  = 'DEPLACEMENT',
+                                    GROUP_NO  = 'SURFFRO',
+                                    CHAM_GD   = DEPL_1,
+                                    NOM_CMP   = ( 'DX','DY','DZ'),
+                                    OPERATION = 'EXTRACTION'));
+
+# filtre sur les noms des noeuds : on vire les noeuds NM... et NP....
+# pour ne garder que les N... et NX...
+DEP_BACK = CALC_TABLE(reuse = DEP_BACK,
+                      TABLE = DEP_BACK,
+                      ACTION = (_F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = '^N'),
+                               _F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = '^N[X]')))
+        
+DEP_FRON = CALC_TABLE(reuse = DEP_FRON,
+                      TABLE = DEP_FRON,
+                      ACTION = (_F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = '^N'),
+                               _F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = '^N[X]')))
+
+IMPR_TABLE(TABLE=DEP_BACK)
+IMPR_TABLE(TABLE=DEP_FRON)
+
+# test des noeuds bloques
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DX',
+           TYPE_TEST='MAX',
+           TABLE=DEP_BACK,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DX',
+           TYPE_TEST='MIN',
+           TABLE=DEP_BACK,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DY',
+           TYPE_TEST='MAX',
+           TABLE=DEP_BACK,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DY',
+           TYPE_TEST='MIN',
+           TABLE=DEP_BACK,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DZ',
+           TYPE_TEST='MAX',
+           TABLE=DEP_BACK,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-17,
+           VALE_CALC=0.,
+           VALE_REFE=0.0,
+           NOM_PARA='DZ',
+           TYPE_TEST='MIN',
+           TABLE=DEP_BACK,)
+
+# test des noeuds de traction
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-13,
+           VALE_CALC=1E-06,
+           VALE_REFE=9.9999999999999995E-07,
+           NOM_PARA='DX',
+           TYPE_TEST='MAX',
+           TABLE=DEP_FRON,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=9.9999999999999998E-13,
+           VALE_CALC=1E-06,
+           VALE_REFE=9.9999999999999995E-07,
+           NOM_PARA='DX',
+           TYPE_TEST='MIN',
+           TABLE=DEP_FRON,)
+
+FIN();

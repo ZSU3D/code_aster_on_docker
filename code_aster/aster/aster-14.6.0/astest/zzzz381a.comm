@@ -1,0 +1,246 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+# lecture maillage lineique
+MAPOU=LIRE_MAILLAGE(FORMAT="ASTER",UNITE=20,);
+
+# lecture maillage section fibres
+MASEC1=LIRE_MAILLAGE(FORMAT="ASTER",UNITE=18,)
+
+
+MOPOU=AFFE_MODELE(
+    MAILLAGE=MAPOU,
+    AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='POU_D_EM',),
+)
+
+spou0 = 4.57E-02
+
+
+decal = 0.02
+tub1 = ( 0.15 ,  0.15); gx1 = 10.0
+tub2 = (-0.15 ,  0.15); gx2 = 15.0
+tub3 = (-0.15 , -0.15); gx3 = 20.0
+tub4 = ( 0.15 , -0.15); gx4 = 25.0
+tub5 = ( 0.0  ,  0.0 ); gx5 = 30.0
+
+stub1 = 1.0e-02/4
+stub2 = 1.0e-02/4
+stub10 = (stub1*8)*3 + (stub2*4)*2
+stub20 = (stub1*8)*2 + (stub2*4)*3
+
+
+spou1  =stub10
+spou2  =stub10+stub20
+
+GF=DEFI_GEOM_FIBRE(INFO=2,
+    # on s'arrange pour utiliser plusieurs occurrences de SECTION :
+    SECTION = (
+        _F( GROUP_FIBRE='SEC1',
+            MAILLAGE_SECT = MASEC1 , TOUT_SECT = 'OUI',
+            COOR_AXE_POUTRE = (0., 1.38889E-02,)),
+        _F( GROUP_FIBRE='SEC2',
+            MAILLAGE_SECT= MASEC1 , TOUT_SECT = 'OUI',
+            COOR_AXE_POUTRE = (0., 1.38889E-02,)),
+    ),
+    FIBRE = (
+        _F( GROUP_FIBRE = 'SACI', CARA = 'SURFACE',
+            COOR_AXE_POUTRE = (0.0, 0.0,),
+            VALE =(  0.08, -0.15, 2.0E-4,
+                    -0.08, -0.15, 2.0E-4,
+                     0.10,  0.11, 1.5E-4,
+                    -0.10,  0.11, 1.5E-4, ),
+        ),
+        _F( GROUP_FIBRE = 'TUBE1', CARA = 'SURFACE',
+            COOR_AXE_POUTRE = (0.0 , 0.0,),
+            VALE =(  decal ,  0.0   , stub1 ,
+                     decal ,  decal , stub1 ,
+                     0.0   ,  decal , stub1 ,
+                    -decal ,  decal , stub1 ,
+                    -decal ,  0.0   , stub1 ,
+                    -decal , -decal , stub1 ,
+                     0.0   , -decal , stub1 ,
+                     decal , -decal , stub1 , ),
+        ),
+        _F( GROUP_FIBRE = 'TUBE2', CARA = 'SURFACE',
+            COOR_AXE_POUTRE = (0.0 , 0.0,),
+            VALE =(  decal ,  decal , stub2 ,
+                    -decal ,  decal , stub2 ,
+                    -decal , -decal , stub2 ,
+                     decal , -decal , stub2 , ),
+        ),
+    ),
+    ASSEMBLAGE_FIBRE=(
+        _F( GROUP_ASSE_FIBRE = 'TUB10',
+            GROUP_FIBRE = ('TUBE1','TUBE2', 'TUBE1', 'TUBE2', 'TUBE1',),
+            COOR_GROUP_FIBRE = ( tub1[0], tub1[1] ,
+                                 tub2[0], tub2[1],
+                                 tub3[0], tub3[1],
+                                 tub4[0], tub4[1],
+                                 tub5[0], tub5[1], ),
+            GX_GROUP_FIBRE = ( gx1, gx2, gx3, gx4, gx5, ),
+        ),
+        _F( GROUP_ASSE_FIBRE = 'TUB20',
+            GROUP_FIBRE = ('TUBE2','TUBE1', 'TUBE2', 'TUBE1', 'TUBE2', ),
+            COOR_GROUP_FIBRE = ( tub1[0], tub1[1] ,
+                                 tub2[0], tub2[1],
+                                 tub3[0], tub3[1],
+                                 tub4[0], tub4[1],
+                                 tub5[0], tub5[1], ),
+            GX_GROUP_FIBRE = ( gx1, gx2, gx3, gx4, gx5, ),
+        ),
+    ),
+)
+MAGF=CREA_MAILLAGE(GEOM_FIBRE=GF)
+#
+POUCA=AFFE_CARA_ELEM(MODELE=MOPOU, INFO=1,
+    # caractéristiques des sections, orientations et rigidite de torsion
+    POUTRE=(
+        _F( GROUP_MA=('POUTRE0'), SECTION='GENERALE',
+            CARA=('A','IY','IZ','JX'),
+            VALE=(spou0,4.657e-4,1.6806e-4,9.77e-5),
+        ),
+        _F( GROUP_MA=('POUTRE1'), SECTION='GENERALE',
+            CARA=('A','IY','IZ','JX'),
+            VALE=(spou1,4.657e-4,1.6806e-4,9.77e-5),
+        ),
+        _F( GROUP_MA=('POUTRE2'), SECTION='GENERALE',
+            CARA=('A','IY','IZ','JX'),
+            VALE=(spou2,4.657e-4,1.6806e-4,9.77e-5),
+        ),
+    ),
+    ORIENTATION=_F(GROUP_MA=('POUTRE0','POUTRE1','POUTRE2'), CARA='ANGL_VRIL', VALE=0.0,),
+    GEOM_FIBRE=GF,
+    MULTIFIBRE = (
+        _F(MAILLE   = 'M10',     GROUP_FIBRE=('SEC1','SACI',)),
+        _F(MAILLE   = 'M20',     GROUP_FIBRE=('SEC2','SACI',)),
+        _F(GROUP_MA = 'POUTRE1', GROUP_FIBRE=('TUB10',)),
+        _F(MAILLE   = 'M12',     GROUP_FIBRE=('TUB10','TUB20')),
+        _F(MAILLE   = 'M22',     GROUP_FIBRE=('TUB10','TUB20')),
+    )
+)
+
+# LES MATERIAUX
+BETON=DEFI_MATERIAU(ELAS=_F(E=2.0E10, NU=0.25,),);
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.1E11, NU=0.30,),);
+TUBE =DEFI_MATERIAU(ELAS=_F(E=2.1E11, NU=0.30,),);
+#
+# relation ELAS par defaut
+COMP1=DEFI_COMPOR(
+    GEOM_FIBRE=GF,MATER_SECT=BETON,
+    MULTIFIBRE=(
+        _F(GROUP_FIBRE='SEC1',  MATER=BETON),
+        _F(GROUP_FIBRE='SEC2',  MATER=BETON),
+        _F(GROUP_FIBRE='SACI',  MATER=ACIER),
+        _F(GROUP_FIBRE='TUB10', MATER=TUBE),
+        _F(GROUP_FIBRE='TUB20', MATER=TUBE),
+    ),
+)
+#
+# LES CHAMPS DE MATERIAUX
+CHMAT=AFFE_MATERIAU(INFO=1,
+    MAILLAGE=MAPOU,
+    AFFE=_F(TOUT='OUI', MATER=(BETON,ACIER,TUBE,)),
+    AFFE_COMPOR=_F(GROUP_MA=('POUTRE0','POUTRE1','POUTRE2'),COMPOR=COMP1),
+)
+# --------------------------------------------------------------------------------------------------
+# Test des concepts
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/GF.concept',ACCES='NEW')
+IMPR_CO(CONCEPT=_F(NOM=GF),    ATTRIBUT='OUI', NIVEAU=2, UNITE=unite)
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/GF.concept",
+             NB_VALE_I=441,
+             VALE_CALC_I=342833,
+             NB_VALE=1818,
+             VALE_CALC=1363.940666,
+             VALE_CALC_K="13d205855397b696dd0eefd833f71e9d",
+             EXPR_IGNORE=('IADM','DATE','LTYP','LONO'),
+)
+
+#
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/POUCA.concept',ACCES='NEW')
+IMPR_CO(CONCEPT=_F(NOM=POUCA), ATTRIBUT='OUI', NIVEAU=2, UNITE=unite)
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/POUCA.concept",
+             NB_VALE_I=1429,
+             # VALE_CALC_I: on ne teste pas les entiers car on y trouve des
+             # décalages dans l'objet CELD
+             NB_VALE=2960,
+             VALE_CALC=4234.6971548,
+             VALE_CALC_K="55f60d48103e8ec2cf2f947101acb417",
+             EXPR_IGNORE=('IADM','DATE','LTYP','LONO'),
+)
+
+#
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/COMP1.concept',ACCES='NEW')
+IMPR_CO(CONCEPT=_F(NOM=COMP1), ATTRIBUT='OUI', NIVEAU=2, UNITE=unite)
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/COMP1.concept",
+             NB_VALE_I=59,
+             VALE_CALC_I=1152,
+             NB_VALE=0,
+             VALE_CALC=0.0000000000,
+             VALE_CALC_K="d67cc3fe40822018545c7b888c5f0567",
+             EXPR_IGNORE=('IADM','DATE','LTYP','LONO'),
+)
+
+#
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/CHMAT.concept',ACCES='NEW')
+IMPR_CO(CONCEPT=_F(NOM=CHMAT), ATTRIBUT='OUI', NIVEAU=2, UNITE=unite)
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/CHMAT.concept",
+             NB_VALE_I=107,
+             VALE_CALC_I=4204826,
+             NB_VALE=0,
+             VALE_CALC=0.0000000000,
+             VALE_CALC_K="2d51cb316bfbd1c4651eddd21f279333",
+             EXPR_IGNORE=('IADM','DATE','LTYP','LONO'),
+)
+
+#
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/MAGF.mail',ACCES='NEW')
+IMPR_RESU(FORMAT='ASTER',UNITE=unite,RESU=_F(MAILLAGE=MAGF))
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MAGF.mail",
+             NB_VALE_I=3115,
+             VALE_CALC_I=733926,
+             NB_VALE=944,
+             VALE_CALC=-5.5800044,
+             VALE_CALC_K="00242ab366544985d884fcd5d23d9a75",
+             EXPR_IGNORE = ('ASTER'),
+)
+
+#
+# Impression au format MED du maillage global section
+unite=DEFI_FICHIER(ACTION='ASSOCIER', FICHIER='./REPE_OUT/MAGF.med',ACCES='NEW', TYPE = 'BINARY')
+IMPR_RESU(FORMAT='MED',UNITE=unite,RESU=_F(MAILLAGE=MAGF))
+DEFI_FICHIER(ACTION='LIBERER', UNITE=unite)
+DETRUIRE(CONCEPT=_F(NOM=unite),INFO=1)
+FIN()

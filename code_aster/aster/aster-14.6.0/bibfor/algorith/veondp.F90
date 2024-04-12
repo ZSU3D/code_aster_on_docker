@@ -1,0 +1,156 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine veondp(modele, mate, sddyna, temps, vecelz)
+!
+! person_in_charge: mickael.abbas at edf.fr
+!
+    implicit none
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "asterfort/calcul.h"
+#include "asterfort/corich.h"
+#include "asterfort/dbgcal.h"
+#include "asterfort/detrsd.h"
+#include "asterfort/exisd.h"
+#include "asterfort/gcncon.h"
+#include "asterfort/infdbg.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/mecact.h"
+#include "asterfort/memare.h"
+#include "asterfort/ndynin.h"
+#include "asterfort/ndynkk.h"
+#include "asterfort/reajre.h"
+    character(len=*) :: vecelz
+    character(len=19) :: sddyna
+    character(len=24) :: modele, mate
+    real(kind=8) :: temps
+!
+! ----------------------------------------------------------------------
+!
+! ROUTINE MECA_NON_LINE (CALCUL)
+!
+! CALCUL DES VECTEURS ELEMENTAIRES DES ONDES PLANES
+!
+! ----------------------------------------------------------------------
+!
+!
+! IN  MODELE : NOM DU MODELE
+! IN  MATE   : CHAMP DE MATERIAU
+! IN  SDDYNA : SD DYNAMIQUE
+! IN  TEMPS  : INSTANT DE CALCUL
+! OUT VECELE : NOM DU VECT_ELEM
+!
+!
+!
+!
+!
+    integer :: nbout, nbin
+    parameter    (nbout=1, nbin=5)
+    character(len=8) :: lpaout(nbout), lpain(nbin)
+    character(len=19) :: lchout(nbout), lchin(nbin)
+!
+    integer :: ibid, i, iret, iondp
+    character(len=19) :: vecele
+    character(len=24) :: chinst
+    character(len=24) :: chgeom, ligrmo
+    integer :: nchond
+    character(len=19) :: chondp
+    aster_logical :: debug
+    character(len=8) :: newnom
+    character(len=16) :: option
+    integer :: ifmdbg, nivdbg
+    character(len=8), pointer :: lgrf(:) => null()
+!
+! ----------------------------------------------------------------------
+!
+    call jemarq()
+    call infdbg('PRE_CALCUL', ifmdbg, nivdbg)
+!
+! --- INITIALISATIONS
+!
+    call ndynkk(sddyna, 'CHONDP', chondp)
+    nchond = ndynin(sddyna,'NBRE_ONDE_PLANE')
+    vecele = vecelz
+    ligrmo = modele(1:8)//'.MODELE'
+    call jeveuo(ligrmo(1:19)//'.LGRF', 'L', vk8=lgrf)
+    chgeom = lgrf(1)//'.COORDO'
+    option = 'ONDE_PLAN'
+    chinst = '&&CHINST'
+    if (nivdbg .ge. 2) then
+        debug = .true.
+    else
+        debug = .false.
+    endif
+    call jeveuo(chondp, 'L', iondp)
+!
+! --- CREATION D'UNE CARTE D'INSTANTS
+!
+    call mecact('V', chinst, 'MODELE', ligrmo, 'INST_R',&
+                ncmp=1, nomcmp='INST', sr=temps)
+!
+! --- CHAMPS D'ENTREE
+!
+    lpain(1) = 'PGEOMER'
+    lchin(1) = chgeom(1:19)
+    lpain(2) = 'PMATERC'
+    lchin(2) = mate(1:19)
+    lpain(3) = 'PTEMPSR'
+    lchin(3) = chinst(1:19)
+    lpain(4) = 'PONDPLA'
+    lpain(5) = 'PONDPLR'
+!
+! --- CHAMPS DE SORTIE
+!
+    lpaout(1) = 'PVECTUR'
+    lchout(1) = vecele(1:8)//'.???????'
+!
+    call detrsd('VECT_ELEM', vecele)
+    call memare('V', vecele, modele(1:8), ' ', ' ',&
+                'CHAR_MECA')
+!
+! -- CALCUL
+!
+    do 30 i = 1, nchond
+        call exisd('CARTE', zk8(iondp+i-1)//'.CHME.ONDPL', iret)
+        call exisd('CARTE', zk8(iondp+i-1)//'.CHME.ONDPR', ibid)
+!
+        if (iret .ne. 0 .and. ibid .ne. 0) then
+            lchin(4) = zk8(iondp+i-1)//'.CHME.ONDPL'
+            lchin(5) = zk8(iondp+i-1)//'.CHME.ONDPR'
+            call gcncon('.', newnom)
+            lchout(1) (10:16) = newnom(2:8)
+!
+            call calcul('S', option, ligrmo, nbin, lchin,&
+                        lpain, nbout, lchout, lpaout, 'V',&
+                        'OUI')
+            call corich('E', lchout(1), -1, ibid)
+!
+            if (debug) then
+                call dbgcal(option, ifmdbg, nbin, lpain, lchin,&
+                            nbout, lpaout, lchout)
+            endif
+!
+            call reajre(vecele, lchout(1), 'V')
+        endif
+ 30 end do
+!
+    call jedema()
+end subroutine

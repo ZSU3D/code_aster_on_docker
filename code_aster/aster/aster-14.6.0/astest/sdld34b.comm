@@ -1,0 +1,178 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+# MISE EN DONNEES
+tfin = 3.0;
+
+pdt = 0.01;
+
+k = (((0.5 * pi) * 2.0) ** 2);
+
+m = 1.0;
+
+dinit = 1.0;
+
+ainit = (-(k) / m);
+
+amort=0.1
+
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA='GROUP_MA_N',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='DIS_T',),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.0E11,
+                            NU=0.3,
+                            RHO=7800.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='GROUP_MA_N',
+                            MATER=ACIER,),);
+
+CARELEM=AFFE_CARA_ELEM(MODELE=MODELE,
+                       DISCRET=(_F(CARA='K_T_D_N',
+                                   GROUP_MA='GROUP_MA_N',
+                                   VALE=(k,0.,0.,),),
+                                _F(CARA='M_T_D_N',
+                                   GROUP_MA='GROUP_MA_N',
+                                   VALE=m,),),);
+
+# CONDITIONS AUX LIMITES
+
+BLOQUAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                        DDL_IMPO=_F(GROUP_NO='GROUP_NO_N',
+                                    DY=0.,
+                                    DZ=0.,),);
+
+#MATRICES ASSEMBLEES K, M
+
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARELEM,
+                CHARGE=BLOQUAGE,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('RIGIDITE'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('MASSE'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('MASDIAG'),
+                              OPTION='MASS_MECA_DIAG',),),);
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=tfin,
+                                   PAS=pdt,),);
+
+DEPLINI=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                   NUME_DDL=NUMEDDL,
+                   OPERATION='AFFE', PROL_ZERO='OUI',
+                   MODELE=MODELE,
+                   AFFE=_F(GROUP_NO='GROUP_NO_N',
+                           NOM_CMP='DX',
+                           VALE=dinit,),);
+
+MODES=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 OPTION='TOUT',
+                 MATR_MASS=MASSE,
+                 SOLVEUR_MODAL=_F(METHODE='QZ',
+                                  ),
+                 )
+
+PROJ_BASE(BASE=MODES,
+                STOCKAGE='DIAG',
+                MATR_ASSE_GENE=(_F(MATRICE=CO('MAGE'),
+                                   MATR_ASSE=MASSE,),
+                                _F(MATRICE=CO('RIGE'),
+                                   MATR_ASSE=RIGIDITE,),),
+                VECT_ASSE_GENE=_F(VECTEUR=CO('DIGE'),
+                                  TYPE_VECT='DEPL',
+                                  VECT_ASSE=DEPLINI,),);
+
+rel = FORMULE(VALE='-.1*2*pi*DX',
+              NOM_PARA='DX',)
+
+TRANSMO=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                        SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                        MATR_MASS=MAGE,
+                        MATR_RIGI=RIGE,
+                        AMOR_MODAL=_F(AMOR_REDUIT=.1,),
+                        ETAT_INIT=_F(DEPL=DIGE,),
+                        INCREMENT=_F(INST_FIN=tfin,
+                                     PAS=pdt,),);
+
+DXGEMO=RECU_FONCTION(RESU_GENE=TRANSMO,
+                     NOM_CHAM='DEPL',
+                     NUME_CMP_GENE=1,);
+
+TRANSMR=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                        SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                        MATR_MASS=MAGE,
+                        MATR_RIGI=RIGE,
+                        ETAT_INIT=_F(DEPL=DIGE,),
+                        COMPORTEMENT=(_F(RELATION='RELA_EFFO_VITE', 
+                                         NOEUD='N', FONCTION=rel, NOM_CMP='DX'),),
+                        INCREMENT=_F(INST_FIN=tfin,
+                                     PAS=pdt,),);
+DXGEMR=RECU_FONCTION(RESU_GENE=TRANSMR,
+                     NOM_CHAM='DEPL',
+                     NUME_CMP_GENE=1,)
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.531338358315,
+                         VALE_REFE=0.53000000000000003,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-2,
+                         FONCTION=DXGEMR,),
+                      _F(VALE_CALC=0.531338358315,
+                         VALE_REFE=0.53000000000000003,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-2,
+                         FONCTION=DXGEMO,),
+                      ),
+              )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.531338358315,
+                         VALE_REFE=0.53133799999999998,
+                         VALE_PARA=2,
+                         REFERENCE='NON_DEFINI',
+                         PRECISION=1.E6,
+                         FONCTION=DXGEMR,
+                         ),
+                      _F(VALE_CALC=0.53133799999999998,
+
+                         VALE_PARA=2,
+                         FONCTION=DXGEMO,
+                         ),
+                      ),
+              )
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=29,
+              COURBE=(
+                      _F(FONCTION=DXGEMO,
+                         MARQUEUR=0,),
+                      _F(FONCTION=DXGEMR,
+                         MARQUEUR=0,),),);
+
+FIN();

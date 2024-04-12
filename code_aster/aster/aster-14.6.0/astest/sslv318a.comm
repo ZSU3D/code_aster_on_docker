@@ -1,0 +1,104 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION A : FISSURE RECTANGLE
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI')
+      )
+
+# dimension du cube 
+LX = 1.
+LY = 1.
+LZ = 1.
+
+MA=LIRE_MAILLAGE(FORMAT='MED',)
+
+MOD=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D'))
+
+# Definition de la fissure sur le maillage en entree
+a = 0.30
+b = 0.15
+r = 0.05
+x0 = LX/2.
+y0 = LY/2.
+z0 = LZ
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA,
+                    DEFI_FISS=_F(FORM_FISS      = 'RECTANGLE',
+                                 DEMI_GRAND_AXE = a,
+                                 DEMI_PETIT_AXE = b,
+                                 RAYON_CONGE    = r,
+                                 CENTRE         = (x0, y0, z0),
+                                 VECT_X         = (1. , 0. , 0. ),
+                                 VECT_Y         = (0. , 0. ,-1. ),
+                                 ))
+
+# Extraction des level sets
+LSN=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+               OPERATION='EXTR',
+               FISSURE=FISS,
+               NOM_CHAM='LNNO')
+
+LST=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+               OPERATION='EXTR',
+               FISSURE=FISS,
+               NOM_CHAM='LTNO')
+
+# IMPR_RESU(FORMAT='GMSH',UNITE=37,RESU=(_F(CHAM_GD=LSN),
+#                                        _F(CHAM_GD=LST)))
+
+LST_P4=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P4',
+                               CHAM_GD = LST,
+                               TOUT_CMP='OUI',
+                               INTITULE='LST P4',
+                               OPERATION = 'EXTRACTION') )
+
+LST_P5=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P5',
+                               CHAM_GD = LST,
+                               TOUT_CMP='OUI',
+                               INTITULE='LST P5',
+                               OPERATION = 'EXTRACTION') )
+                               
+IMPR_TABLE(TABLE=LST_P4)
+IMPR_TABLE(TABLE=LST_P5)
+
+ref_p4 = sqrt( (LX/2.-(a-r))**2+(LZ-(b-r))**2) - r
+ref_p5 = 0.2
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=0.884077084613,
+           VALE_REFE=0.88407708461347023,
+           NOM_PARA='X1',
+           TABLE=LST_P4,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=0.2,
+           VALE_REFE=0.2,
+           NOM_PARA='X1',
+           TABLE=LST_P5,)
+
+FIN()

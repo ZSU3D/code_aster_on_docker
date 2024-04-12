@@ -1,0 +1,70 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'))
+
+import numpy as NP
+
+ma = LIRE_MAILLAGE(FORMAT="ASTER",)
+
+np_str = NP.array(['N3', 'N7'])
+list_str = [i for i in np_str]
+
+ma = DEFI_GROUP(
+    reuse=ma,
+    MAILLAGE=ma,
+    CREA_GROUP_NO=(
+        _F(NOM='NEW1',
+           # test que (no, max='**') accepte un numpy.array de numpy.str_
+           NOEUD=np_str,),
+        _F(# test que (TXM, max=1) accepte un numpy.str_
+           NOM=np_str[0],
+           # test que (no, max='**') accepte une list de numpy.str_
+           NOEUD=list_str,),
+    ),
+)
+
+tab = CREA_TABLE(LISTE=(
+    _F(PARA='INT',
+       LISTE_I=list(range(5)),),
+    _F(PARA='STR',
+       LISTE_K=[str(i) for i in range(5)],),
+    _F(PARA='NPSTR',
+       # test que (TXM, max='**') accepte un numpy.array de numpy.str_
+       LISTE_K=np_str,),
+),)
+
+IMPR_TABLE(TABLE=tab, UNITE=6)
+
+TEST_TABLE(
+    TABLE=tab,
+    NOM_PARA='INT',
+    REFERENCE='ANALYTIQUE',
+    VALE_REFE_I=1,
+    VALE_CALC_I=1,
+    FILTRE=_F(
+        NOM_PARA='NPSTR',
+        VALE_K='N7',
+    ),
+)
+
+FIN()

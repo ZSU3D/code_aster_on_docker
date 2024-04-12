@@ -1,0 +1,581 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#  BARREAU CYLINDRIQUE SOUMIS A LA PRESSION OU 2 FORCES CONCENTREES
+#  SUR LES LEVRES DE LA FISSURE
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',)
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+      AFFE=_F( TOUT = 'OUI',PHENOMENE = 'MECANIQUE',MODELISATION = 'AXIS'))
+
+MA=MODI_MAILLAGE( reuse=MA,  MAILLAGE=MA,
+                             ORIE_PEAU_2D=_F(  GROUP_MA = 'LPOP8',  )
+                )
+
+MAT1=DEFI_MATERIAU(ELAS=_F(  E = 60.E3, NU = 0.2))
+
+MAT2=DEFI_MATERIAU(ELAS=_F(  E = 1.E3, NU = 0.3))
+
+MAT3=DEFI_MATERIAU(ELAS=_F(  E = 1.E3, NU = 0.2))
+
+CHMAT1=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=(
+                            _F(  GROUP_MA = 'VMAT1', MATER = MAT2),
+                            _F(  GROUP_MA = 'VMAT2', MATER = MAT2))
+                          )
+
+CHMAT2=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=(
+                            _F(  GROUP_MA = 'VMAT1', MATER = MAT1),
+                            _F(  GROUP_MA = 'VMAT2', MATER = MAT3))
+                          )
+
+CHMAT3=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=(
+                            _F(  GROUP_MA = 'VMAT1', MATER = MAT1),
+                            _F(  GROUP_MA = 'VMAT2', MATER = MAT2))
+                          )
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+                     CREA_GROUP_NO=_F(
+                        GROUP_MA = ( 'LPOP8',  'LPOP8S',  'LP8P9',  'LP8P9S', ))
+                 )
+
+CH1=AFFE_CHAR_MECA(  MODELE=MO, DOUBLE_LAGRANGE='NON',
+                     DDL_IMPO=( _F(  GROUP_NO = 'LP8P9',  DX = 0.),
+                                _F(  GROUP_NO = 'LP8P9S', DX = 0.),
+                                _F(  GROUP_NO = 'PB',     DY = 0.)),
+                     PRES_REP=( _F(  GROUP_MA = 'LPOP8',  PRES = 1.),
+                                _F(  GROUP_MA = 'LPOP8S', PRES = 1.))
+                   )
+
+CH2=AFFE_CHAR_MECA(  MODELE=MO, DOUBLE_LAGRANGE='NON',
+                     DDL_IMPO=( _F(  GROUP_NO = 'LP8P9',  DX = 0.),
+                                _F(  GROUP_NO = 'LP8P9S', DX = 0.),
+                                _F(  GROUP_NO = 'PB',     DY = 0.)),
+                     FORCE_NODALE=( _F( GROUP_NO = 'P8',  FY =  1.591549E-3),
+                                    _F( GROUP_NO = 'P8S', FY = -1.591549E-3))
+                           )
+
+RES1=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT1,
+          EXCIT=_F( CHARGE = CH1)
+                      )
+
+RES2=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT2,
+          EXCIT=_F( CHARGE = CH1)
+                      )
+
+RES3=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT3,
+          EXCIT=_F( CHARGE = CH1)
+                      )
+
+RES4=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT1,
+          EXCIT=_F( CHARGE = CH2)
+                      )
+
+RES5=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT2,
+          EXCIT=_F( CHARGE = CH2)
+                      )
+
+RES6=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT3,
+          EXCIT=_F( CHARGE = CH2)
+                      )
+
+# POST TRAITEMENT MECA. RUPTURE
+# -----------------------------
+
+FOND=DEFI_FOND_FISS(    MAILLAGE=MA, SYME='NON',
+                           FOND_FISS=_F( GROUP_NO = ('P0',)),
+                        LEVRE_SUP=_F(GROUP_MA='LEVRE_SUP',),
+                        LEVRE_INF=_F(GROUP_MA='LEVRE_INF',),
+                      )
+
+# CREATION DU CHAMP THETA SUR LA COURONNE 0 (TRIANGLES)
+# -----------------------------------------------------
+
+# CREATION DU CHAMP THETA SUR LA COURONNE 1 (QUADRANGLES)
+# -------------------------------------------------------
+
+# CREATION DU CHAMP THETA SUR LA COURONNE 2 (QUADRANGLES)
+# -------------------------------------------------------
+
+# CREATION DU CHAMP THETA SUR LA COURONNE 3 (QUADRANGLES)
+# -------------------------------------------------------
+
+# CREATION DU CHAMP THETA SUR LA COURONNE 4
+# -----------------------------------------
+
+# CALCUL DE G_THETA SUR LA COURONNE 0
+# -----------------------------------
+
+G1_C0=CALC_G(            RESULTAT=RES1,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+G2_C0=CALC_G(            RESULTAT=RES2,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+G3_C0=CALC_G(            RESULTAT=RES3,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+G4_C0=CALC_G(            RESULTAT=RES4,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+G5_C0=CALC_G(            RESULTAT=RES5,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+G6_C0=CALC_G(            RESULTAT=RES6,
+                         THETA=_F(
+                                  R_INF=0.000,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.025,),
+                    )
+
+# CALCUL DE G_THETA SUR LA COURONNE 1
+# -----------------------------------
+
+G1_C1=CALC_G(           RESULTAT=RES1,
+                        THETA=_F(
+                                 R_INF=0.025,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.050,),
+                    )
+
+G2_C1=CALC_G(            RESULTAT=RES2,
+                         THETA=_F(
+                                  R_INF=0.025,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.050,),
+                    )
+
+G3_C1=CALC_G(            RESULTAT=RES3,
+                         THETA=_F(
+                                  R_INF=0.025,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.050,),
+                    )
+
+G4_C1=CALC_G(            RESULTAT=RES4,
+                         THETA=_F(
+                                  R_INF=0.025,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.050,),
+                    )
+
+G5_C1=CALC_G(            RESULTAT=RES5,
+                         THETA=_F(
+                                  R_INF=0.025,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.050,),
+                    )
+
+G6_C1=CALC_G(            RESULTAT=RES6,
+                         THETA=_F(
+                                  R_INF=0.025,
+                                  FOND_FISS=FOND,
+                                  R_SUP=0.050,),
+                    )
+
+# CALCUL DE G_THETA SUR LA COURONNE 2
+# -----------------------------------
+
+G1_C2=CALC_G(           RESULTAT=RES1,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+G2_C2=CALC_G(           RESULTAT=RES2,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+G3_C2=CALC_G(           RESULTAT=RES3,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+G4_C2=CALC_G(           RESULTAT=RES4,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+G5_C2=CALC_G(           RESULTAT=RES5,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+G6_C2=CALC_G(           RESULTAT=RES6,
+                        THETA=_F(
+                                 R_INF=0.050,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.075,),
+                    )
+
+# CALCUL DE G_THETA SUR LA COURONNE 3
+# -----------------------------------
+
+G1_C3=CALC_G(           RESULTAT=RES1,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+G2_C3=CALC_G(           RESULTAT=RES2,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+G3_C3=CALC_G(           RESULTAT=RES3,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+G4_C3=CALC_G(           RESULTAT=RES4,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+G5_C3=CALC_G(           RESULTAT=RES5,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+G6_C3=CALC_G(           RESULTAT=RES6,
+                        THETA=_F(
+                                 R_INF=0.075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.100,),
+                    )
+
+# CALCUL DE G_THETA SUR LA COURONNE 4
+# -----------------------------------
+
+G1_C4=CALC_G(    RESULTAT=RES1,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+G2_C4=CALC_G(    RESULTAT=RES2,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+G3_C4=CALC_G(    RESULTAT=RES3,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+G4_C4=CALC_G(    RESULTAT=RES4,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+G5_C4=CALC_G(    RESULTAT=RES5,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+G6_C4=CALC_G(    RESULTAT=RES6,
+                 THETA=_F(
+                          R_INF=0.025,
+                          FOND_FISS=FOND,
+                          R_SUP=0.500,),
+                    )
+
+# IMPRESSION DES RESULTATS COURONNE 0
+# -----------------------------------
+# La VALE_REFE est issue d'un calcul avec ABAQUS
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=0.00137454459596,
+           VALE_REFE=1.4643799999999999E-3,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G1_C0,)
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=0.000646134339389,
+           VALE_REFE=6.7316800000000003E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G2_C0,)
+
+TEST_TABLE(PRECISION=0.11,
+           VALE_CALC=0.000634765131756,
+           VALE_REFE=7.0663699999999998E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G3_C0,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=5.17645978284E-09,
+           VALE_REFE=5.5215199999999998E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G4_C0,)
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=2.64417542349E-09,
+           VALE_REFE=2.5974000000000002E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G5_C0,)
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=2.43067503225E-09,
+           VALE_REFE=2.5369899999999999E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G6_C0,)
+
+# IMPRESSION DES RESULTATS COURONNE 1
+# -----------------------------------
+
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00143112207301,
+           VALE_REFE=1.4643799999999999E-3,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G1_C1,)
+
+TEST_TABLE(PRECISION=5.0000000000000001E-3,
+           VALE_CALC=0.000674228743306,
+           VALE_REFE=6.7316800000000003E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G2_C1,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=0.000661638086886,
+           VALE_REFE=7.0663699999999998E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G3_C1,)
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=5.38458501107E-09,
+           VALE_REFE=5.5215199999999998E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G4_C1,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=2.75597620695E-09,
+           VALE_REFE=2.5974000000000002E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G5_C1,)
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=2.53098512857E-09,
+           VALE_REFE=2.5369899999999999E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G6_C1,)
+
+# IMPRESSION DES RESULTATS COURONNE 2
+# -----------------------------------
+
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00143157110148,
+           VALE_REFE=1.4643799999999999E-3,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G1_C2,)
+
+TEST_TABLE(PRECISION=5.0000000000000001E-3,
+           VALE_CALC=0.000674338846627,
+           VALE_REFE=6.7316800000000003E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G2_C2,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=0.000661812338785,
+           VALE_REFE=7.0663699999999998E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G3_C2,)
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=5.38624604146E-09,
+           VALE_REFE=5.5215199999999998E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G4_C2,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=2.75634625575E-09,
+           VALE_REFE=2.5974000000000002E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G5_C2,)
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=2.53152360049E-09,
+           VALE_REFE=2.5369899999999999E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G6_C2,)
+
+# IMPRESSION DES RESULTATS COURONNE 3
+# -----------------------------------
+
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00143163511024,
+           VALE_REFE=1.4643799999999999E-3,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G1_C3,)
+
+TEST_TABLE(PRECISION=5.0000000000000001E-3,
+           VALE_CALC=0.000674366041886,
+           VALE_REFE=6.7316800000000003E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G2_C3,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=0.000661841856893,
+           VALE_REFE=7.0663699999999998E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G3_C3,)
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=5.38647372898E-09,
+           VALE_REFE=5.5215199999999998E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G4_C3,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=2.7564508156E-09,
+           VALE_REFE=2.5974000000000002E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G5_C3,)
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=2.5316299022E-09,
+           VALE_REFE=2.5369899999999999E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G6_C3,)
+
+# IMPRESSION DES RESULTATS COURONNE 4
+# -----------------------------------
+
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00143160202732,
+           VALE_REFE=1.4643799999999999E-3,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G1_C4,)
+
+TEST_TABLE(PRECISION=5.0000000000000001E-3,
+           VALE_CALC=0.000674327452671,
+           VALE_REFE=6.7316800000000003E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G2_C4,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=0.000661798844994,
+           VALE_REFE=7.0663699999999998E-4,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G3_C4,)
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=5.38681058198E-09,
+           VALE_REFE=5.5215199999999998E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G4_C4,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=2.75646810155E-09,
+           VALE_REFE=2.5974000000000002E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G5_C4,)
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=2.53162995278E-09,
+           VALE_REFE=2.5369899999999999E-09,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='G',
+           TABLE=G6_C4,)
+
+FIN( )
+#

@@ -1,0 +1,148 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ET VOLUMIQUES (LU DANS UN FICHIER I-DEAS)
+# AVEC MODELISATION 2D DEFORMATIONS PLANES ELEMENTS QUAD8
+# VALIDATION PAR REFERENCE AU CALCUL ANALYTIQUE
+#
+# ----------------------------------------------------------------------
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# ----------------------------------------------------------------------
+
+CYLINDRE = LIRE_MAILLAGE(FORMAT='IDEAS',
+                         UNITE=19,
+                         )
+
+CYLINDRE=DEFI_GROUP(reuse=CYLINDRE,
+      MAILLAGE=CYLINDRE,
+      CREA_GROUP_NO=_F( GROUP_MA = 'LINT')
+)
+
+# ----------------------------------------------------------------------
+MOD_CYLI=AFFE_MODELE(
+      MAILLAGE=CYLINDRE,
+      AFFE=_F(  GROUP_MA = ( 'CYLINDRE', 'LINT', ),
+             PHENOMENE = 'MECANIQUE',  MODELISATION = 'D_PLAN')
+                      )
+
+# ----------------------------------------------------------------------
+# DEFINITION DES MATERIAUX
+ACIER=DEFI_MATERIAU(
+      ELAS=_F(  E = 10.,   NU = 0.30,   RHO = 1.0)
+                      )
+
+MAT_CYLI=AFFE_MATERIAU(
+      MAILLAGE=CYLINDRE,
+      AFFE=_F( TOUT = 'OUI',  MATER = ACIER)
+                         )
+
+# ----------------------------------------------------------------------
+# CONDITION AUX LIMITES
+LIMIT=AFFE_CHAR_MECA(
+      MODELE=MOD_CYLI,DDL_IMPO=(
+      _F( GROUP_NO = ( 'P1', 'P4', ),
+                DY = 0.0),
+      _F( GROUP_NO = ( 'P3', 'P5', ),
+                DX = 0.0))
+                      )
+
+# ----------------------------------------------------------------------
+#LECTURE DES FORCE VOLUMIQUES ISSUES DE FLUX3D (VIA L'INTERFACE)
+EVOCH=LIRE_RESU( FORMAT='IDEAS',
+                    MAILLAGE=CYLINDRE,
+                       UNITE=38,
+                   TYPE_RESU='EVOL_CHAR',
+                    NOM_CHAM=( 'FVOL_2D', 'FSUR_2D', ),FORMAT_IDEAS=(
+                    _F( NOM_CHAM = 'FVOL_2D',
+                                  NUME_DATASET = 55,
+                                  RECORD_6 = (1, 4, 2, 0, 2, 3,),
+                                  POSI_ORDRE = ( 7, 4, ),
+                                  POSI_INST = ( 8, 1, ),
+                                  NOM_CMP = ('FX', 'FY',)),
+                    _F( NOM_CHAM = 'FSUR_2D',
+                                  NUME_DATASET = 55,
+                                  RECORD_6 = (1, 4, 2, 15, 2, 3,),
+                                  POSI_ORDRE = ( 7, 4, ),
+                                  POSI_INST = ( 8, 1, ),
+                                  NOM_CMP = ('FX', 'FY',))),
+                   TOUT_ORDRE='OUI',
+        TITRE='FORCE VOLUMIQUE + FORCE SURFACIQUE')
+
+# ----------------------------------------------------------------------
+CHVOL=AFFE_CHAR_MECA(  MODELE=MOD_CYLI,
+                        EVOL_CHAR=EVOCH
+)
+
+# ----------------------------------------------------------------------
+# CALCUL A PARTIR DES FORCES VOLUMIQUES ET SURFACIQUES RELUES
+RELINE=10
+
+NBIGLOB=5
+
+RESIGLOB=1.0E-03
+
+L_INST=DEFI_LIST_REEL(
+               DEBUT=0.0,     INTERVALLE=_F( JUSQU_A = 2., PAS = 1.0)
+         )
+
+RESU=STAT_NON_LINE(
+      MODELE=MOD_CYLI,
+      CHAM_MATER=MAT_CYLI,EXCIT=(
+      _F( CHARGE = CHVOL),
+            _F( CHARGE = LIMIT)),
+     INCREMENT=_F(  LIST_INST = L_INST,   NUME_INST_FIN = 2),
+
+     COMPORTEMENT=_F(  RELATION = 'ELAS'),
+     NEWTON=_F(  MATRICE = 'ELASTIQUE',
+              REAC_ITER = 1),
+       RECH_LINEAIRE=_F( ITER_LINE_MAXI = RELINE),
+     CONVERGENCE=_F(
+                   ITER_GLOB_MAXI = NBIGLOB,
+                   RESI_GLOB_RELA = RESIGLOB),
+      TITRE=('CALCUL FORCES VOLUMIQUES ET SURFACIQUES',)
+                      )
+
+# ----------------------------------------------------------------------
+TEST_RESU(RESU=(_F(GROUP_NO='P1',
+                   INST=1.0,
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_REFE=0.52130982,
+                   VALE_CALC=0.52096127678764,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   CRITERE='RELATIF',
+                   ),
+                _F(GROUP_NO='P2',
+                   INST=1.0,
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_REFE=0.44203108,
+                   VALE_CALC=0.44178236668276,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+FIN()

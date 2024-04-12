@@ -1,0 +1,1455 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# DYNAMIQUE TRANSITOIRE SUR BASE MODALE SYSTEME MASSE ET RESSORT
+#                       PAR INTEGRATION DIRECTE MASSE ET RESSORT
+########################################################################
+# INTEGRATION DIRECTE         : 1- SCHEMA NEWMARK
+#                                         PAS DE TEMPS = 1.E-3 S
+# INTEGRATION SUR BASE MODALE : 2- SCHEMA DIFF_CENTRE (EULER)
+#                                         PAS DE TEMPS = 1.E-3 S
+#                               3- SCHEMA PAS ADAPTATIF
+#                                         PAS DE TEMPS = 1.E-3 S
+#                               4- SCHEMAS RUNGE-KUTTTA
+#                                         PAS DE TEMPS = ADAPTATIFS
+# RAPPORT DE RIGIDITE DIFFERENT
+# EXCITATION CRENEAU
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'));
+
+#
+
+RESSORT0=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+RESSORT=CREA_MAILLAGE(MAILLAGE=RESSORT0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='N2', NOEUD = 'N2',),
+        _F(NOM_GROUP_MA='N3', NOEUD = 'N3',),
+    ),
+)
+
+MODELE=AFFE_MODELE(   MAILLAGE=RESSORT,AFFE=(
+                     _F( MAILLE=('AC', 'CB'),  PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DIS_T'),
+                     _F( GROUP_MA=('N2', 'N3'),   PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DIS_T'))            )
+
+#
+ELEMNT=AFFE_CARA_ELEM(  MODELE=MODELE,DISCRET=(
+                 _F(  MAILLE = 'AC',
+                           CARA = 'K_T_D_L',
+                           VALE = (28.E2,  1., 2., )),
+                 _F(  MAILLE = 'AC',
+                           CARA = 'M_T_L',
+                           VALE = (0.,  0., 0., 0.,  0., 0., 0.,  0., 0.,
+                           0.,  0., 0., 0.,  0., 0., 0.,  0., 0., 0.,  0., 0., )),
+
+                 _F(  MAILLE = 'CB',
+                           CARA = 'K_T_D_L',
+                           VALE = (28.E4,  1., 2., )),
+                 _F(  MAILLE = 'CB',
+                           CARA = 'M_T_L',
+                           VALE = (0.,  0., 0., 0.,  0., 0., 0.,  0., 0.,
+                           0.,  0., 0., 0.,  0., 0., 0.,  0., 0., 0.,  0., 0., )),
+
+                 _F(  MAILLE = ( 'AC', 'CB', ),
+                           CARA = 'A_T_D_L',
+                           VALE = (50., 0., 0., )),
+
+                 _F(  GROUP_MA = ( 'N2', 'N3', ),
+                           CARA = 'M_T_D_N',
+                           VALE = 10.))
+                          )
+
+#
+
+CONDLIM=AFFE_CHAR_MECA(  MODELE=MODELE,
+                          FORCE_NODALE=_F(  NOEUD = 'N3',  FX = 5.),
+                           DDL_IMPO=_F(  NOEUD = 'N1', DX = 0., DY = 0., DZ = 0.)
+                        )
+
+#
+
+RIGIELEM=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='RIGI_MECA',
+                             CARA_ELEM=ELEMNT,   CHARGE=CONDLIM )
+
+MASSELEM=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='MASS_MECA',
+                             CARA_ELEM=ELEMNT,   CHARGE=CONDLIM )
+
+AMORELEM=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='AMOR_MECA',
+                             CARA_ELEM=ELEMNT  )
+
+EFFOELEM=CALC_VECT_ELEM(  CHARGE=CONDLIM,  OPTION='CHAR_MECA',
+                             CARA_ELEM=ELEMNT                  )
+
+#
+#
+
+NUMEROTA=NUME_DDL(  MATR_RIGI=RIGIELEM  )
+
+#
+
+MATRRIGI=ASSE_MATRICE(  MATR_ELEM=RIGIELEM,  NUME_DDL=NUMEROTA  )
+
+MATRMASS=ASSE_MATRICE(  MATR_ELEM=MASSELEM,  NUME_DDL=NUMEROTA  )
+
+MATRAMOR=ASSE_MATRICE(  MATR_ELEM=AMORELEM,  NUME_DDL=NUMEROTA  )
+
+VECTASS=ASSE_VECTEUR(  VECT_ELEM=EFFOELEM,  NUME_DDL=NUMEROTA  )
+
+#
+#
+# CALCUL DE LA BASE MODALE COMPLETE
+# ---------------------------------
+#
+#
+
+MODES=CALC_MODES(MATR_RIGI=MATRRIGI,
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=6,
+                              FREQ=(10.,),
+                              ),
+                 MATR_MASS=MATRMASS,
+                 SOLVEUR_MODAL=_F(METHODE='JACOBI',PREC_JACOBI=1.E-4,
+                                  NMAX_ITER_BATHE=30,
+                                  ),
+                 )
+
+
+#
+#
+# PROJECTION DANS LA BASE MODALE
+# ------------------------------
+#
+#
+PROJ_BASE(  BASE=MODES,
+            STOCKAGE = 'PLEIN',
+            MATR_ASSE_GENE=(
+             _F(
+                             MATRICE = CO("MASSEGEN"),
+                             MATR_ASSE = MATRMASS),
+             _F(
+                             MATRICE = CO("RIGIDGEN"),
+                             MATR_ASSE = MATRRIGI),
+             _F(
+                             MATRICE = CO("AMORTGEN"),
+                             MATR_ASSE = MATRAMOR,)),
+             VECT_ASSE_GENE=_F(
+                             VECTEUR = CO("EFFOGENE"),
+                             VECT_ASSE = VECTASS, TYPE_VECT='FORC') )
+
+#
+# DEFINITION DE L'EXCITATION EN FONCTION DU TEMPS
+# ------------------------------------------------
+#
+FONCALPH=DEFI_FONCTION(  NOM_PARA='INST',  NOM_RESU='ALPHA',
+                          VALE=( 0., 1.,  1., 1.,  1.0000001, 0., ),
+                          PROL_DROITE='CONSTANT'               )
+
+#
+# DEFINITION DES INSTANTS DE CALCUL DE LA SOLUTION
+#-------------------------------------------------
+L_RECUD=( 0.27, 0.53, 0.80, 1.25, 1.51, 1.78, 2.05, 2.31, 2.58, 2.85, )
+L_RECUV=( 0.11, 0.39, 0.66, 0.93, 1.11, 1.37, 1.64, 1.90, 2.17, 2.44, 2.71, 2.97, )
+
+LRECUD=DEFI_LIST_REEL(   VALE=L_RECUD )
+LRECUV=DEFI_LIST_REEL(   VALE=L_RECUV )
+
+AR_LIST = list(L_RECUD) + list(L_RECUV)
+AR_LIST.sort()
+
+#
+# 1- SCHEMA NEWMARK DYNA_VIBRA (BASE MODALE)
+#
+L_INST=DEFI_LIST_REEL(  DEBUT=0.,
+                             INTERVALLE=_F(  JUSQU_A = 3.,  PAS = 0.001))
+
+L_ARCH=DEFI_LIST_ENTI(  DEBUT=0,
+                             INTERVALLE=_F(  JUSQU_A = 3000,    PAS = 10)
+                          )
+
+DYNLINEW=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                           MATR_MASS=MATRMASS,      MATR_RIGI=MATRRIGI,
+                           MATR_AMOR=MATRAMOR,
+                           SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                           INCREMENT=_F(  LIST_INST = L_INST, NUME_FIN = 3000),
+                           ARCHIVAGE=_F(  PAS_ARCH = 1.e6, INST=AR_LIST),
+                           EXCIT=_F(  VECT_ASSE = VECTASS,
+                                   FONC_MULT = FONCALPH)
+                           )
+
+N3_X_DEP=RECU_FONCTION(  NOEUD='N3',   NOM_CMP='DX',   NOM_CHAM='DEPL',
+                             RESULTAT=DYNLINEW,  LIST_INST=LRECUD  )
+
+N3_X_VIT=RECU_FONCTION(  NOEUD='N3',   NOM_CMP='DX',   NOM_CHAM='VITE',
+                             RESULTAT=DYNLINEW,  LIST_INST=LRECUV  )
+
+#
+# 2- SCHEMA EULER DYNA_VIBRA
+#
+DYNMODEU=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                              MATR_MASS=MASSEGEN,  MATR_RIGI=RIGIDGEN,
+                              MATR_AMOR=AMORTGEN,
+                             EXCIT=_F(  VECT_ASSE_GENE = EFFOGENE,
+                                     FONC_MULT = FONCALPH),
+                             INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 3.,
+                                          PAS = 0.0001),
+                             ARCHIVAGE=_F(  PAS_ARCH = 1.e6, INST=AR_LIST),)
+
+#
+# RETOUR DANS L'ESPACE PHYSIQUE
+# -----------------------------
+#
+#
+DYTRAEUD=REST_GENE_PHYS(  RESU_GENE=DYNMODEU,    NOM_CHAM='DEPL',
+                            LIST_INST=LRECUD,   INTERPOL='LIN'    )
+
+DYTRAEUV=REST_GENE_PHYS(  RESU_GENE=DYNMODEU,    NOM_CHAM='VITE',
+                            LIST_INST=LRECUV,   INTERPOL='LIN'    )
+
+#
+# 3- SCHEMA PAS ADAPTATIF DYNA_VIBRA
+#
+DYNMODAD=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',PAS_MAXI=1.E-4),
+                             MATR_MASS=MASSEGEN,  MATR_RIGI=RIGIDGEN,
+                             MATR_AMOR=AMORTGEN,
+                             EXCIT=_F(  VECT_ASSE_GENE = EFFOGENE,
+                                     FONC_MULT = FONCALPH),
+                             INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 3.,
+                             PAS = 0.00005),
+                             ARCHIVAGE=_F(  PAS_ARCH = 1.e6, INST=AR_LIST))
+
+
+#
+# RETOUR DANS L'ESPACE PHYSIQUE
+# -----------------------------
+#
+#
+DYTRAADD=REST_GENE_PHYS(  RESU_GENE=DYNMODAD,    NOM_CHAM='DEPL',
+                            LIST_INST=LRECUD,   INTERPOL='LIN'    )
+
+DYTRAADV=REST_GENE_PHYS(  RESU_GENE=DYNMODAD,    NOM_CHAM='VITE',
+                            LIST_INST=LRECUV,   INTERPOL='LIN'    )
+#
+# 4- SCHEMAS RUNGE-KUTTA DYNA_VIBRA
+#
+DYNMO_54=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_54',TOLERANCE=1.E-6,PAS_MAXI=0.001),
+                             MATR_MASS=MASSEGEN,  MATR_RIGI=RIGIDGEN,
+                             MATR_AMOR=AMORTGEN,
+                             EXCIT=_F(VECT_ASSE_GENE = EFFOGENE,
+                                      FONC_MULT = FONCALPH),
+                             INCREMENT=_F(
+                             INST_INIT = 0.,  INST_FIN = 3.,
+                             PAS = 0.0001),
+                             ARCHIVAGE=_F(  PAS_ARCH = 1.e6, INST=AR_LIST),)
+
+
+DYNMO_32=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_32',TOLERANCE=1.E-5,PAS_MAXI=0.001),
+                             MATR_MASS=MASSEGEN,  MATR_RIGI=RIGIDGEN,
+                             MATR_AMOR=AMORTGEN,
+                             EXCIT=_F(VECT_ASSE_GENE = EFFOGENE,
+                                      FONC_MULT = FONCALPH),
+                             INCREMENT=_F(
+                             INST_INIT = 0.,  INST_FIN = 3.,
+                             PAS = 0.0001),
+                             ARCHIVAGE=_F(  PAS_ARCH = 1.e6, INST=AR_LIST),)
+
+#
+# RETOUR DANS L'ESPACE PHYSIQUE
+# -----------------------------
+#
+#
+
+DYTR_54D=REST_GENE_PHYS(  RESU_GENE=DYNMO_54,    NOM_CHAM='DEPL',
+                            LIST_INST=LRECUD,   INTERPOL='LIN'    )
+
+DYTR_32D=REST_GENE_PHYS(  RESU_GENE=DYNMO_32,    NOM_CHAM='DEPL',
+                            LIST_INST=LRECUD,   INTERPOL='LIN'    )
+
+DYTR_54V=REST_GENE_PHYS(  RESU_GENE=DYNMO_54,    NOM_CHAM='VITE',
+                            LIST_INST=LRECUV,   INTERPOL='LIN'    )
+
+DYTR_32V=REST_GENE_PHYS(  RESU_GENE=DYNMO_32,    NOM_CHAM='VITE',
+                            LIST_INST=LRECUV,   INTERPOL='LIN'    )
+#
+# TESTS PAR RAPPORT A SOLUTION DE REFERENCE
+#
+#
+#DEPLACEMENTS
+#
+#
+# 1- NEWMARK DIRECT
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=3.092628883919E-03,
+                         VALE_REFE=3.0926999999999999E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.27000000000000002,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=8.799024381158E-04,
+                         VALE_REFE=8.7953E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.53000000000000003,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=2.466771489672E-03,
+                         VALE_REFE=2.4669000000000002E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.80000000000000004,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=-1.098288523914E-03,
+                         VALE_REFE=-1.098E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.25,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=7.876254029894E-04,
+                         VALE_REFE=7.8753999999999998E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.51,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=-5.651306516015E-04,
+                         VALE_REFE=-5.6508000000000003E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.78,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=4.051548286254E-04,
+                         VALE_REFE=4.0502000000000002E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.0499999999999998,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=-2.900702520333E-04,
+                         VALE_REFE=-2.9011999999999999E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.3100000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=2.083232346886E-04,
+                         VALE_REFE=2.0830999999999999E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.5800000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      _F(VALE_CALC=-1.494622915704E-04,
+                         VALE_REFE=-1.4943000000000001E-4,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.8500000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_DEP,),
+                      ),
+              )
+
+#
+# 2- EULER MODAL
+#
+
+TEST_RESU(RESU=_F(INST=0.27000000000000002,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00309264711902,
+                  VALE_REFE=3.0926999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.53000000000000003,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000879521597548,
+                  VALE_REFE=8.7953E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.80000000000000004,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00246685962649,
+                  VALE_REFE=2.4669000000000002E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.25,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00109756233674,
+                  VALE_REFE=-1.098E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.51,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00078715349012,
+                  VALE_REFE=7.8753999999999998E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.78,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000564792870998,
+                  VALE_REFE=-5.6508000000000003E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.0499999999999998,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00040480515278,
+                  VALE_REFE=4.0502000000000002E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3100000000000001,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000289963420367,
+                  VALE_REFE=-2.9011999999999999E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.5800000000000001,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000208200126158,
+                  VALE_REFE=2.0830999999999999E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.8500000000000001,
+                  RESULTAT=DYTRAEUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000149339943186,
+                  VALE_REFE=-1.4943000000000001E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=8.0000000000000002E-3,),
+          )
+
+#
+# 3- PAS ADAPTATIF MODAL
+#
+
+
+TEST_RESU(RESU=_F(INST=0.27000000000000002,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00309267568061,
+                  VALE_REFE=3.0926999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.53000000000000003,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000879515447315,
+                  VALE_REFE=8.7953E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.80000000000000004,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00246689236935,
+                  VALE_REFE=2.4669000000000002E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.25,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00109819975246,
+                  VALE_REFE=-1.098E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.51,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000787720540954,
+                  VALE_REFE=7.8753999999999998E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.78,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000565187687183,
+                  VALE_REFE=-5.6508000000000003E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.0499999999999998,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000405087787939,
+                  VALE_REFE=4.0502000000000002E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3100000000000001,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000290187491365,
+                  VALE_REFE=-2.9011999999999999E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.5800000000000001,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000208360973778,
+                  VALE_REFE=2.0830999999999999E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.8500000000000001,
+                  RESULTAT=DYTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00014945712559,
+                  VALE_REFE=-1.4943000000000001E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+#
+# 4- RUNGE-KUTTA
+#
+
+TEST_RESU(RESU=_F(INST=0.27000000000000002,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00309268162193,
+                  VALE_REFE=3.0927E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.53000000000000003,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000879533347394,
+                  VALE_REFE=8.7953E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.80000000000000004,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00246688168326,
+                  VALE_REFE=2.46690000E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.25,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00109798700405,
+                  VALE_REFE=-1.098E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.51,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00078748644324,
+                  VALE_REFE=7.8754E-4,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.78,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000565039222245,
+                  VALE_REFE=-5.6508000E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.0499999999999998,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000404997394132,
+                  VALE_REFE=4.050200E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.00E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3100000000000001,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000290090680202,
+                  VALE_REFE=-2.9012E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.5800000000000001,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00020829969197,
+                  VALE_REFE=2.0831E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.8500000000000001,
+                  RESULTAT=DYTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000149419059817,
+                  VALE_REFE=-1.49430001E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=8.00E-3,),
+          )
+
+
+
+TEST_RESU(RESU=_F(INST=0.27000000000000002,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00309268282771,
+                  VALE_REFE=3.0926999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.53000000000000003,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00087953457372,
+                  VALE_REFE=8.7953E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.80000000000000004,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00246688185193 ,
+                  VALE_REFE=2.4669000E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.25,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00109814413717,
+                  VALE_REFE=-1.098E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.00E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.51,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000787640806304,
+                  VALE_REFE=7.8754E-4,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.78,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000565139199947,
+                  VALE_REFE=-5.65080E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.0499999999999998,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000405060274134,
+                  VALE_REFE=4.05020E-4,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3100000000000001,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000290152938254,
+                  VALE_REFE=-2.9012E-4,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.5800000000000001,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000208339790297 ,
+                  VALE_REFE=2.0831E-4,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.00E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.8500000000000001,
+                  RESULTAT=DYTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000149444518454,
+                  VALE_REFE=-1.494300E-4,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=8.00E-3,),
+          )
+
+#
+#VITESSES
+#
+#
+# 1- NEWMARK DIRECT
+#
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.01824003409319,
+                         VALE_REFE=0.018346999999999999,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.11,
+                         PRECISION=6.0000000000000001E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-0.01311201046165,
+                         VALE_REFE=-0.013140000000000001,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.39000000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=9.345500072918E-03,
+                         VALE_REFE=9.3509000000000005E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.66000000000000003,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-6.713026834436E-03,
+                         VALE_REFE=-6.7080000000000004E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=0.93000000000000005,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-0.01578723319210,
+                         VALE_REFE=-0.015862999999999999,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.1100000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=0.01120338020154,
+                         VALE_REFE=0.011157,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.3700000000000001,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-7.972098640765E-03,
+                         VALE_REFE=-7.9837999999999992E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.6399999999999999,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=5.712165086772E-03,
+                         VALE_REFE=5.7108000000000003E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=1.8999999999999999,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-4.098981881623E-03,
+                         VALE_REFE=-4.0997999999999998E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.1699999999999999,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=2.941261496675E-03,
+                         VALE_REFE=2.9405E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.4399999999999999,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=-2.108165417255E-03,
+                         VALE_REFE=-2.1072999999999999E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.71,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      _F(VALE_CALC=1.510362300208E-03,
+                         VALE_REFE=1.5104999999999999E-3,
+                         REFERENCE='SOURCE_EXTERNE',
+                         VALE_PARA=2.9700000000000002,
+                         PRECISION=5.E-3,
+                         FONCTION=N3_X_VIT,),
+                      ),
+              )
+
+#
+# 2- EULER MODAL
+#
+
+TEST_RESU(RESU=_F(INST=0.11,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0183509966935,
+                  VALE_REFE=0.018346999999999999,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.39000000000000001,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0131414891953,
+                  VALE_REFE=-0.013140000000000001,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00935176249692,
+                  VALE_REFE=9.3509000000000005E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.93000000000000005,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0067075370119,
+                  VALE_REFE=-6.7080000000000004E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.1100000000000001,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0158561581887,
+                  VALE_REFE=-0.015862999999999999,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=6.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.3700000000000001,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0111502988184,
+                  VALE_REFE=0.011157,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=8.0000000000000002E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.6399999999999999,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00798107707168,
+                  VALE_REFE=-7.9837999999999992E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.8999999999999999,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00570788284319,
+                  VALE_REFE=5.7108000000000003E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.1699999999999999,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00409789911652,
+                  VALE_REFE=-4.0997999999999998E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.4399999999999999,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.002939080239,
+                  VALE_REFE=2.9405E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.71,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00210622201766,
+                  VALE_REFE=-2.1072999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.9700000000000002,
+                  RESULTAT=DYTRAEUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0015097025174,
+                  VALE_REFE=1.5104999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+#
+# 3- PAS ADAPTATIF MODAL
+#
+TEST_RESU(RESU=_F(INST=0.11,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0183471752987,
+                  VALE_REFE=0.018346999999999999,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.39000000000000001,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0131400969471,
+                  VALE_REFE=-0.013140000000000001,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0093510648574,
+                  VALE_REFE=9.3509000000000005E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.93000000000000005,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00670800767,
+                  VALE_REFE=-6.7080000000000004E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.1100000000000001,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0158703170334,
+                  VALE_REFE=-0.015862999999999999,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.3700000000000001,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0111580808504,
+                  VALE_REFE=0.011157,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.6399999999999999,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00798555110075,
+                  VALE_REFE=-7.9837999999999992E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.8999999999999999,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00571205083134,
+                  VALE_REFE=5.7108000000000003E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.1699999999999999,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00410068057878,
+                  VALE_REFE=-4.0997999999999998E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.4399999999999999,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0029410991446,
+                  VALE_REFE=2.9405E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.71,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00210769292168,
+                  VALE_REFE=-2.1072999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.9700000000000002,
+                  RESULTAT=DYTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00151081361797,
+                  VALE_REFE=1.5104999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+#
+# 4- RUNGE-KUTTA MODAL
+#
+TEST_RESU(RESU=_F(INST=0.11,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.018347027766,
+                  VALE_REFE=0.018347,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.39000000000000001,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0131402232435,
+                  VALE_REFE=-0.01314000,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00935101171805,
+                  VALE_REFE=9.3509000000000005E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.93000000000000005,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00670798992189,
+                  VALE_REFE=-6.7080E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.11,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0158610263065,
+                  VALE_REFE=-0.015863,
+                  REFERENCE='SOURCE_EXTERNE',
+                  CRITERE='ABSOLU',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.3700000000000001,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0111560021947,
+                  VALE_REFE=0.011157,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.6399999999999999,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00798338780306,
+                  VALE_REFE=-7.9838E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.8999999999999999,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00571034625872,
+                  VALE_REFE=5.7108000E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.1699999999999999,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00409951694138,
+                  VALE_REFE=-4.0998E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.4399999999999999,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00294033610419,
+                  VALE_REFE=2.9405E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.71,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00210720226898,
+                  VALE_REFE=-2.1072999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.9700000000000002,
+                  RESULTAT=DYTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00151036405674,
+                  VALE_REFE=1.5104999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+
+TEST_RESU(RESU=_F(INST=0.11,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0183466174958,
+                  VALE_REFE=0.018347,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.39000000000000001,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0131397814094,
+                  VALE_REFE=-0.0131400,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00935112820947,
+                  VALE_REFE=9.3509000000000005E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.93000000000000005,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00670800386459,
+                  VALE_REFE=-6.7080000000000004E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.1100000000000001,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0158662948521,
+                  VALE_REFE=-0.015863,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.3700000000000001,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0111567929326,
+                  VALE_REFE=0.011157,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.6399999999999999,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00798472873031,
+                  VALE_REFE=-7.9838E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.8999999999999999,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00571152295262,
+                  VALE_REFE=5.710800E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.1699999999999999,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00410030913946,
+                  VALE_REFE=-4.0998E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.4399999999999999,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00294084360209 ,
+                  VALE_REFE=2.9405E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.71,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00210751592864,
+                  VALE_REFE=-2.1072999999999999E-3,
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.9700000000000002,
+                  RESULTAT=DYTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00151067949957,
+                  VALE_REFE=1.5105E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='SOURCE_EXTERNE',
+                  PRECISION=5.E-3,),
+          )
+
+FIN( )
+#

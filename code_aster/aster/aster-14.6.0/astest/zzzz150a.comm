@@ -1,0 +1,162 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ),DEBUG=_F(SDVERI='OUI'))
+
+# ------------------------------------------------------------------------------
+# COURBE DE TRACTION
+
+A5=DEFI_FONCTION(
+   NOM_RESU='SIGM',
+   NOM_PARA='EPSI',
+   VALE=(0.002,400.0,
+         0.003,500.0,
+         0.0045,550.0,
+         0.0065,580.0,
+         0.008,590.0,
+         0.01,600.0,
+         0.02,600.0,
+   ),
+   PROL_DROITE='CONSTANT',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+# ------------------------------------------------------------------------------
+# NAPPE
+FCT1=DEFI_FONCTION(
+   NOM_PARA='EPSI',
+   VALE=(0.002,400.0,0.004,500.0,),
+   PROL_DROITE='LINEAIRE',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+FCT2=DEFI_FONCTION(
+   NOM_PARA='EPSI',
+   VALE=(0.001,200.0,0.003,300.0,),
+   PROL_DROITE='LINEAIRE',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+FCT3=DEFI_FONCTION(
+   NOM_PARA='EPSI',
+   VALE=(0.001,2000.0,0.003,3000.0,),
+   PROL_DROITE='LINEAIRE',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+CTRACB=DEFI_NAPPE(
+   NOM_PARA='TEMP',
+   PARA=(0.0,50.0,),
+   FONCTION=(FCT1,FCT2,),
+   PROL_DROITE='LINEAIRE',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+CTRACC=DEFI_NAPPE(
+   NOM_PARA='TEMP',
+   PARA=(0.0,50.0,100.),
+   FONCTION=(FCT1,FCT2,FCT3),
+   PROL_DROITE='LINEAIRE',
+   PROL_GAUCHE='LINEAIRE',
+)
+
+# ------------------------------------------------------------------------------
+IMPR_FONCTION(
+   FORMAT='TABLEAU',
+   UNITE=50,
+   COURBE=  _F( FONCTION=CTRACC, ),
+   )
+
+IMPR_FONCTION(
+   FORMAT='TABLEAU',
+   UNITE=51,
+   COURBE=( _F( FONCTION=FCT1,   ),
+            _F( FONCTION=CTRACB, ),
+            _F( FONCTION=FCT2,   ), )
+   )
+
+TEST_FICHIER(FICHIER="fort.51",
+             NB_VALE_I=12,
+             VALE_CALC_I=65,
+             NB_VALE=10,
+             VALE_CALC=3.0000060000e+03,
+             VALE_CALC_K="38a090c2ef30c6c759c863ea64ad5df4",
+)
+
+# ------------------------------------------------------------------------------
+IMPR_FONCTION(
+   FORMAT='TABLEAU',
+   UNITE=52,
+   COURBE= _F( FONC_X=FCT1,
+               FONC_Y=FCT2, ),
+   )
+
+TEST_FICHIER(FICHIER="fort.52",
+             NB_VALE_I=4,
+             VALE_CALC_I=2,
+             NB_VALE=4,
+             VALE_CALC=1.5000000000e+03,
+             VALE_CALC_K="dc6b6f265a8ad492634f50da4fe167d3",
+)
+
+# ------------------------------------------------------------------------------
+IMPR_FONCTION(
+   FORMAT='XMGRACE',
+   UNITE=53,
+   COURBE=(
+      _F(
+         ABSCISSE=[0.]+A5.Absc(),
+         ORDONNEE=[0.]+A5.Ordo(),
+         COULEUR=2,
+      ),
+   ),
+   TITRE='Courbe de traction',
+   SOUS_TITRE='avec un palier horizontal',
+   LEGENDE_X='Deformation',
+   LEGENDE_Y='Contrainte',
+)
+TEST_FICHIER(FICHIER="fort.53",
+             NB_VALE_I=312,
+             VALE_CALC_I=64076,
+             NB_VALE=69,
+             VALE_CALC=6.3699820000e+02,
+             VALE_CALC_K="49c8e63ede6638d28a72aa42c3b6fdd4",
+)
+
+# ------------------------------------------------------------------------------
+DEFI_FICHIER(UNITE=54, FICHIER='./REPE_OUT/unite.54')
+IMPR_FONCTION(
+   FORMAT='XMGRACE',
+   UNITE=54,
+   COURBE=(
+      _F(
+         FONCTION=CTRACB,
+      ),
+   ),
+)
+DEFI_FICHIER(UNITE=54, ACTION='LIBERER')
+TEST_FICHIER(FICHIER="./REPE_OUT/unite.54",
+             NB_VALE_I=386,
+             VALE_CALC_I=61842,
+             NB_VALE=77,
+             VALE_CALC=7.4403563000e+02,
+             VALE_CALC_K="e7f764d48ba4bec78e56e2c41ff86617",
+)
+
+FIN()

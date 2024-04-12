@@ -1,0 +1,176 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS TEST TPLL01C
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),IMPR_MACRO='NON')
+
+PHI0=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=0.0         )
+
+PHI1=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=-1200.0     )
+
+COEH=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=30.0        )
+
+T_EX=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=140.0       )
+
+T_IM=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=100.0       )
+
+ACIER=DEFI_MATERIAU( THER=_F(  LAMBDA = 0.75, RHO_CP = 2.0))
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED', )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAIL,
+                AFFE=_F(  TOUT = 'OUI', MATER = ACIER) )
+
+MOTH=AFFE_MODELE(  MAILLAGE=MAIL,
+                      AFFE=_F( TOUT = 'OUI', MODELISATION = 'PLAN',
+                                      PHENOMENE = 'THERMIQUE'))
+
+CHTH=AFFE_CHAR_THER_F(  MODELE=MOTH,FLUX_REP=(
+          _F( GROUP_MA = 'GRMA13', FLUN = PHI0),
+          _F( GROUP_MA = 'GRMA12', FLUN = PHI1)),
+           ECHANGE=_F( GROUP_MA = 'GRMA14', COEF_H = COEH, TEMP_EXT = T_EX),
+          TEMP_IMPO=_F( GROUP_NO = 'GRNM15', TEMP = T_IM)
+         )
+
+LR8=DEFI_LIST_REEL(        DEBUT=0.,
+       INTERVALLE=_F(    JUSQU_A = 10.0,   NOMBRE = 2)
+                       )
+
+TEMPE=THER_LINEAIRE(        MODELE=MOTH,
+           ETAT_INIT=_F( STATIONNAIRE = 'OUI'),
+          INCREMENT=_F( LIST_INST = LR8),
+             CHAM_MATER=CHMAT, EXCIT=_F( CHARGE = CHTH)
+             )
+
+TEMPE=CALC_CHAMP(reuse=TEMPE,RESULTAT=TEMPE,THERMIQUE=('FLUX_ELNO','FLUX_ELGA',))
+
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N24',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=100.0,
+                   VALE_CALC=100.0,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N6',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=20.0,
+                   VALE_CALC=19.999990591125,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N14',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=60.0,
+                   VALE_CALC=60.000001046177,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   POINT=3,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_REFE=960.0,
+                   VALE_CALC=960.00091435167,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=2,
+                   POINT=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_REFE=720.0,
+                   VALE_CALC=720.00041984492,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='M2',),
+                _F(NUME_ORDRE=2,
+                   POINT=3,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_REFE=960.0,
+                   VALE_CALC=960.00075494276,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=2,
+                   POINT=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_REFE=720.0,
+                   VALE_CALC=720.00035976155,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='M2',),
+                ),
+          )
+
+
+TR1_C=MACR_LIGN_COUPE(RESULTAT=TEMPE, NUME_ORDRE=2, NOM_CHAM='FLUX_ELNO',
+                     LIGN_COUPE=(
+                        _F(TYPE='SEGMENT', NB_POINTS=5, INTITULE='FLU_NORM',
+                           DISTANCE_MAX=1.e-6, TRAC_NOR='OUI', NOM_CMP = ( 'FLUX', 'FLUY', ),
+                           COOR_ORIG=( 0.04,  0.07, ),
+                           COOR_EXTR=( 0.07,  0.03, ),
+                    )))
+
+TEST_TABLE(VALE_REFE=1200.0,
+           VALE_CALC=1200.0017523818,
+           PRECISION=1.E-3,
+           REFERENCE='ANALYTIQUE',
+           NOM_PARA='TRAC_NOR',
+           TABLE=TR1_C,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(VALE_REFE=1200.0,
+           VALE_CALC=1199.9996281527,
+           PRECISION=1.E-3,
+           REFERENCE='ANALYTIQUE',
+           NOM_PARA='TRAC_NOR',
+           TABLE=TR1_C,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.025000000000000001,),
+           )
+
+TEST_TABLE(VALE_REFE=1200.0,
+           VALE_CALC=1200.0011520839,
+           PRECISION=1.E-3,
+           REFERENCE='ANALYTIQUE',
+           NOM_PARA='TRAC_NOR',
+           TABLE=TR1_C,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.050000000000000003,),
+           )
+
+FIN()
+#

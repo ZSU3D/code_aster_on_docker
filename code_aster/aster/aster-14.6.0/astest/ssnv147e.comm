@@ -1,0 +1,177 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION 3D   (10 MAILLES HEXA20)
+#======================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',)
+
+
+MA=DEFI_GROUP( reuse=MA,
+               MAILLAGE=MA,
+               CREA_GROUP_NO=_F(
+                TOUT_GROUP_MA = 'OUI')
+              )
+
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(MAILLAGE=MA));
+
+#FIN();
+
+MO=AFFE_MODELE(
+                MAILLAGE=MA,
+                AFFE=_F(
+               GROUP_MA = ('BLOC', 'FIXE', 'TRAC',),
+               PHENOMENE = 'MECANIQUE',
+               MODELISATION = '3D')
+             )
+
+CALCAIRE=DEFI_MATERIAU(
+                    ELAS=_F(
+                E = 20000.,
+                NU = 0.),
+               BETON_ECRO_LINE=_F(
+                SYT = 6.,
+                D_SIGM_EPSI = -10000.),
+               )
+
+CAL_FAIB=DEFI_MATERIAU(
+                    ELAS=_F(
+                E = 20000.,
+                NU = 0.),
+               BETON_ECRO_LINE=_F(
+                SYT = 5.,
+                D_SIGM_EPSI = -10000.),
+               )
+
+CHMAT=AFFE_MATERIAU(
+                MAILLAGE=MA,AFFE=(
+                    _F(
+                GROUP_MA = 'BLOC',
+                MATER = CALCAIRE), _F(
+                MAILLE = 'M1',
+                MATER = CAL_FAIB))
+              )
+
+L_INST=DEFI_LIST_REEL(
+               DEBUT=0.0,INTERVALLE=(
+
+                _F(  JUSQU_A = 1.,       NOMBRE = 1),
+                _F(  JUSQU_A = 100.,     NOMBRE = 990))
+              )
+
+LIAISON=AFFE_CHAR_MECA(
+               MODELE=MO,
+                FACE_IMPO=_F( GROUP_MA = 'FIXE',  DX = 0., DY = 0., DZ = 0.)
+              )
+
+TRACTION=AFFE_CHAR_MECA(
+                      MODELE=MO,
+               FORCE_FACE=_F( GROUP_MA = 'TRAC', FZ = 1.)
+              )
+
+RAMPE=DEFI_FONCTION(
+              NOM_PARA='INST',
+                  VALE=(0., 0.,
+                        1., 1.,)
+             )
+
+REPONSE=STAT_NON_LINE(
+                     MODELE=MO,
+                 CHAM_MATER=CHMAT,EXCIT=(
+
+                _F( CHARGE = LIAISON),
+                _F( CHARGE = TRACTION, FONC_MULT = RAMPE)),
+                  COMPORTEMENT=_F(
+                RELATION = 'ENDO_ISOT_BETON'),
+
+                INCREMENT=_F(
+                LIST_INST = L_INST,
+                INST_FIN = 1.),
+                     NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 50)
+             )
+
+
+REPONSE=STAT_NON_LINE( reuse=REPONSE,
+                  ETAT_INIT=_F(
+                EVOL_NOLI = REPONSE),
+                     MODELE=MO,
+                 CHAM_MATER=CHMAT,EXCIT=(
+
+                _F( CHARGE = LIAISON),
+                _F( CHARGE = TRACTION, TYPE_CHARGE = 'FIXE_PILO')),
+                  COMPORTEMENT=_F(
+                RELATION = 'ENDO_ISOT_BETON'),
+
+                INCREMENT=_F(
+                LIST_INST = L_INST,),
+               PILOTAGE=_F(
+                TYPE = 'PRED_ELAS',
+                COEF_MULT=2.,
+                ETA_PILO_R_MIN = 0.,
+                ETA_PILO_MIN = 0.50,
+                ETA_PILO_R_MAX = 10.,
+                SELECTION='RESIDU',
+                ),
+                     NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1,
+                REAC_ITER_ELAS=1,
+                ),
+                CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 10,
+                ),
+
+             )
+
+
+TABLE = RECU_TABLE(CO=REPONSE, NOM_PARA='ETA_PILOTAGE')
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=19,
+                   GROUP_NO='E',
+                   RESULTAT=REPONSE,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=9.2499999999999999E-05,),
+                _F(NUME_ORDRE=19,
+                   POINT=1,
+                   RESULTAT=REPONSE,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=0.5,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=19,
+                   POINT=1,
+                   RESULTAT=REPONSE,
+                   NOM_CHAM='VARI_ELGA',
+                   NOM_CMP='V1',
+                   VALE_CALC=0.90000000000000002,
+                   MAILLE='M1',),
+                ),
+          )
+
+FIN()

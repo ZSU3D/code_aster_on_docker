@@ -1,0 +1,237 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#               OSCILLATEUR FLUIDE-ELASTIQUE MERIDIEN
+# ----------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAYA0=LIRE_MAILLAGE(FORMAT='MED',)
+
+MAYA=CREA_MAILLAGE(MAILLAGE=MAYA0,
+    CREA_POI1=_F(NOM_GROUP_MA='MASSPONC', GROUP_NO = ('MASSPONC',) )
+)
+
+MODELE=AFFE_MODELE(  MAILLAGE=MAYA,INFO=2,AFFE=(
+                      _F( 
+                            #TOUT='OUI',
+                            GROUP_MA=('EFLUIDE','LFL12'),
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = '2D_FLUIDE'),
+                      _F( GROUP_MA = ('EFS_P_IN','EFS_PIST','EFS_P_OU'),
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = '2D_FLUI_STRU'),
+                      _F( GROUP_MA = ('E_PISTON','E_P_IN','ES_P_IN',
+                                       'E_P_OU'),
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = 'D_PLAN'),
+                      _F( GROUP_MA = ('AMORPONC'),
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = '2D_DIS_T'),
+                      _F( GROUP_MA = ('MASSPONC',),
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = '2D_DIS_T'),),
+
+                  )
+
+# ----------------------------------------------------------------------
+#  DEFINITION DES MATERIAUX
+
+EAU=DEFI_MATERIAU(  FLUIDE=_F(
+                              RHO = 0.750E+03,CELE_R = 1.0E+03),
+                 )
+
+ACIER=DEFI_MATERIAU(  ELAS=_F(
+                         E = 2.000000000E+12,NU = 0.3E+00,
+                         RHO = 0.000000000E+03,ALPHA = 0.000000000E+00)
+                   )
+
+FICTIF=DEFI_MATERIAU(  ELAS=_F(
+                         E = 2.000000000E+12,NU = 0.3E+00,
+                         RHO = 0.000000000E+03,ALPHA = 0.000000000E+00)
+                   )
+
+#
+# ----------------------------------------------------------------------
+#  AFFECTATION DES MATERIAUX
+
+CHAMPMAT=AFFE_MATERIAU(   MAILLAGE=MAYA,AFFE=(
+               _F(  TOUT='OUI', MATER = EAU),
+               _F(  GROUP_MA = ('EFS_P_IN','EFS_PIST','EFS_P_OU'),
+                                          MATER = EAU),
+               _F(  GROUP_MA = ('E_P_IN','ES_P_IN','E_P_OU'),
+                                          MATER = FICTIF),
+               _F(  GROUP_MA = 'E_PISTON', MATER = ACIER),),
+                      )
+
+CHAMPMA2=AFFE_MATERIAU(   MAILLAGE=MAYA,AFFE=(
+               _F(  TOUT='OUI', MATER = EAU),
+               _F(  GROUP_MA = ('EFS_P_IN','EFS_PIST','EFS_P_OU'),
+                                          MATER = EAU),
+               _F(  GROUP_MA = ('E_P_IN','ES_P_IN','E_P_OU'),
+                                          MATER = FICTIF),
+               _F(  GROUP_MA = 'E_PISTON', MATER = ACIER),),
+                      )
+#
+# ----------------------------------------------------------------------
+# AFFECTATION DES CARACTERISTIQUES ELEMENTAIRES
+
+CARA_ELE=AFFE_CARA_ELEM( MODELE=MODELE,
+            DISCRET_2D=(_F( GROUP_MA='MASSPONC',
+                        CARA='K_T_D_N',
+                        REPERE='GLOBAL',VALE=(0.,50.E+09,),),
+                     _F( GROUP_MA='MASSPONC',
+                        CARA='M_T_D_N',
+                        VALE=200.E+03),
+                     _F( GROUP_MA='MASSPONC',
+                        CARA='A_T_D_N',
+                        VALE=(0.,0.),),
+                    _F( GROUP_MA='AMORPONC',
+                         CARA='A_T_D_N',
+                        REPERE='GLOBAL',VALE=(37.5E+04,0.,),),
+                    ),)
+
+#
+# ----------------------------------------------------------------------
+# CHARGEMENT ET LIAISONS
+
+CHARGS=AFFE_CHAR_MECA( MODELE=MODELE,
+            PRES_REP=_F( GROUP_MA='ES_P_IN',
+                         PRES=17.0E+06),
+           DDL_IMPO=(_F( GROUP_NO='MASSPONC',
+                         DX=0.,),
+                     _F( GROUP_MA='AMORPONC',
+                         DY=0.,),),
+           LIAISON_SOLIDE=(_F( GROUP_MA=('E_PISTON',),),
+                           _F( GROUP_MA=('E_P_IN',),),
+                           _F( GROUP_MA=('E_P_OU',),),),
+                    )
+
+#
+# ----------------------------------------------------------------------
+#
+KE1=CALC_MATR_ELEM(  MODELE=MODELE,
+                    OPTION='RIGI_MECA',
+                    CHARGE=CHARGS,
+                    CHAM_MATER=CHAMPMAT,
+                    CARA_ELEM=CARA_ELE,
+                 )
+KE2=CALC_MATR_ELEM(  MODELE=MODELE,
+                    OPTION='RIGI_MECA',
+                    CHARGE=CHARGS,
+                    CHAM_MATER=CHAMPMA2,
+                    CARA_ELEM=CARA_ELE,
+                 )
+
+ME=CALC_MATR_ELEM( MODELE=MODELE,
+                   OPTION='MASS_MECA',
+                   CHARGE=CHARGS,
+                   CHAM_MATER=CHAMPMAT,
+                   CARA_ELEM=CARA_ELE,
+                 )
+
+AE=CALC_MATR_ELEM( MODELE=MODELE,
+                   OPTION='AMOR_MECA',
+                   RIGI_MECA=KE1,
+                   MASS_MECA=ME,
+                   CHAM_MATER=CHAMPMAT,
+                   CARA_ELEM=CARA_ELE,
+                   CHARGE=CHARGS,
+                 )
+
+VE=CALC_VECT_ELEM(
+                   OPTION='CHAR_MECA',
+                   CHARGE=CHARGS,
+                   CHAM_MATER=CHAMPMAT,
+                   CARA_ELEM=CARA_ELE,
+                 )
+
+NUM=NUME_DDL(  MATR_RIGI=KE1 ,)
+
+STIFF1=ASSE_MATRICE(  MATR_ELEM=KE1,  NUME_DDL=NUM ,)
+STIFF2=ASSE_MATRICE(  MATR_ELEM=KE2,  NUME_DDL=NUM ,)
+
+STIFF=COMB_MATR_ASSE(COMB_R=(_F( MATR_ASSE = STIFF1,COEF_R = 1.),
+                            _F( MATR_ASSE = STIFF2,COEF_R = 0.)))
+
+MASS=ASSE_MATRICE(  MATR_ELEM=ME,  NUME_DDL=NUM ,)
+
+AMOR=ASSE_MATRICE(  MATR_ELEM=AE,  NUME_DDL=NUM, )
+
+VECT=ASSE_VECTEUR(  VECT_ELEM=VE,  NUME_DDL=NUM ,)
+
+#
+# ----------------------------------------------------------------------
+# DEFINITION DU TEMPS DE CALCUL ET DU PAS DE TEMPS
+
+TEMPCAL=DEFI_LIST_REEL(DEBUT=0.0,
+                       INTERVALLE=_F(JUSQU_A=0.100,
+                                     NOMBRE=2000,),
+                      )
+
+# LISTE DES INSTANTS POUR LESQUELS ON VEUT  SAUVEGARDER LES RESULTATS
+
+TEMPARCH=DEFI_LIST_ENTI(DEBUT=1,
+                       INTERVALLE=_F(JUSQU_A=2000,
+                                     PAS=1,),
+                      )
+
+# CALCUL DE LA REPONSE TRANSITOIRE
+
+DYNA=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                   EXCIT=_F(VECT_ASSE=VECT,
+                            COEF_MULT=1.,),
+                   MATR_MASS=MASS,
+                   MATR_RIGI=STIFF,
+                   MATR_AMOR=AMOR,
+                   SCHEMA_TEMPS=_F(SCHEMA='NEWMARK'),
+                   INCREMENT=_F(LIST_INST=TEMPCAL,),
+                   ARCHIVAGE=_F(CHAM_EXCLU=('ACCE',),),
+                  )
+
+#
+# EXTRACTIONS ET TESTS:
+#----------------------
+#
+TEST_RESU(RESU=(_F(GROUP_NO='MASSPONC',
+                   INST=0.02015,
+                   RESULTAT=DYNA,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=-1.3530E-3,
+                   VALE_CALC=-0.00135361195721,
+                   PRECISION=1.E-3,
+                   ),
+                _F(GROUP_NO='MASSPONC',
+                   INST=0.02605,
+                   RESULTAT=DYNA,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=-4.210E-4,
+                   VALE_CALC=-0.000420710523995,
+                   PRECISION=1.E-3,
+                   ),
+                ),
+          )
+
+#
+FIN( )
+#

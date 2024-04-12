@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+
+###
+### This file is generated automatically by SALOME v6.5.0 with dump python functionality
+###
+
+import sys
+import salome
+salome.salome_init()
+theStudy = salome.myStudy
+import salome_notebook
+notebook = salome_notebook.notebook
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+
+###
+### GEOM component
+###
+
+import GEOM
+from salome.geom import geomBuilder
+geompy = geomBuilder.New(salome.myStudy)
+import math
+import SALOMEDS
+
+
+Wire_1 = geompy.MakeSketcher("Sketcher:F 0.000000 0.000000:TT 0.100000 0.000000:TT 0.100000 0.100000:TT 0.000000 0.100000:WW", [0, 0, 0, 0, 0, 1, 1, 0, -0])
+cube = geompy.MakeFaceWires([Wire_1], 1)
+geompy.addToStudy( Wire_1, 'Wire_1' )
+geompy.addToStudy( cube, 'cube' )
+
+
+###
+### SMESH component
+###
+
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+from salome.StdMeshers import StdMeshersBuilder
+from salome.NETGENPlugin import NETGENPluginBuilder
+
+smeshObj_1 = smesh.CreateHypothesis('MaxLength')
+cube_1 = smesh.Mesh(cube)
+Regular_1D = cube_1.Segment()
+Nb_Segments_1 = Regular_1D.NumberOfSegments(1)
+Nb_Segments_1.SetDistrType( 0 )
+Quadrangle_2D = cube_1.Quadrangle(algo=smeshBuilder.QUADRANGLE)
+Quadrangle_Parameters_1 = Quadrangle_2D.QuadrangleParameters(StdMeshersBuilder.QUAD_STANDARD)
+isDone = cube_1.Compute()
+droi = cube_1.CreateEmptyGroup( SMESH.EDGE, 'droi' )
+nbAdd = droi.Add( [ 4 ] )
+haut = cube_1.CreateEmptyGroup( SMESH.EDGE, 'haut' )
+nbAdd = haut.Add( [ 1 ] )
+bas = cube_1.CreateEmptyGroup( SMESH.EDGE, 'bas' )
+nbAdd = bas.Add( [ 3 ] )
+gau = cube_1.CreateEmptyGroup( SMESH.EDGE, 'gau' )
+nbAdd = gau.Add( [ 2 ] )
+total = cube_1.CreateEmptyGroup( SMESH.FACE, 'total' )
+nbAdd = total.Add( [ 5 ] )
+smesh.SetName(cube_1, 'cube')
+
+## some objects were removed
+aStudyBuilder = theStudy.NewBuilder()
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_1))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+## set object names
+smesh.SetName(cube_1.GetMesh(), 'cube')
+smesh.SetName(Regular_1D.GetAlgorithm(), 'Regular_1D')
+smesh.SetName(Nb_Segments_1, 'Nb. Segments_1')
+smesh.SetName(Quadrangle_2D.GetAlgorithm(), 'Quadrangle_2D')
+smesh.SetName(Quadrangle_Parameters_1, 'Quadrangle Parameters_1')
+smesh.SetName(droi, 'droi')
+smesh.SetName(haut, 'haut')
+smesh.SetName(bas, 'bas')
+smesh.SetName(gau, 'gau')
+smesh.SetName(total, 'total')
+
+
+########Export du maillage au format MMED########
+cube_1.ExportMED( r''+ExportPATH+'ssnp161a.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+
+if salome.sg.hasDesktop():
+  salome.sg.updateObjBrowser(1)

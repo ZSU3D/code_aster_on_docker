@@ -1,0 +1,302 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#  - CALCUL DE MOYENNE DE LA DEFORMATION
+#    JAUGE VIRTUELLE
+#  - RESULTATS ISSUS DE CALC_MODES
+
+#---------------------------------------------------------------------
+#
+import numpy as NP
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),
+       DEBUG=_F(SDVERI='OUI'),
+       IMPR_MACRO='NON',
+       PAR_LOT='OUI',
+       ERREUR=_F(ERREUR_F='EXCEPTION',),
+     )
+
+force = 1.E3
+young = 2.1E11
+poisson = 0.3
+rho = 7800.
+longueur = 1.
+section = 0.3*0.2
+
+POUTRE=LIRE_MAILLAGE(FORMAT='MED',VERI_MAIL=_F(VERIF='OUI'), );
+
+MODEL=AFFE_MODELE(MAILLAGE=POUTRE,
+                  AFFE=_F( GROUP_MA = 'TOUT_ELT',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = '3D',),);
+
+POUTRE=DEFI_GROUP(reuse =POUTRE,
+                MAILLAGE=POUTRE,
+                CREA_GROUP_NO=(
+                             _F(GROUP_MA='AY',NOM='AY',),
+                             _F(GROUP_MA='AZ',NOM='AZ',),
+                             _F(GROUP_MA='SURF2',NOM='SURF2',),
+                              ),);
+#
+#---------------------------------------------------------------------
+#                     CARACTERISTIQUES MATERIAUX
+#---------------------------------------------------------------------
+#
+ACIER=DEFI_MATERIAU(ELAS=_F( E = young,
+                             NU = poisson,
+                             RHO = rho),);
+
+MAT=AFFE_MATERIAU( MAILLAGE=POUTRE,
+                   AFFE=_F( GROUP_MA = 'TOUT_ELT', MATER = ACIER)
+                 );
+
+#
+#---------------------------------------------------------------------
+#                     CHARGEMENTS
+#---------------------------------------------------------------------
+#
+CHAR0=AFFE_CHAR_MECA( MODELE=MODEL,
+                      DDL_IMPO=(  # traction - compression
+                               _F( GROUP_NO = 'AY',DY=0.,),
+                               _F( GROUP_NO = 'AZ',DZ=0.,),
+                        ),
+                      FACE_IMPO=( # encastrement
+                               _F( GROUP_MA = 'SURF1',DX=0.,),
+                        ),
+                      LIAISON_UNIF=( # pour la force de traction
+                               _F( GROUP_NO = 'SURF2',DDL=('DX',)),
+                        ),
+                      );
+#
+#---------------------------------------------------------------------
+#                     RESOLUTION
+#---------------------------------------------------------------------
+#
+M_EL_RIG=CALC_MATR_ELEM( MODELE=MODEL,
+                         CHAM_MATER=MAT,
+                         CHARGE=CHAR0,
+                         OPTION='RIGI_MECA'
+                           );
+
+M_EL_MAS=CALC_MATR_ELEM( MODELE=MODEL,
+                         CHAM_MATER=MAT,
+                         CHARGE=CHAR0,
+                         OPTION='MASS_MECA'
+                           );
+
+NU=NUME_DDL( MATR_RIGI=M_EL_RIG)
+M_AS_RIG=ASSE_MATRICE( MATR_ELEM=M_EL_RIG,   NUME_DDL=NU)
+M_AS_MAS=ASSE_MATRICE( MATR_ELEM=M_EL_MAS,   NUME_DDL=NU)
+
+rota = 90.
+rota_rad = rota*NP.pi/180.
+cosinus = NP.cos(rota_rad)
+sinus = NP.sin(rota_rad)
+
+CHF=AFFE_CHAR_MECA(MODELE=MODEL,
+                   FORCE_FACE=(_F(GROUP_MA='SURF2',FX=force),
+                                  ),)
+
+modes = 1
+if modes:
+  MODES=CALC_MODES(MATR_RIGI=M_AS_RIG,
+                     OPTION='BANDE',
+                     CALC_FREQ=_F(FREQ=(1000.,1500.,),
+                                  ),
+                     MATR_MASS=M_AS_MAS,
+                     SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                      ),
+                     )
+
+
+  MODES=CALC_CHAMP(reuse=MODES,RESULTAT=MODES,DEFORMATION=('EPSI_ELGA','EPSI_ELNO'))
+
+
+  MODES=CALC_CHAMP( reuse=MODES, RESULTAT=MODES,
+                 DEFORMATION='EPSI_NOEU'
+                     )
+
+projection = 0
+if projection:
+# MESURE
+    MAILMESU=LIRE_MAILLAGE(UNITE=22)
+
+    MODLMESU=AFFE_MODELE( MAILLAGE=MAILMESU,
+                          AFFE=(
+                              _F( MAILLE = ('P3','P4','P5','P6','L1','L2','L3',),
+                                  PHENOMENE = 'MECANIQUE',
+                                  MODELISATION = 'DIS_T'),
+                                ),)
+
+    OBSJAU = OBSERVATION(
+                   RESULTAT = MODES,
+                   MODELE_1 = MODEL,
+                   MODELE_2 = MODLMESU,
+                   PROJECTION = 'OUI',
+                   TOUT_ORDRE = 'OUI',
+                   NOM_CHAM = 'EPSI_NOEU',
+                   EPSI_MOYENNE = (  # pour JAUGE : une occ par jauge
+                              _F( GROUP_MA='SURF3',SEUIL_VARI=(0.1,),MASQUE=('EPYY','EPXY','EPXZ','EPYZ'),),
+                              _F( GROUP_MA='SURF4',MASQUE=('EPZZ','EPXY','EPXZ','EPYZ'),),
+                              ),
+                   MODI_REPERE = _F(
+                                    TYPE_CHAM = 'TENS_3D',
+                                    GROUP_MA=('P4',),  # sur le modele mesure (rotation 90 degre)
+                                    REPERE = 'DIR_JAUGE',  VECT_X = (cosinus,sinus,0.),  VECT_Y = (-sinus,cosinus,0.),
+                              ),
+                   FILTRE =(
+                              _F( GROUP_NO = 'P3',
+                                NOM_CHAM = 'EPSI_NOEU',
+                                DDL_ACTIF = ('EPXX','EPZZ',),),
+                              _F( GROUP_NO = 'P4',
+                                NOM_CHAM = 'EPSI_NOEU',
+                                DDL_ACTIF = ('EPXX','EPYY',),),
+                              ),
+                  );
+
+    OBSMXT = OBSERVATION(
+                   RESULTAT = MODES,
+                   MODELE_1 = MODEL,
+                   MODELE_2 = MODLMESU,
+                   PROJECTION = 'OUI',
+                   TOUT_ORDRE = 'OUI',
+                   NOM_CHAM = ('EPSI_NOEU','DEPL'),
+                   FILTRE =(
+                              _F( GROUP_NO = 'P3',
+                                NOM_CHAM = 'EPSI_NOEU',
+                                DDL_ACTIF = ('EPXX','EPZZ',),),
+                              _F( GROUP_NO = 'P3',
+                                NOM_CHAM = 'DEPL',
+                                DDL_ACTIF = ('DX','DY',),),
+                              ),
+                  );
+
+else:
+    OBSJAU = OBSERVATION(
+                   RESULTAT = MODES,
+                   MODELE_1 = MODEL,
+                   MODELE_2 = MODEL,
+                   PROJECTION = 'NON',
+                   TOUT_ORDRE = 'OUI',
+                   NOM_CHAM = 'EPSI_NOEU',
+                   MATR_RIGI=M_AS_RIG,
+                   MATR_MASS=M_AS_MAS,
+                   EPSI_MOYENNE = (  # pour JAUGE : une occ par jauge
+                              _F(
+                                 GROUP_MA=('SURF3',),
+                                 SEUIL_VARI=(0.1,),
+                                 MASQUE=('EPYY','EPXY','EPXZ','EPYZ'),
+                                 ),
+                              _F( GROUP_MA='SURF4',MASQUE=('EPZZ','EPXY','EPXZ','EPYZ'),),
+                              ),
+                   MODI_REPERE = (
+                               _F( TYPE_CHAM = 'TENS_3D',
+                                    GROUP_MA=('SURF4','SURF6',), # (rotation 90 degre)
+                                    REPERE = 'DIR_JAUGE',  VECT_X = (cosinus,sinus,0.),  VECT_Y = (-sinus,cosinus,0.),),
+                              ),
+                   FILTRE = (
+                              _F( GROUP_NO = 'P3',
+                                  NOM_CHAM = 'EPSI_NOEU',
+                                  DDL_ACTIF = ('EPXX','EPZZ',),),
+                              _F( GROUP_NO = 'P4',
+                                  NOM_CHAM = 'EPSI_NOEU',
+                                  DDL_ACTIF = ('EPXX','EPYY',),),
+                             ),
+                  );
+
+    OBSMXT = OBSERVATION(
+                   RESULTAT = MODES,
+                   MODELE_1 = MODEL,
+                   MODELE_2 = MODEL,
+                   PROJECTION = 'NON',
+                   TOUT_ORDRE = 'OUI',
+                   MATR_RIGI=M_AS_RIG,
+                   MATR_MASS=M_AS_MAS,
+                   NOM_CHAM = ('DEPL','EPSI_NOEU'),
+                   FILTRE = (
+                              _F( GROUP_NO = 'P3',
+                                  NOM_CHAM = 'EPSI_NOEU',
+                                  DDL_ACTIF = ('EPXX','EPZZ',),),
+                              _F( GROUP_NO = 'P3',
+                                  NOM_CHAM = 'DEPL',
+                                  DDL_ACTIF = ('DX','DY',),),),
+                  );
+
+#---------------------------------------------------------------------
+#                     VERIFICATION DES RESULTATS
+#---------------------------------------------------------------------
+#
+
+
+modes = 1
+if modes:
+  TEST_RESU(RESU=(_F(GROUP_NO='P3',
+                     NUME_MODE=1,
+                     RESULTAT=OBSJAU,
+                     NOM_CHAM='EPSI_NOEU',
+                     NOM_CMP='EPXX',
+                     VALE_CALC=1.0120571181683,
+                     CRITERE='RELATIF',
+                     ),
+                  _F(GROUP_NO='P3',
+                     NUME_MODE=1,
+                     RESULTAT=OBSJAU,
+                     NOM_CHAM='EPSI_NOEU',
+                     NOM_CMP='EPZZ',
+                     VALE_CALC=-0.30631275158657,
+                     CRITERE='RELATIF',
+                     ),
+# rotation 90 degres : EPXX <-> EPYY
+                  _F(GROUP_NO='P4',
+                     NUME_MODE=1,
+                     RESULTAT=OBSJAU,
+                     NOM_CHAM='EPSI_NOEU',
+                     NOM_CMP='EPYY',
+                     VALE_CALC=1.0168194189613,
+                     CRITERE='RELATIF',
+                     ),
+                  _F(GROUP_NO='P4',
+                     NUME_MODE=1,
+                     RESULTAT=OBSJAU,
+                     NOM_CHAM='EPSI_NOEU',
+                     NOM_CMP='EPXX',
+                     VALE_CALC=-0.31181161388859,
+                     CRITERE='RELATIF',
+                     ),
+# observation mixte
+                  _F(GROUP_NO='P3',
+                     NUME_MODE=1,
+                     RESULTAT=OBSMXT,
+                     NOM_CHAM='EPSI_NOEU',
+                     NOM_CMP='EPXX',
+                     VALE_CALC=1.0144135640865,
+                     CRITERE='RELATIF',
+                     ),
+                  _F(GROUP_NO='P3',
+                     NUME_MODE=1,
+                     RESULTAT=OBSMXT,
+                     NOM_CHAM='DEPL',
+                     NOM_CMP='DX',
+                     VALE_CALC=0.75705679759059,
+                     CRITERE='RELATIF',
+                     ),
+                  ),
+            )
+
+FIN();

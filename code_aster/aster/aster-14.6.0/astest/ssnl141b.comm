@@ -1,0 +1,209 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+ACIER=DEFI_MATERIAU(ELAS=_F( E = 2.E11,NU = 0., RHO = 7850.E0,) )
+
+BETON=DEFI_MATERIAU(ELAS=_F( E = 3.0E+10,NU = 0.2,RHO = 2500.E0,) )
+
+GF=DEFI_GEOM_FIBRE(
+           FIBRE = (_F( GROUP_FIBRE='SACI',
+                       CARA = 'SURFACE',
+                           COOR_AXE_POUTRE = (0.,0.,),
+                            VALE =(
+                                  -0.012499999999999997, -0.012499999999999997, 0.00062500000000000012, -0.012499999999999997, 0.012499999999999997, 0.00062500000000000012, 0.012499999999999997, -0.012499999999999997, 0.00062500000000000012, 0.012499999999999997, 0.012499999999999997, 0.00062500000000000012
+                                  ),),
+                    _F( GROUP_FIBRE='SBET',
+                       CARA = 'SURFACE',
+                           COOR_AXE_POUTRE = (0.,0.,),
+                            VALE =(
+                                -0.037500000000000006, -0.037500000000000006, 0.00062500000000000012, -0.037500000000000006, -0.012499999999999997, 0.00062500000000000012, -0.037500000000000006, 0.012499999999999997, 0.00062500000000000012, -0.037500000000000006, 0.037500000000000006, 0.00062500000000000012, -0.012499999999999997, -0.037500000000000006, 0.00062500000000000012, -0.012499999999999997, 0.037500000000000006, 0.00062500000000000012, 0.012499999999999997, -0.037500000000000006, 0.00062500000000000012, 0.012499999999999997, 0.037500000000000006, 0.00062500000000000012, 0.037500000000000006, -0.037500000000000006, 0.00062500000000000012, 0.037500000000000006, -0.012499999999999997, 0.00062500000000000012, 0.037500000000000006, 0.012499999999999997, 0.00062500000000000012, 0.037500000000000006, 0.037500000000000006, 0.00062500000000000012
+                                  ),),
+                    ),
+
+            )
+
+COMPF=DEFI_COMPOR(GEOM_FIBRE=GF,MATER_SECT=BETON,
+                  MULTIFIBRE=(_F(GROUP_FIBRE='SACI',
+                                 MATER=ACIER, RELATION='ELAS'),
+                              _F(GROUP_FIBRE='SBET',
+                                 MATER=BETON, RELATION='ELAS'),
+                                ),
+                                )
+
+MODELE=AFFE_MODELE( MAILLAGE=MA,
+                        AFFE=_F( GROUP_MA = 'POUTRE',PHENOMENE = 'MECANIQUE',
+                                        MODELISATION ='POU_D_EM') )
+
+CAREL=AFFE_CARA_ELEM(MODELE=MODELE,
+                     POUTRE=_F(GROUP_MA='POUTRE',
+                    SECTION='RECTANGLE',
+                               CARA=('H',),
+                               VALE=(1.0E-1,)),
+                     GEOM_FIBRE=GF,
+                     MULTIFIBRE=_F(GROUP_MA = 'POUTRE',GROUP_FIBRE=('SACI','SBET'),
+                               PREC_AIRE=1.2E-6,
+                               PREC_INERTIE=6.3E03),
+                     )
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA, AFFE=_F( GROUP_MA = 'POUTRE',MATER = (ACIER,BETON)),
+                        AFFE_COMPOR=_F(GROUP_MA = 'POUTRE',COMPOR=COMPF))
+
+
+
+# CONDITIONS AUX LIMITES
+
+ENCAST=AFFE_CHAR_MECA( MODELE=MODELE,
+                        DDL_IMPO=(
+                                    _F( GROUP_NO ='ENCAST',
+                                        DX =0.,DY=0.,DZ = 0.,DRX = 0.,DRY = 0.,DRZ=0.),
+
+                                ),
+            )
+#CHARGE
+FORC = AFFE_CHAR_MECA( MODELE=MODELE,
+                        FORCE_POUTRE=(
+                                    _F( GROUP_MA ='POUTRE',
+                                        FZ = -1.0E4),
+                                ),
+            )
+
+
+LINE=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.,1.),
+                   PROL_DROITE='EXCLU',
+                   PROL_GAUCHE='EXCLU',)
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=(_F(JUSQU_A=1.,
+                                    NOMBRE=1,),
+                                ),
+                    )
+
+U =STAT_NON_LINE(   MODELE=MODELE,     CHAM_MATER=CHMAT,
+                    CARA_ELEM=CAREL,EXCIT=( _F( CHARGE = ENCAST),
+                                            _F( CHARGE = FORC, FONC_MULT = LINE),),
+                    COMPORTEMENT=_F(RELATION='MULTIFIBRE',
+                                GROUP_MA='POUTRE',),
+                    INCREMENT=_F(LIST_INST=LINST,),
+                                            )
+U = CALC_CHAMP(reuse=U,RESULTAT=U,CONTRAINTE='SIEF_ELNO')
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=U,NUME_ORDRE = 1, NOM_CHAM=('DEPL','SIEF_ELGA')))
+
+
+# CALCUL MODAL
+
+ENCADE=AFFE_CHAR_MECA( MODELE=MODELE,
+                        DDL_IMPO=(
+                                    _F( GROUP_NO ='ENCAST',
+                                        DX =0.,DY=0.,DZ = 0.,DRX=0.),
+
+                                ),
+            )
+
+APPUI=AFFE_CHAR_MECA( MODELE=MODELE,
+                        DDL_IMPO=(
+                                    _F( GROUP_NO ='APPUI',
+                                        DY=0.,DZ = 0.,DRX=0.),
+
+                                ),
+            )
+
+ASSEMBLAGE(MODELE=MODELE,
+           CHAM_MATER=CHMAT,
+           CARA_ELEM=CAREL,
+           CHARGE=(ENCADE,APPUI),
+           NUME_DDL=CO('NUM_DDL'),
+           MATR_ASSE=(_F(MATRICE=CO('MATASSR'),
+                         OPTION='RIGI_MECA',),
+                      _F(MATRICE=CO('MATASSM'),
+                         OPTION='MASS_MECA',),),);
+
+FREQ=CALC_MODES(MATR_RIGI=MATASSR,
+                MATR_MASS=MATASSM,
+                CALC_FREQ=_F(NMAX_FREQ=7,
+                             ),
+                )
+
+#
+
+
+# CALCUL MODAL EN MASS_DIAG
+
+RIGI=CALC_MATR_ELEM(MODELE=MODELE, OPTION='RIGI_MECA',
+                    CHAM_MATER=CHMAT,
+                    CARA_ELEM=CAREL,
+                    CHARGE=(ENCADE,APPUI),
+                   )
+MASS=CALC_MATR_ELEM(MODELE=MODELE, OPTION='MASS_MECA_DIAG',
+                    CHAM_MATER=CHMAT,
+                    CARA_ELEM=CAREL,
+                    CHARGE=(ENCADE,APPUI),)
+NUMDDL=NUME_DDL(MATR_RIGI=RIGI,)
+RIGAS=ASSE_MATRICE(MATR_ELEM=RIGI,NUME_DDL=NUMDDL)
+MASAS=ASSE_MATRICE(MATR_ELEM=MASS,NUME_DDL=NUMDDL)
+
+FREQ_DIA=CALC_MODES(MATR_RIGI=RIGAS,
+                    MATR_MASS=MASAS,
+                    CALC_FREQ=_F(NMAX_FREQ=8,
+                                 ),
+                    )
+
+
+TEST_RESU(RESU=(_F(
+                    NUME_ORDRE = 1,
+                    RESULTAT=U,
+                    NOM_CHAM='DEPL',
+                    NOEUD='N21',
+                    NOM_CMP='DZ',
+                    VALE_REFE = -6.64935064935E-2,
+                    VALE_CALC = -6.64935064935E-2,
+                    REFERENCE = 'ANALYTIQUE',
+                    ),
+                ),
+            )
+
+TEST_RESU(RESU=(_F(
+                    NUME_ORDRE = 1,
+                    RESULTAT=FREQ,
+                    PARA='FREQ',
+                    VALE_REFE = 34.7665079762,
+                    VALE_CALC = 34.7423820809,
+                    REFERENCE = 'ANALYTIQUE',
+                    ),
+                    ),
+            )
+
+TEST_RESU(RESU=(_F(
+                    NUME_ORDRE = 1,
+                    RESULTAT=FREQ_DIA,
+                    PARA='FREQ',
+                    VALE_REFE = 34.7665079762,
+                    VALE_CALC = 34.7518884796,
+                    REFERENCE = 'ANALYTIQUE',
+                    ),
+                    ),
+            )
+
+FIN()

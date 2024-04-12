@@ -1,0 +1,252 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------
+# description du test :
+#----------------------
+# 1) On lit (au format IDEAS) un evol_char de type "pression" (PRESLU):
+#     - pour les mailles M15 et M16 (groupe_ma='CD'):
+#         - t=0.0 , p=0.0
+#         - t=1.0 , p=4.0
+#     - pour les autres mailles : p=0.0
+#
+# 2) On definit 2 fonctions F1 et F2 telles que :
+#     F1(t=1)=2.
+#     F2(t=1)=3.
+#
+# 3) On definit des chargements repartis equivalents a des pressions :
+#    CH1 : sur CD : p=1 + p=4
+#    CH2 : sur CD : p=3 + p=4 + p=2
+#
+# 4) on applique tous ces chargements sur le haut d'un cylindre (et on bloque sa base):
+#    La pression totale appliquee en haut vaut donc :
+#      F1*CH1 + F2*CH2 = 2*(1+4) + 3*(3+4+2) = 37.
+#    Le materiau est elastique : E=1, NU=0
+#    La solution est alors homogene : DY= 37 car le cylindre est haut de 1.
+#
+# 5) on verifie que la solution est bonne avec tous les mecaniques :
+#    MECA_STATIQUE, STAT_NON_LINE, DYNA_NON_LINE, DYNA_VIBRA
+#----------------------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+
+MA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                   UNITE=19,
+                   )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+         AFFE=_F(  TOUT = 'OUI',PHENOMENE = 'MECANIQUE',
+                           MODELISATION = 'AXIS'))
+
+MAT=DEFI_MATERIAU(ELAS=_F( E = 1.,  NU = 0.0, RHO = 1.E-7))
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                        AFFE=_F(  TOUT = 'OUI', MATER = MAT))
+
+LINST=DEFI_LIST_REEL(VALE=( 0., 1.,))
+
+F1=DEFI_FONCTION(NOM_PARA='INST', VALE=(0., 0., 10., 20.,))
+
+F2=DEFI_FONCTION(NOM_PARA='INST', VALE=(0., 0., 10., 30.,))
+
+PRESLU=LIRE_RESU(      MODELE=MO,     UNITE=37,
+                              FORMAT='IDEAS',     TYPE_RESU='EVOL_CHAR',
+                            NOM_CHAM=('PRES',),   TOUT_ORDRE='OUI',
+                        FORMAT_IDEAS=_F(     NOM_CHAM = 'PRES',
+                             NUME_DATASET = 57,
+                                       RECORD_6 = ( 1, 4, 1, 15, 2, 1, ),
+                             POSI_ORDRE = ( 7, 4,),
+                             POSI_INST = ( 8, 1,),
+                             NOM_CMP = ('PRES',))
+                      )
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=PRESLU,
+                  NOM_CHAM='PRES',
+                  NOEUD='N3',
+                  NOM_CMP='PRES',
+                  VALE_CALC=4.0,
+                  VALE_REFE=4.0,
+                  PRECISION=9.9999999999999995E-07,
+                  MAILLE='M15',),
+          )
+
+CH0=AFFE_CHAR_MECA(  MODELE=MO,
+           DDL_IMPO=_F(  GROUP_MA = 'AB',   DY = 0.) )
+
+CH1=AFFE_CHAR_MECA(  MODELE=MO,
+         PRES_REP=_F(  GROUP_MA = 'CD',   PRES = 1.),
+           EVOL_CHAR=PRESLU    )
+
+CH2=AFFE_CHAR_MECA(  MODELE=MO,
+         PRES_REP=_F(  GROUP_MA = 'CD',   PRES = 3.),
+         FORCE_CONTOUR=_F(  GROUP_MA = 'CD',   FY = -2.),
+           EVOL_CHAR=PRESLU
+         )
+
+# 1) VALIDATION DE EVOL_CHAR (DE TYPE PRESSION) AVEC MECA_STATIQUE :
+# ------------------------------------------------------------------
+U1=MECA_STATIQUE(       MODELE=MO,   CHAM_MATER=CHMAT,
+           LIST_INST=LINST,EXCIT=(
+              _F( CHARGE = CH0),
+              _F( CHARGE = CH1, FONC_MULT = F1),
+              _F( CHARGE = CH2, FONC_MULT = F2))
+                        )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-37.0,
+                  VALE_REFE=-37.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+# 2) VALIDATION DE EVOL_CHAR (DE TYPE PRESSION) AVEC STAT_NON_LINE :
+# ----------------------------------------------------------------
+U2=STAT_NON_LINE(       MODELE=MO,   CHAM_MATER=CHMAT,
+           INCREMENT=_F( LIST_INST = LINST),EXCIT=(
+              _F( CHARGE = CH0),
+              _F( CHARGE = CH1, FONC_MULT = F1),
+              _F( CHARGE = CH2, FONC_MULT = F2)),
+           COMPORTEMENT=_F( TOUT = 'OUI', RELATION = 'ELAS')
+                        )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-37.0,
+                  VALE_REFE=-37.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+# 3) VALIDATION DE EVOL_CHAR (DE TYPE PRESSION) AVEC DYNA_NON_LINE :
+# ------------------------------------------------------------------
+U3=DYNA_NON_LINE(       MODELE=MO,   CHAM_MATER=CHMAT,
+           INCREMENT=_F( LIST_INST = LINST),EXCIT=(
+              _F( CHARGE = CH0),
+              _F( CHARGE = CH1, FONC_MULT = F1),
+              _F( CHARGE = CH2, FONC_MULT = F2)),
+           COMPORTEMENT=_F( TOUT = 'OUI', RELATION = 'ELAS'),
+           SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',FORMULATION='DEPLACEMENT'),
+                        )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U3,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-36.9999950667,
+                  VALE_REFE=-37.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+# 4) VALIDATION DE EVOL_CHAR (DE TYPE PRESSION) AVEC DYNA_VIBRA :
+# -----------------------------------------------------------------
+ASSEMBLAGE(  MODELE=MO,  CHAM_MATER=CHMAT,
+                     CHARGE=CH0,
+                    NUME_DDL=CO("NU"),MATR_ASSE=(
+
+                        _F( MATRICE = CO("MATRRIGI"),
+                         OPTION = 'RIGI_MECA'),
+                        _F( MATRICE = CO("MATRMASS"),
+                         OPTION = 'MASS_MECA'))
+                   )
+
+U4=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+           MODELE=MO,      CHAM_MATER=CHMAT,
+           SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+           INCREMENT=_F( LIST_INST = LINST),EXCIT=(
+              _F( CHARGE = CH0),
+              _F( CHARGE = CH1, FONC_MULT = F1),
+              _F( CHARGE = CH2, FONC_MULT = F2)),
+             MATR_MASS=MATRMASS,
+             MATR_RIGI=MATRRIGI,
+             )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U4,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-36.9999950667,
+                  VALE_REFE=-37.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+# 5) VALIDATION DE EVOL_CHAR (DE TYPE PRESSION) AVEC CALC_VECT_ELEM :
+# -----------------------------------------------------------------
+
+F1bis=DEFI_FONCTION(NOM_PARA='INST', VALE=(0., 0., 1., 1.,))
+
+CH_ALL=AFFE_CHAR_MECA(MODELE=MO,
+                      DDL_IMPO=_F(  GROUP_MA = 'AB',   DY = 0.) ,
+                      PRES_REP=(
+                                _F(  GROUP_MA = 'CD',   PRES = 1.),
+                                _F(  GROUP_MA = 'CD',   PRES = 3.),
+                               ),
+                      EVOL_CHAR=PRESLU,
+                      )
+
+U5=MECA_STATIQUE(MODELE=MO,
+                 LIST_INST=LINST,
+                 CHAM_MATER=CHMAT,
+                 EXCIT=(_F( CHARGE = CH_ALL, FONC_MULT = F1bis),),)
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U5,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-7.0,
+                  VALE_REFE=-7.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+
+rigiel    = CALC_MATR_ELEM(MODELE=MO, CHAM_MATER=CHMAT, OPTION='RIGI_MECA', CHARGE=CH_ALL)
+vecel     = CALC_VECT_ELEM(CHARGE=CH_ALL, INST=1.0, CHAM_MATER=CHMAT, OPTION='CHAR_MECA')
+numeddl   = NUME_DDL(MATR_RIGI = rigiel)
+matass    = ASSE_MATRICE(MATR_ELEM=rigiel , NUME_DDL=numeddl)
+vecas     = ASSE_VECTEUR(VECT_ELEM=vecel, NUME_DDL=numeddl)
+matass    = FACTORISER(reuse=matass, MATR_ASSE=matass);
+U6        = RESOUDRE( MATR = matass, CHAM_NO= vecas )
+TEST_RESU(CHAM_NO=_F(
+                  REFERENCE='ANALYTIQUE',
+                  CHAM_GD=U6,
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=-7.0,
+                  VALE_REFE=-7.0,
+                  PRECISION=9.9999999999999995E-07,),
+          )
+
+FIN()
+#

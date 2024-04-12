@@ -1,0 +1,661 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+K0=1.E+05
+
+M0=450.0
+
+X0=0.10
+
+A0=X0 / 10.0
+
+W0=pi/4.
+
+V0=W0 * A0
+
+#
+PAS=0.02
+
+DER=18.
+
+METHOD1='DIFF_CENTRE'
+
+METHOD2='DEVOGE'
+
+#
+# EMPLOI DE FORMULE POUR DEFINIR L ACCELERATION ET LA NON-LINEARITE----
+ACCE_X = FORMULE(VALE="""A0*sin(W0*INST) *
+                  (-W0**2 +(K0/M0)*(1. - abs(A0*sin(W0*INST))/X0))
+                """,
+                 A0=A0,
+                 W0=W0,
+                 K0=K0,
+                 M0=M0,
+                 X0=X0,
+                 NOM_PARA='INST',)
+f_NLIN = FORMULE(VALE='K0*DX*((abs(DX)-1.E-6)/X0) ',
+                 K0=K0,
+                 X0=X0,
+                 NOM_PARA='DX',)
+
+def NONLINEARITE_SOL(X) :
+    X0 = 1.E-6
+    if X == 0. : return 0
+    sign = X/abs(X)
+    X = abs(X)
+    if X <= X0 : return 0
+    else       : return sign* ( f_NLIN(X) )
+
+FOR_EFDE = FORMULE(VALE='NONLINEARITE_SOL(DX)',
+                   NONLINEARITE_SOL=NONLINEARITE_SOL,
+                   NOM_PARA='DX',)
+
+
+# ---------------------------------------------------------------------
+MAILLAGE=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+MODELE=AFFE_MODELE(  MAILLAGE=MAILLAGE,
+         AFFE=_F(  PHENOMENE = 'MECANIQUE', MODELISATION = 'DIS_T',
+                GROUP_MA = 'DISCRET')
+                    )
+
+CON_LIM=AFFE_CHAR_MECA(  MODELE=MODELE,
+               DDL_IMPO=_F(  TOUT = 'OUI',  DY = 0., DZ = 0.)
+                        )
+
+CARA_ELE=AFFE_CARA_ELEM(  MODELE=MODELE,DISCRET=(
+                _F(  MAILLE = 'NN', CARA = 'M_T_D_N', VALE = M0),
+                        _F(  MAILLE = 'NN', CARA = 'K_T_D_N',
+                          VALE = (K0, K0, K0, )))
+                         )
+
+#
+RIGI_ELE=CALC_MATR_ELEM(  MODELE=MODELE, OPTION='RIGI_MECA',
+                            CARA_ELEM=CARA_ELE,  CHARGE=CON_LIM
+                         )
+
+MASS_ELE=CALC_MATR_ELEM(  MODELE=MODELE, OPTION='MASS_MECA',
+                            CARA_ELEM=CARA_ELE,  CHARGE=CON_LIM
+                         )
+
+#
+NUMEDDL=NUME_DDL(  MATR_RIGI=RIGI_ELE )
+
+RIGIDITE=ASSE_MATRICE(  MATR_ELEM=RIGI_ELE,  NUME_DDL=NUMEDDL  )
+
+MASSE=ASSE_MATRICE(  MATR_ELEM=MASS_ELE,  NUME_DDL=NUMEDDL  )
+
+VIT_INIT=CREA_CHAMP( OPERATION='AFFE', PROL_ZERO='OUI', TYPE_CHAM='NOEU_DEPL_R',
+MAILLAGE=MAILLAGE,
+                          NUME_DDL=NUMEDDL,
+                         AFFE=_F(  TOUT = 'OUI',  NOM_CMP = 'DX',  VALE = V0)
+                        )
+
+L_RECU=DEFI_LIST_REEL(  DEBUT=0.,INTERVALLE=(
+                      _F(  JUSQU_A = 2.,   PAS = 2.),
+                      _F(  JUSQU_A = DER,  PAS = 4.)) )
+
+TRAN_PHE=DYNA_LINE(TYPE_CALCUL='TRAN',
+                   BASE_CALCUL='GENE',
+                   MODELE=MODELE,
+                   CARA_ELEM=CARA_ELE,
+                   CHARGE=CON_LIM,
+                   SCHEMA_TEMPS=_F(SCHEMA=METHOD1,),
+                   ETAT_INIT=_F(VITE = VIT_INIT),
+                   ENRI_STAT='NON',
+                   BANDE_ANALYSE=2.5,
+                   EXCIT=_F(DIRECTION=(-1., 0., 0.,),
+                            TYPE_APPUI="MONO",
+                            FONC_MULT = ACCE_X),
+                   COMPORTEMENT=_F(RELATION='RELA_EFFO_DEPL',
+                                   NOEUD = 'N01',
+                                   NOM_CMP = 'DX',
+                                   FONCTION = FOR_EFDE),
+                   INCREMENT=_F(INST_INIT = 0.,
+                                INST_FIN = DER,
+                                PAS = PAS),
+                   ARCHIVAGE=_F(LIST_INST=L_RECU, PAS_ARCH = 10**8),
+                   BASE_RESU = CO('MODE_ME2'),
+                   )
+
+# AVEC CORRECTION STATIQUE
+TRAN_PHS=DYNA_LINE(TYPE_CALCUL='TRAN',
+                   BASE_CALCUL='GENE',
+                   MODELE=MODELE,
+                   CARA_ELEM=CARA_ELE,
+                   CHARGE=CON_LIM,
+                   SCHEMA_TEMPS=_F(SCHEMA=METHOD1,),
+                   ETAT_INIT=_F(VITE = VIT_INIT),
+                   ENRI_STAT='OUI',
+                   ORTHO='OUI',
+                   BANDE_ANALYSE=2.5,
+                   EXCIT=_F(DIRECTION=(-1., 0., 0.,),
+                            TYPE_APPUI="MONO",
+                            FONC_MULT = ACCE_X),
+                   COMPORTEMENT=_F(RELATION='RELA_EFFO_DEPL',
+                                   NOEUD = 'N01',
+                                   NOM_CMP = 'DX',
+                                   FONCTION = FOR_EFDE),
+                   INCREMENT=_F(INST_INIT = 0.,
+                                INST_FIN = DER,
+                                PAS = PAS),
+                   ARCHIVAGE=_F(LIST_INST=L_RECU, PAS_ARCH = 10**8),
+                   BASE_RESU = CO('MODE_ME'),
+                   )
+
+TRAN_PHD=DYNA_LINE(TYPE_CALCUL='TRAN',
+                   BASE_CALCUL='GENE',
+                   MODELE=MODELE,
+                   CARA_ELEM=CARA_ELE,
+                   CHARGE=CON_LIM,
+                   SCHEMA_TEMPS=_F(SCHEMA=METHOD2, PAS_MAXI=PAS),
+                   ETAT_INIT=_F(VITE = VIT_INIT),
+                   ENRI_STAT='NON',
+                   BANDE_ANALYSE=2.5,
+                   EXCIT=_F(DIRECTION=(-1., 0., 0.,),
+                            TYPE_APPUI="MONO",
+                            FONC_MULT = ACCE_X),
+                   COMPORTEMENT=_F(RELATION='RELA_EFFO_DEPL',
+                                   NOEUD = 'N01',
+                                   NOM_CMP = 'DX',
+                                   FONCTION = FOR_EFDE),
+                   INCREMENT=_F(INST_INIT = 0.,
+                                INST_FIN = DER,
+                                PAS = PAS),
+                   ARCHIVAGE=_F(LIST_INST=L_RECU, PAS_ARCH = 10**8),
+                   )
+
+#
+MODE_MEC=CALC_MODES(MATR_RIGI=RIGIDITE,
+                    OPTION='PLUS_PETITE',
+                    CALC_FREQ=_F(NMAX_FREQ=1,
+                                 ),
+                    MATR_MASS=MASSE,
+                    )
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODE_MEC,
+                  VALE_CALC=2.37254181139,),
+          )
+
+#
+MONO_X=CALC_CHAR_SEISME(  MATR_MASS=MASSE,   DIRECTION=(-1., 0., 0.,),
+                           MONO_APPUI='OUI'
+                         )
+
+#
+# PROJECTION DES MATRICES M ET K SUR LA BASE MODALE
+#---------------------------------------------------
+PROJ_BASE(BASE=MODE_MEC,
+          STOCKAGE='DIAG',
+          MATR_ASSE_GENE=(
+           _F( MATRICE = CO("MASS_GEN"), MATR_ASSE = MASSE),
+           _F( MATRICE = CO("RIGI_GEN"), MATR_ASSE = RIGIDITE)),VECT_ASSE_GENE=(
+           _F( VECTEUR = CO("VECT_GEN"), VECT_ASSE = VIT_INIT, TYPE_VECT='VITE'),
+           _F( VECTEUR = CO("VECT_X"), VECT_ASSE = MONO_X, TYPE_VECT='FORC'))
+               )
+
+#
+#
+# RECUPERATION DES DEPLACEMENTS RELATIFS CALCULES
+# -----------------------------------------------
+
+F_E2=RECU_FONCTION(  NOEUD='N01',  NOM_CMP='DX',  NOM_CHAM='DEPL',
+            RESULTAT=TRAN_PHE,    LIST_INST=L_RECU
+                    )
+
+F_D2=RECU_FONCTION(  NOEUD='N01',  NOM_CMP='DX',  NOM_CHAM='DEPL',
+            RESULTAT=TRAN_PHD,    LIST_INST=L_RECU
+                    )
+F_ES=RECU_FONCTION(  NOEUD='N01',  NOM_CMP='DX',  NOM_CHAM='DEPL',
+            RESULTAT=TRAN_PHS,    LIST_INST=L_RECU
+                    )
+
+#
+TEST_FONCTION(VALEUR=(
+
+                       # DYNA_LINE : F_E2
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999883729946E-03,
+                         VALE_PARA=2.0,
+                         FONCTION=F_E2,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999848874655E-03,
+                         VALE_PARA=6.0,
+                         FONCTION=F_E2,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999902314109E-03,
+                         VALE_PARA=10.0,
+                         FONCTION=F_E2,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999855237058E-03,
+                         VALE_PARA=14.0,
+                         FONCTION=F_E2,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999873975236E-03,
+                         VALE_PARA=18.0,
+                         FONCTION=F_E2,),
+                      ),
+              )
+
+#
+TEST_FONCTION(VALEUR=(
+
+                     # DYNA_LINE : F_D2
+                     _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999876897338E-03,
+                         VALE_PARA=2.0,
+                         FONCTION=F_D2,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999869269610E-03,
+                         VALE_PARA=6.0,
+                         FONCTION=F_D2,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999879054771E-03,
+                         VALE_PARA=10.0,
+                         FONCTION=F_D2,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999874216933E-03,
+                         VALE_PARA=14.0,
+                         FONCTION=F_D2,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999870598095E-03 ,
+                         VALE_PARA=18.0,
+                         FONCTION=F_D2,),
+
+                      ),
+              )
+
+#
+TEST_FONCTION(# DYNA_LINE : F_ES
+              VALEUR=(_F(VALE_REFE=1.E-2,
+                         PRECISION=5.E-2,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999883729946E-03,
+                         VALE_PARA=2.0,
+                         FONCTION=F_ES,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=5.E-2,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999848874655E-03,
+                         VALE_PARA=6.0,
+                         FONCTION=F_ES,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=6.E-2,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999902314109E-03,
+                         VALE_PARA=10.0,
+                         FONCTION=F_ES,),
+                      _F(VALE_REFE=-1.E-2,
+                         PRECISION=5.E-2,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=-9.999855237058E-03,
+                         VALE_PARA=14.0,
+                         FONCTION=F_ES,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=5.E-2,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999873975236E-03,
+                         VALE_PARA=18.0,
+                         FONCTION=F_ES,),
+                      ),
+              )
+
+#
+
+DEPL_R = FORMULE(VALE='A0 * sin(W0*INST) ',
+                 A0=A0,
+                 W0=W0,
+                 NOM_PARA='INST',)
+
+
+VITE_R = FORMULE(VALE='A0 * W0 * cos(W0*INST) ',
+                 A0=A0,
+                 W0=W0,
+                 NOM_PARA='INST',)
+
+ACCE_R = FORMULE(VALE='-A0*W0*W0*sin(W0*INST) ',
+                 A0=A0,
+                 W0=W0,
+                 NOM_PARA='INST',)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODE_MEC,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= 2.37254,
+                   PRECISION=1.E-3,
+                   VALE_CALC=2.37254181139,),
+                ),
+          )
+
+#=======================================================================
+
+# Test DYNA_LINE
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODE_ME2,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= 2.37254,
+                   PRECISION=1.E-3,
+                   VALE_CALC=2.37254181139,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= DEPL_R( 2.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=0.00999988372995,),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= DEPL_R( 6.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-0.00999984887465,),
+                _F(NUME_ORDRE=3,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= DEPL_R( 10.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=0.00999990231411,),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= DEPL_R( 14.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-0.00999985523706,),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= DEPL_R( 18.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=0.00999987397524,),
+                ),
+          )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODE_ME2,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= 2.37254,
+                   PRECISION=1.E-3,
+                   VALE_CALC=2.37254181139,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='VITE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= VITE_R( 2.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=6.13434621666E-05,
+                   CRITERE='ABSOLU',),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='VITE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= VITE_R( 6.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-6.18289681175E-05,
+                   CRITERE='ABSOLU',),
+                _F(NUME_ORDRE=3,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='VITE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= VITE_R( 10.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=6.17987644848E-05,
+                   CRITERE='ABSOLU',),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='VITE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= VITE_R( 14.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-6.13595659487E-05,
+                   CRITERE='ABSOLU',),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='VITE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= VITE_R( 18.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=6.20631402279E-05,
+                   CRITERE='ABSOLU',),
+                ),
+          )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODE_ME2,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= 2.37254,
+                   PRECISION=1.E-3,
+                   VALE_CALC=2.37254181139,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='ACCE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= ACCE_R( 2.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-0.00617005445271,),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='ACCE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= ACCE_R( 6.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=0.00616385785824,),
+                _F(NUME_ORDRE=3,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='ACCE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= ACCE_R( 10.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-0.00617335835406,),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='ACCE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= ACCE_R( 14.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=0.00616498897043,),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=TRAN_PHE,
+                   NOM_CHAM='ACCE',
+                   NOEUD='N01',
+                   NOM_CMP='DX',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE= ACCE_R( 18.),
+                   PRECISION=1.E-3,
+                   VALE_CALC=-0.00616832025506,),
+                ),
+          )
+
+#=======================================================================
+
+TRAN_GE3=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                       MATR_MASS=MASS_GEN,   MATR_RIGI=RIGI_GEN,
+                        SCHEMA_TEMPS=_F(SCHEMA=METHOD1,),
+                        ETAT_INIT=_F( VITE = VECT_GEN),
+                       EXCIT=_F( VECT_ASSE_GENE = VECT_X, FONC_MULT = ACCE_X),
+                       COMPORTEMENT=_F(RELATION='RELA_EFFO_DEPL',  NOEUD = 'N01',  NOM_CMP = 'DX',
+                                        FONCTION = FOR_EFDE),
+                        INCREMENT=_F( INST_INIT = 0.,  INST_FIN = DER,
+                        PAS=PAS)
+                       )
+
+TABLE=POST_DYNA_MODA_T(  RESU_GENE=TRAN_GE3,
+                        RELA_EFFO_DEPL=_F(  NOEUD = 'N01', NOM_CMP = 'DX') )
+
+
+TRAN_GE4=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                       MATR_MASS=MASS_GEN,   MATR_RIGI=RIGI_GEN,
+                        SCHEMA_TEMPS=_F(SCHEMA=METHOD2, PAS_MAXI=PAS),
+                        ETAT_INIT=_F( VITE = VECT_GEN),
+                       EXCIT=_F( VECT_ASSE_GENE = VECT_X, FONC_MULT = ACCE_X),
+                       COMPORTEMENT=_F(RELATION='RELA_EFFO_DEPL',  NOEUD = 'N01',  NOM_CMP = 'DX',
+                                        FONCTION = FOR_EFDE),
+                        INCREMENT=_F( INST_INIT = 0.,  INST_FIN = DER,
+                        PAS=PAS),
+                        ARCHIVAGE=_F(LIST_INST=L_RECU)
+                       )
+
+#
+
+F3=RECU_FONCTION(  RESU_GENE=TRAN_GE3,  NOM_CHAM='DEPL',PRECISION=1.E-3,
+                       NOEUD='N01',  NOM_CMP='DX',  LIST_INST=L_RECU,
+                       INTERP_NUME='LIN',      INTERPOL='LIN'
+                    )
+
+F4=RECU_FONCTION(  RESU_GENE=TRAN_GE4,  NOM_CHAM='DEPL',PRECISION=1.E-3,
+                       NOEUD='N01',  NOM_CMP='DX',  LIST_INST=L_RECU,
+                       INTERP_NUME='LIN',      INTERPOL='LIN'
+                    )
+
+#
+
+TEST_FONCTION(VALEUR=(_F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999883729946E-03 ,
+                         VALE_PARA=2.0,
+                         FONCTION=F3,),
+                      _F(VALE_CALC=-9.999848874655E-03,
+                         VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=6.0,
+                         FONCTION=F3,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999902314109E-03,
+                         VALE_PARA=10.0,
+                         FONCTION=F3,),
+                      _F(VALE_CALC=-9.999855237058E-03,
+                         VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=14.0,
+                         FONCTION=F3,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999873975236E-03,
+                         VALE_PARA=18.0,
+                         FONCTION=F3,),
+                      ),
+              )
+
+TEST_FONCTION(VALEUR=(_F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999876897338E-03,
+                         VALE_PARA=2.0,
+                         FONCTION=F4,),
+                      _F(VALE_CALC=-9.999869269610E-03,
+                         VALE_REFE=-1.E-2,
+                         PRECISION=5.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=6.0,
+                         FONCTION=F4,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999879054771E-03,
+                         VALE_PARA=10.0,
+                         FONCTION=F4,),
+                      _F(VALE_CALC=-9.999874216933E-03,
+                         VALE_REFE=-1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=14.0,
+                         FONCTION=F4,),
+                      _F(VALE_REFE=1.E-2,
+                         PRECISION=1.E-3,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC=9.999870598095E-03,
+                         VALE_PARA=18.0,
+                         FONCTION=F4,),
+                      ),
+              )
+
+FIN( )
+#

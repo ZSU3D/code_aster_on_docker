@@ -1,0 +1,199 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+# COQUE HELICOIDALE (POUTRE VRILLEE) SOUS CHARGES CONCENTREES
+#
+# MODELISATION MEC3QU9H: 101 NOEUDS --  24 MAILLES QUAD9
+#=======================================================================
+
+
+MATERI_1=DEFI_MATERIAU( ELAS=_F(  E = 29.0E+6,      NU = 0.2200) )
+
+MAILLA_1=LIRE_MAILLAGE(FORMAT='MED',   )
+
+MAILLA_1=DEFI_GROUP( reuse=MAILLA_1,   MAILLAGE=MAILLA_1,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+CH_MAT_1=AFFE_MATERIAU(  MAILLAGE=MAILLA_1,
+                            AFFE=_F(  TOUT = 'OUI',   MATER = MATERI_1) )
+
+MODELE_1=AFFE_MODELE(  MAILLAGE=MAILLA_1,
+                     AFFE=_F( TOUT = 'OUI', MODELISATION = 'COQUE_3D',
+                                PHENOMENE = 'MECANIQUE') )
+
+CINE=AFFE_CHAR_MECA(MODELE=MODELE_1,
+                  DDL_IMPO=_F( GROUP_NO = 'OBC',      DX = 0.,  DY = 0.,  DZ = 0.,
+                                              DRX = 0., DRY = 0., DRZ = 0.))
+
+CHFZ=AFFE_CHAR_MECA(MODELE=MODELE_1,
+                  FORCE_NODALE=_F( GROUP_NO = 'A',  FZ = 1.000000000000000) )
+
+CHFY=AFFE_CHAR_MECA(MODELE=MODELE_1,
+                  FORCE_NODALE=_F( GROUP_NO = 'A',  FY = 1.000000000000000) )
+
+CARAC__1=AFFE_CARA_ELEM(   MODELE=MODELE_1,
+                               COQUE=_F(
+       GROUP_MA = 'TOUT',
+  EPAIS = 0.320,
+                                  A_CIS = 0.83333333333333) )
+
+MATELE_1=CALC_MATR_ELEM(   MODELE=MODELE_1,     CHARGE=CINE,
+                               CARA_ELEM=CARAC__1,
+                               CHAM_MATER=CH_MAT_1,
+                               OPTION='RIGI_MECA' )
+
+VEFZ=CALC_VECT_ELEM(   CHARGE=(CINE, CHFZ,),   CARA_ELEM=CARAC__1,
+                          CHAM_MATER=CH_MAT_1,  OPTION='CHAR_MECA'  )
+
+VEFY=CALC_VECT_ELEM(   CHARGE=(CINE, CHFY,),   CARA_ELEM=CARAC__1,
+                          CHAM_MATER=CH_MAT_1,  OPTION='CHAR_MECA'  )
+
+NU=NUME_DDL(   MATR_RIGI=MATELE_1 )
+
+MATASS=ASSE_MATRICE(   MATR_ELEM=MATELE_1,   NUME_DDL=NU )
+
+VEFZAS=ASSE_VECTEUR(   VECT_ELEM=VEFZ,       NUME_DDL=NU )
+
+VEFYAS=ASSE_VECTEUR(   VECT_ELEM=VEFY,       NUME_DDL=NU )
+
+MATASS=FACTORISER( reuse=MATASS,  MATR_ASSE=MATASS )
+
+DEFZ=RESOUDRE( MATR=MATASS,     CHAM_NO=VEFZAS)
+
+DEFY=RESOUDRE( MATR=MATASS,     CHAM_NO=VEFYAS)
+
+TEST_RESU(CHAM_NO=(_F(CRITERE='RELATIF',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      GROUP_NO='A',
+                      PRECISION=1.E-2,
+                      CHAM_GD=DEFZ,
+                      VALE_CALC=-1.7174662119206E-03,
+                      VALE_REFE=-1.72E-3,),
+                   _F(CRITERE='RELATIF',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DZ',
+                      GROUP_NO='A',
+                      PRECISION=1.E-2,
+                      CHAM_GD=DEFZ,
+                      VALE_CALC= 5.4113371784214E-03,
+                      VALE_REFE=5.4200000000000003E-3,),
+                   _F(CRITERE='RELATIF',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      GROUP_NO='A',
+                      PRECISION=1.E-2,
+                      CHAM_GD=DEFY,
+                      VALE_CALC= 1.7503256799896E-03,
+                      VALE_REFE=1.75E-3,),
+                   _F(CRITERE='RELATIF',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DZ',
+                      GROUP_NO='A',
+                      PRECISION=1.E-2,
+                      CHAM_GD=DEFY,
+                      VALE_CALC=-1.7174662119206E-03,
+                      VALE_REFE=-1.72E-3,),
+                   ),
+          )
+
+#---------------------------------------------------------------------
+# TEST IMPR_RESU/GMSH MAILLAGE
+DEFI_FICHIER( UNITE=35,
+              FICHIER='./REPE_OUT/MA10.pos')
+
+IMPR_RESU ( MODELE=MODELE_1,
+            INFO=2,
+            FORMAT='GMSH', VERSION=1.0, UNITE=35,
+            RESU=_F( MAILLAGE=MAILLA_1 )   ) ;
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=35)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA10.pos",
+             NB_VALE_I=1279,
+             VALE_CALC_I=2927510,
+             NB_VALE=375,
+             VALE_CALC=7.4999999941e+02,
+)
+
+#---------------------------------------------------------------------
+# TEST IMPR_RESU/GMSH RESU
+DEFI_FICHIER( UNITE=36,
+              FICHIER= './REPE_OUT/DEP10.pos')
+
+IMPR_RESU ( MODELE=MODELE_1,
+            INFO=2,
+            FORMAT='GMSH', VERSION=1.0, UNITE=36,
+            RESU=_F( CHAM_GD=DEFZ   )   ) ;
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=36)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/DEP10.pos",
+             NB_VALE_I=93,
+             VALE_CALC_I=1023,
+             NB_VALE=12968,
+             VALE_CALC=1.8146172191e+04,
+)
+
+#---------------------------------------------------------------------
+# TEST IMPR_RESU/GMSH MAILLAGE
+DEFI_FICHIER( UNITE=37,
+              FICHIER='./REPE_OUT/MA12.pos')
+
+IMPR_RESU ( MODELE=MODELE_1,
+            INFO=2,
+            FORMAT='GMSH', VERSION=1.2, UNITE=37,
+            RESU=_F( MAILLAGE=MAILLA_1 )   ) ;
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=37)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA12.pos",
+             NB_VALE_I=1279,
+             VALE_CALC_I=2927510,
+             NB_VALE=375,
+             VALE_CALC=7.4999999941e+02,
+)
+
+#---------------------------------------------------------------------
+# TEST IMPR_RESU/GMSH RESU
+DEFI_FICHIER( UNITE=38,
+              FICHIER='./REPE_OUT/DEP12.pos')
+
+IMPR_RESU ( MODELE=MODELE_1,
+            INFO=2,
+            FORMAT='GMSH', VERSION=1.2, UNITE=38,
+            RESU=_F( CHAM_GD=DEFZ   )   ) ;
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=38)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/DEP12.pos",
+             NB_VALE_I=176,
+             VALE_CALC_I=878,
+             NB_VALE=10375,
+             VALE_CALC=1.5553683808e+04,
+)
+
+#---------------------------------------------------------------------
+FIN()
+#

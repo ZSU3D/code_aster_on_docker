@@ -1,0 +1,320 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#----------------------------------------------------------------------------------
+# Dans ce test tres simple, tous les deplacements des 6 noeuds du maillage
+# sont imposes. On peut donc facilement verifier que les C.L. sont bien respectees.
+#
+#          S4
+#  N5  +---------+ N6
+#      !         !
+#  S5  !         ! S3
+#      !         !
+#  N3  +---------+ N4
+#      !         !
+#  S6  !         ! S2
+#      !         !
+#  N1  +---------+ N2
+#          S1
+#
+#----------------------------------------------------------------------------------
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",  )
+
+MO=AFFE_MODELE(MAILLAGE=MA,AFFE=_F(TOUT = 'OUI', PHENOMENE = 'MECANIQUE', MODELISATION = 'D_PLAN') )
+
+MAT1=DEFI_MATERIAU( ELAS=_F(  E = 1.2, NU = 0.3, ),)
+
+CHMAT=AFFE_MATERIAU( MAILLAGE=MA, AFFE=  _F(TOUT = 'OUI', MATER = MAT1,),)
+
+CHMEC=AFFE_CHAR_MECA(  MODELE=MO, INFO=2,
+             FACE_IMPO=( _F(  GROUP_MA = 'GXXXXXX_GAUCHE', SANS_NOEUD='N3', DX=1, DY=2),
+                         _F(  GROUP_MA = 'GXXXXXX_BAS', SANS_NOEUD='N1' , DNOR = 3),
+                         _F(  GROUP_MA = 'GXXXXXX_HAUT', SANS_GROUP_MA= 'GXXXXXX_GAUCHE', DNOR = 5,),
+                         _F(  GROUP_MA = 'GXXXXXX_DROIT', SANS_GROUP_NO='GXXXXXX_N2N6', DX = 5, DY= 10),),
+             DDL_IMPO=(  _F(  NOEUD=('N3','N6','N2'), DX=7),
+                         _F(  NOEUD='N3', DY=13),)
+             )
+
+DX1=DEFI_CONSTANTE(VALE=1.)
+DY1=DEFI_CONSTANTE(VALE=2.)
+DX2=DEFI_CONSTANTE(VALE=5.)
+DY2=DEFI_CONSTANTE(VALE=10.)
+DX3=DEFI_CONSTANTE(VALE=7.)
+DY3=DEFI_CONSTANTE(VALE=13.)
+DNOR1=DEFI_CONSTANTE(VALE=3.)
+DNOR2=DEFI_CONSTANTE(VALE=5.)
+
+CHMECF=AFFE_CHAR_MECA_F(  MODELE=MO, INFO=2,
+             FACE_IMPO=( _F(  GROUP_MA = 'GXXXXXX_GAUCHE', SANS_NOEUD='N3', DX=DX1, DY=DY1),
+                         _F(  GROUP_MA = 'GXXXXXX_BAS', SANS_NOEUD='N1' , DNOR = DNOR1),
+                         _F(  GROUP_MA = 'GXXXXXX_HAUT', SANS_GROUP_MA= 'GXXXXXX_GAUCHE', DNOR = DNOR2),
+                         _F(  GROUP_MA = 'GXXXXXX_DROIT', SANS_GROUP_NO='GXXXXXX_N2N6', DX=DX2, DY=DY2),),
+             DDL_IMPO=(  _F(  NOEUD=('N3','N6','N2'), DX=DX3),
+                         _F(  NOEUD='N3', DY=DY3),)
+             )
+
+
+MSLIN1=MECA_STATIQUE(MODELE=MO, CHAM_MATER=CHMAT,EXCIT=_F(CHARGE = CHMEC,), )
+MSLIN2=MECA_STATIQUE(MODELE=MO, CHAM_MATER=CHMAT,EXCIT=_F(CHARGE = CHMECF,), )
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.000000000,
+                  VALE_REFE=1.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=2.000000000,
+                  VALE_REFE=2.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DY',
+                  VALE_CALC=-3.000000000,
+                  VALE_REFE=-3.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DY',
+                  VALE_CALC=13.000000000,
+                  VALE_REFE=13.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N4',
+                  NOM_CMP='DX',
+                  VALE_CALC=5.000000000,
+                  VALE_REFE=5.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N4',
+                  NOM_CMP='DY',
+                  VALE_CALC=10.000000000,
+                  VALE_REFE=10.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N5',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.000000000,
+                  VALE_REFE=1.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N5',
+                  NOM_CMP='DY',
+                  VALE_CALC=2.000000000,
+                  VALE_REFE=2.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N6',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N6',
+                  NOM_CMP='DY',
+                  VALE_CALC=5.000000000,
+                  VALE_REFE=5.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.000000000,
+                  VALE_REFE=1.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='DY',
+                  VALE_CALC=2.000000000,
+                  VALE_REFE=2.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DY',
+                  VALE_CALC=-3.000000000,
+                  VALE_REFE=-3.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N3',
+                  NOM_CMP='DY',
+                  VALE_CALC=13.000000000,
+                  VALE_REFE=13.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N4',
+                  NOM_CMP='DX',
+                  VALE_CALC=5.000000000,
+                  VALE_REFE=5.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N4',
+                  NOM_CMP='DY',
+                  VALE_CALC=10.000000000,
+                  VALE_REFE=10.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N5',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.000000000,
+                  VALE_REFE=1.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N5',
+                  NOM_CMP='DY',
+                  VALE_CALC=2.000000000,
+                  VALE_REFE=2.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N6',
+                  NOM_CMP='DX',
+                  VALE_CALC=7.000000000,
+                  VALE_REFE=7.0,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MSLIN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N6',
+                  NOM_CMP='DY',
+                  VALE_CALC=5.000000000,
+                  VALE_REFE=5.0,),
+          )
+
+FIN( )

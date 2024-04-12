@@ -1,0 +1,137 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine crvrc2()
+    implicit none
+!
+!     COMMANDE:  CREA_RESU
+!     CREE UNE STRUCTURE DE DONNEE DE TYPE "EVOL_THER"  CONTENANT
+!     LA TEMPERATURE SUR LES COUCHES DES COQUES MULTICOUCHE A PARTIR
+!     D'UN EVOL_THER CONTENANT TEMP/TEMP_INF/TEMP_SUP
+!
+!
+!
+#include "jeveux.h"
+#include "asterc/getfac.h"
+#include "asterc/getres.h"
+#include "asterfort/assert.h"
+#include "asterfort/calcul.h"
+#include "asterfort/cesvar.h"
+#include "asterfort/detrsd.h"
+#include "asterfort/exlima.h"
+#include "asterfort/getvid.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jeexin.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/mecara.h"
+#include "asterfort/rsadpa.h"
+#include "asterfort/rscrsd.h"
+#include "asterfort/rsexch.h"
+#include "asterfort/rsnoch.h"
+#include "asterfort/utmess.h"
+    integer :: nbfac, n1, nbinst, kinst,  iordr
+    integer :: nbin, iret, jinst,  iexi
+    real(kind=8) :: vinst
+    character(len=8) :: kbid, resu, modele, model2, carele, paout, lpain(10)
+    character(len=16) :: type, oper
+    character(len=19) :: ligrel, chout, resu1, chtemp
+    character(len=24) :: chcara(18), lchin(10)
+    integer, pointer :: ordr(:) => null()
+    character(len=24), pointer :: celk(:) => null()
+!
+!----------------------------------------------------------------------
+    call jemarq()
+!
+    call getfac('PREP_VRC2', nbfac)
+    if (nbfac .eq. 0) goto 20
+    ASSERT(nbfac.eq.1)
+!
+!
+    call getres(resu, type, oper)
+    call getvid('PREP_VRC2', 'MODELE', iocc=1, scal=modele, nbret=n1)
+    call getvid('PREP_VRC2', 'CARA_ELEM', iocc=1, scal=carele, nbret=n1)
+    call getvid('PREP_VRC2', 'EVOL_THER', iocc=1, scal=resu1, nbret=n1)
+!
+!     -- ON VERIFIE QUE LE CARA_ELEM S'APPUIE BIEN SUR LE MODELE
+    call jeexin(carele//'.CANBSP    .CELK', iexi)
+    if (iexi .eq. 0) then
+        call utmess('F', 'CALCULEL4_14', sk=carele)
+    endif
+    call jeveuo(carele//'.CANBSP    .CELK', 'L', vk24=celk)
+    model2=celk(1)(1:8)
+    if (model2 .ne. modele) then
+        call utmess('F', 'CALCULEL4_15', sk=carele)
+    endif
+!
+!
+!
+!
+    call jelira(resu1//'.ORDR', 'LONUTI', nbinst)
+    call jeveuo(resu1//'.ORDR', 'L', vi=ordr)
+    ASSERT(nbinst.gt.0)
+!
+    call jeexin(resu//'           .DESC', iret)
+    if (iret .ne. 0) then
+        call utmess('F', 'CALCULEL7_6', sk=resu)
+    else
+        call rscrsd('G', resu, 'EVOL_THER', nbinst)
+    endif
+!
+    paout = 'PTEMPCR'
+    call mecara(carele, chcara)
+!
+    call exlima('PREP_VRC2', 1, 'G', modele, ligrel)
+!
+    lpain(1) = 'PNBSP_I'
+    lchin(1) = chcara(1) (1:8)//'.CANBSP'
+    lpain(2) = 'PTEMPER'
+    lpain(3) = 'PCACOQU'
+    lchin(3) = chcara(7)
+    nbin = 3
+!
+!     -- BOUCLE SUR LES INSTANTS :
+!     --------------------------------
+    do kinst = 1,nbinst
+        iordr = ordr(kinst)
+        call rsexch('F', resu1, 'TEMP', iordr, chtemp,&
+                    iret)
+        lchin(2) = chtemp
+!
+        call rsexch(' ', resu, 'TEMP', iordr, chout,&
+                    iret)
+        call cesvar(carele, ' ', ligrel, chout)
+        call calcul('S', 'PREP_VRC', ligrel, nbin, lchin,&
+                    lpain, 1, chout, paout, 'G',&
+                    'OUI')
+        call detrsd('CHAM_ELEM_S', chout)
+        call rsnoch(resu, 'TEMP', iordr)
+        call rsadpa(resu1, 'L', 1, 'INST', iordr,&
+                    0, sjv=jinst, styp=kbid)
+        vinst=zr(jinst)
+        call rsadpa(resu, 'E', 1, 'INST', iordr,&
+                    0, sjv=jinst, styp=kbid)
+        zr(jinst) = vinst
+!
+    end do
+!
+!
+20  continue
+    call jedema()
+end subroutine

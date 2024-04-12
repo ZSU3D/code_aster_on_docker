@@ -1,0 +1,126 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#   Ce test sert a valider les charges cinematiques (AFFE_CHAR_CINE)
+#   avec une matrice reelle NON-SYMETRIQUE.
+#
+#   On compare les resultats obtenus avec AFFE_CHAR_MECA et AFFE_CHAR_CINE
+#
+# ======================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MATERI_1=DEFI_MATERIAU( ELAS=_F(  E = 450000.,    NU = 0.3) )
+MAILLA_1=LIRE_MAILLAGE(FORMAT='MED',   )
+MAILLA_1=DEFI_GROUP( reuse=MAILLA_1,   MAILLAGE=MAILLA_1, CREA_GROUP_MA=_F(  NOM = 'TOUT',  TOUT = 'OUI') )
+CH_MAT_1=AFFE_MATERIAU(  MAILLAGE=MAILLA_1, AFFE=_F(  TOUT = 'OUI',   MATER = MATERI_1) )
+MODELE_1=AFFE_MODELE(  MAILLAGE=MAILLA_1, 
+                     AFFE=_F( TOUT = 'OUI', MODELISATION = 'COQUE_3D', PHENOMENE = 'MECANIQUE') )
+
+
+CHARGE_1=AFFE_CHAR_MECA(MODELE=MODELE_1,DDL_IMPO=(
+                          _F( GROUP_NO = 'G_10', DY = 7., DRX = 0.,        DRZ = 0.),
+                          _F( GROUP_NO = 'G_20',  DX = 4., DRY = 0., DRZ = 0.),
+                          _F( GROUP_NO = 'G_30',  DX = 4., DY = 7., DZ = -5., DRX = 0., DRY = 0., DRZ = 0.),
+                          _F( GROUP_NO = 'G_40',  DX = 4., DY = 7., DZ = -5., DRX = 0., DRY = 0., DRZ = 0.)) )
+
+CHARGC_1=AFFE_CHAR_CINE(MODELE=MODELE_1,MECA_IMPO=(
+                          _F( GROUP_NO = 'G_10',         DY = 7., DRX = 0.,        DRZ = 0.),
+                          _F( GROUP_NO = 'G_20',  DX = 4., DRY = 0., DRZ = 0.),
+                          _F( GROUP_NO = 'G_30',  DX = 4., DY = 7., DZ = -5., DRX = 0., DRY = 0., DRZ = 0.),
+                          _F( GROUP_NO = 'G_40',  DX = 4., DY = 7., DZ = -5., DRX = 0., DRY = 0., DRZ = 0.)) )
+
+CHARGE_2=AFFE_CHAR_MECA(MODELE=MODELE_1, FORCE_COQUE=_F( TOUT = 'OUI',      PRES = 0.5) )
+PRES=DEFI_FONCTION(  NOM_PARA='X',  VALE=(-104., 0.5,  104., 0.5,) )
+CHARGE_F=AFFE_CHAR_MECA_F(MODELE=MODELE_1, FORCE_COQUE=_F( TOUT = 'OUI',PRES = PRES) )
+
+CARAC_1=AFFE_CARA_ELEM(   MODELE=MODELE_1, COQUE=_F(  GROUP_MA = 'TOUT',  EPAIS = 0.125) )
+D_FONC=DEFI_FONCTION( NOM_PARA='INST', VALE=( 0., 0., 1., 1., ),)
+L_INST=DEFI_LIST_REEL(   DEBUT=0.0, INTERVALLE=_F(  JUSQU_A = 0.1, NOMBRE = 1) )
+
+
+# LE 1ER CALCUL (AVEC AFFE_CHAR_MECA) SERT DE REFERENCE :
+#---------------------------------------------------------
+NONLIN1=STAT_NON_LINE( MODELE=MODELE_1, CHAM_MATER=CH_MAT_1, CARA_ELEM=CARAC_1,
+       EXCIT=(  _F( CHARGE = CHARGE_1),
+                _F( CHARGE = CHARGE_2, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV'),
+                _F( CHARGE = CHARGE_F, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV')),
+       COMPORTEMENT=_F( RELATION = 'ELAS', DEFORMATION = 'GROT_GDEP'),
+       INCREMENT=_F(LIST_INST = L_INST),
+       CONVERGENCE=_F( RESI_GLOB_RELA = 1.E-8, ITER_GLOB_MAXI = 20,  ARRET = 'OUI'),
+       NEWTON=_F( REAC_ITER = 1) )
+
+# Cet IMPR_RESU sert a tester la suppression du dernier noeud central sur COQUE_3D lors de l'impression du champ de deplacement
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(RESULTAT=NONLIN1,NOM_CHAM='DEPL',),)
+
+TEST_RESU(RESU=_F(GROUP_NO='G_11',
+                  INST=0.10000000000000001,
+                  RESULTAT=NONLIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-5.0335779463534998,
+                  CRITERE='RELATIF',),
+          )
+
+# LE 2EME CALCUL (AVEC AFFE_CHAR_CINE) SERT A VALIDER LES CHARGES CINEMATIQUES AVEC UNE MATRICE NON-SYMETRIQUE:
+#--------------------------------------------------------------------------------------------------------------
+NONLIN2=STAT_NON_LINE( MODELE=MODELE_1, CHAM_MATER=CH_MAT_1, CARA_ELEM=CARAC_1,
+       EXCIT=(  _F( CHARGE = CHARGC_1),
+                _F( CHARGE = CHARGE_2, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV'),
+                _F( CHARGE = CHARGE_F, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV')),
+       COMPORTEMENT=_F( RELATION = 'ELAS', DEFORMATION = 'GROT_GDEP'),
+       INCREMENT=_F(LIST_INST = L_INST),
+       CONVERGENCE=_F( RESI_GLOB_RELA = 1.E-8, ITER_GLOB_MAXI = 20,  ARRET = 'OUI'),
+       NEWTON=_F( REAC_ITER = 1) )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_11',
+                  INST=0.10000000000000001,
+                  REFERENCE='AUTRE_ASTER',
+                  RESULTAT=NONLIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-5.033577946,
+                  VALE_REFE=-5.0335779463534998,
+                  CRITERE='RELATIF',),
+          )
+
+# LE 3EME CALCUL SERT A VALIDER L'ASSEMBLAGE D'UNE MATRICE NON-SYMERIQUE DANS UNE MATRICE SYMETRIQUE (ROUTINE MASYNS)
+#---------------------------------------------------------------------------------------------------------------------
+NONLIN3=STAT_NON_LINE( MODELE=MODELE_1, CHAM_MATER=CH_MAT_1, CARA_ELEM=CARAC_1,
+       EXCIT=(  _F( CHARGE = CHARGC_1),
+                _F( CHARGE = CHARGE_2, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV'),
+                _F( CHARGE = CHARGE_F, FONC_MULT = D_FONC, TYPE_CHARGE = 'SUIV')),
+       COMPORTEMENT=_F( RELATION = 'ELAS', DEFORMATION = 'PETIT'),
+       INCREMENT=_F(LIST_INST = L_INST),
+       CONVERGENCE=_F( RESI_GLOB_RELA = 1.E-8, ITER_GLOB_MAXI = 20,  ARRET = 'OUI'),
+       NEWTON=_F( REAC_ITER = 1) )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_11',
+                  INST=0.10000000000000001,
+                  RESULTAT=NONLIN3,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-5.0283711767339003,
+                  CRITERE='RELATIF',),
+          )
+
+#
+FIN( )

@@ -1,0 +1,1296 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+TITRE='CPPN4 CAS 3 COQUE 3D'
+
+COMMENT='360 ELEMENTS QUAD9,136 ELEMENTS SEG3,R=1.250M EP=77MM,FLEXION DANS LE PLAN'
+
+EP=0.077
+
+RMOY=0.3955
+
+RMOYN=- RMOY
+
+REXT=RMOY + (EP/2.)
+
+RC=1.25
+
+LTUBE=1.
+
+L=RC + LTUBE
+
+YOUNG=2.E11
+
+POISSON=0.3
+
+SIGY=200.E6
+
+H=2.E10
+
+K=0.8333333333
+
+MOMENTMZ=1.
+
+FYMAX=MOMENTMZ / (RMOY * RMOY * pi)
+
+FYMAXN=- FYMAX
+
+# MPY ET MPZ SONT DONNES PAR LA COURBE ML/MLS CF RAPPORT BOYLE&SPENCE
+
+
+MLSURMLS=0.8
+
+BETA=0.001
+
+# PETITS CALCULS
+
+
+RINT=RMOY - (EP/2.)
+
+LAMBDA=EP*RC/RMOY/RMOY
+
+CFLEX=1.65 / LAMBDA
+
+SURF=pi* (REXT*REXT-RINT*RINT)
+
+IY=pi*(REXT**4-RINT**4)/4.
+
+IZ=IY
+
+IX=IY + IZ
+
+IYFLEX=IY / CFLEX
+
+IZFLEX=IZ / CFLEX
+
+NP=SURF * SIGY
+
+MEDR=SIGY*IY/REXT
+
+MPDR=4.0*MEDR/pi
+
+MPX=SIGY*IX/REXT
+
+# STHETA EST DONNE PAR LA FORMULE DE SOBEL (HOOP STRESS MAX)
+
+GAMMA=RC/RMOY
+
+STHETA1=1.89/(LAMBDA**(0.666667))
+
+STHETA2=0.96/(LAMBDA**(0.333333))/GAMMA
+
+STHETA=STHETA1 - STHETA2
+
+MEFL=MEDR / STHETA
+
+MPFL=MEFL*100.0
+
+#
+
+FDET=MPFL * 1.E-3
+
+#
+
+MAINI=LIRE_MAILLAGE(FORMAT='MED', )
+
+MAINI=DEFI_GROUP( reuse=MAINI,   MAILLAGE=MAINI,
+                      CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI') )
+
+MA=CREA_MAILLAGE(   MAILLAGE=MAINI,
+                       MODI_MAILLE=_F( OPTION = 'QUAD8_9',
+                                    TOUT = 'OUI')  )
+
+MA=DEFI_GROUP(reuse=MA,  MAILLAGE=MA,CREA_GROUP_NO=(
+                 _F( GROUP_MA = 'CERCLE1'),
+                 _F( GROUP_MA = 'CERCLE2')))
+
+MO=AFFE_MODELE(        MAILLAGE=MA,
+         AFFE=_F( TOUT = 'OUI',  PHENOMENE = 'MECANIQUE',
+                     MODELISATION = 'COQUE_3D')
+                      )
+
+#------CARACTERESTIQUES ELEMENTAIRES----------------------
+
+
+CAREL=AFFE_CARA_ELEM(   MODELE=MO,
+                                 COQUE=_F(
+       GROUP_MA = 'TOUT',
+
+                                        EPAIS = EP,
+                                        A_CIS = K,
+                                        COEF_RIGI_DRZ = 1.E-5)
+
+                             )
+
+#-------CARCTERESTIQUES DU MATERIAUX----------------------
+
+MAT=DEFI_MATERIAU(   ELAS=_F( E = YOUNG, NU = POISSON),
+                       ECRO_LINE=_F( D_SIGM_EPSI = H, SY = 1.E+14)
+                    )
+
+CHMAT=AFFE_MATERIAU(   MAILLAGE=MA,
+                       AFFE=_F( TOUT = 'OUI', MATER = MAT))
+
+#--------------- NIVEAU DE CHARGE FINAL ------------------
+
+
+FYMAXI=FYMAX *  FDET
+
+FYMAXNI=- FYMAXI
+
+#-------------- CONDITIONS AUX LIMITES -------------------
+
+FXFY=DEFI_FONCTION(    NOM_PARA='Y',
+                         VALE=(  RMOYN,    FYMAXI,
+                                 RMOY,     FYMAXNI, ),
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE'
+                      )
+
+D0=DEFI_CONSTANTE(   VALE=0.)
+
+CHART=AFFE_CHAR_MECA_F(   MODELE=MO,
+     DDL_IMPO=_F( GROUP_NO = 'CERCLE1',
+              DX = D0, DY = D0, DZ = D0, DRX = D0, DRY = D0, DRZ = D0),
+     FORCE_ARETE=_F( GROUP_MA = 'CERCLE2', FX = FXFY)
+                      )
+
+#-------------------MECA_STATIQUE-----------------------
+
+
+LINEAI=MECA_STATIQUE(  MODELE=MO,
+                          CHAM_MATER=CHMAT,
+                          CARA_ELEM=CAREL,
+                         EXCIT=_F(  CHARGE = CHART)
+                        )
+
+#
+#
+#
+###  LES COUPLES DE NOEUDS ONT LE MEME X ET Y ET ABS ( Z )
+###
+###  LE CHARGEMENT EST SUIVANT X
+###  SYMETRIE SUIVANT Y
+#
+#
+###
+###  MEMES
+###
+###  DX   DY  ABZ  ( DZ )   ABS ( DRX )  ABS  ( DRY ) ET  ABS ( DRZ )
+###
+#
+#
+# ON TESTE LES DEPLACEMENTS LINEAIRES D UNE MANIERE NON REGRESSIVE
+##################################################################
+#
+#     N1157
+###########
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000651284864713,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108156474737,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.000584657774752,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+#
+#     N1104
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000128844651394,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00109426610815,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.000681740636981,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+#     N1109
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401846248414,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108429678537,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DZ',
+                  VALE_CALC=6.34606881486E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRX',
+                  VALE_CALC=-8.06976578476E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRY',
+                  VALE_CALC=-4.85186753903E-05,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.42645844082E-05,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+########################################################################
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401846248414,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108429678537,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-6.34606881543E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRX',
+                  VALE_CALC=8.06976578491E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRY',
+                  VALE_CALC=4.85186753905E-05,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=LINEAI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.42645844072E-05,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+#
+#
+#            D E C O U P A G E    T E M P O R E L
+########################################################################
+#
+#
+#
+
+
+
+FONCT=DEFI_FONCTION(   NOM_PARA='INST',
+                      VALE=( 0., 0., 1., 1., ) )
+
+#
+#
+#
+
+LI1PAS=DEFI_LIST_REEL(DEBUT=0.,
+               INTERVALLE=_F( JUSQU_A = 1., NOMBRE = 1)
+                        )
+
+LI2PAS=DEFI_LIST_REEL(DEBUT=0.,
+               INTERVALLE=_F( JUSQU_A = 1., NOMBRE = 10)
+                        )
+
+#
+#
+#
+#
+#
+#            A N A L Y S E   N O N    LINEAIRE    PLASTICITE
+########################################################################
+#
+#
+
+
+COQUE1P=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CHMAT,
+                         CARA_ELEM=CAREL,
+                             EXCIT=_F(
+                CHARGE = CHART,
+                FONC_MULT = FONCT),
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ISOT_LINE',
+               ),
+                         INCREMENT=_F(
+                LIST_INST = LI1PAS),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_MAXI = 1.E-3,
+                ITER_GLOB_MAXI = 25,
+                ARRET = 'OUI')
+              )
+
+#
+#
+########################################################################
+#
+#
+# ON TESTE LE NOMBRE D ITERATION = 2 DE NEWTON SUR LE PAS 1
+######################################################################
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='ITER_GLOB',
+                  VALE_CALC_I=1,
+                  RESULTAT=COQUE1P,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+#
+#
+########################################################################
+#
+##############################
+#
+#
+#
+# ON TESTE LES DEPLACEMENTS COQUE1P D UNE MANIERE NON REGRESSIVE
+##################################################################
+#
+#
+#
+#     N1157
+###########
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000650252038429,
+                  VALE_REFE=6.5127100000000003E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.6000000000000001E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0010793118886,
+                  VALE_REFE=1.08154E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=2.0899999999999998E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.000583650524555,
+                  VALE_REFE=5.8465500000000001E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.73E-3,
+                  ),
+          )
+
+#
+#
+#
+#     N1104
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000128809038245,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00109201583155,
+                  VALE_REFE=1.09424E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=2.0600000000000002E-3,
+                  ),
+          )
+
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.00068021767511,
+                  VALE_REFE=6.8174700000000002E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=2.25E-3,
+                  ),
+          )
+
+#
+#
+#     N1109
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401250869441,
+                  VALE_REFE=4.01834E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.49E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108205196121,
+                  VALE_REFE=1.08427E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=2.0799999999999998E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DZ',
+                  VALE_CALC=6.34738844672E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRX',
+                  VALE_CALC=-8.10054056072E-06,
+                  VALE_REFE=-8.0699200000000001E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=3.82E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRY',
+                  VALE_CALC=-4.82603969205E-05,
+                  VALE_REFE=-4.8522900000000003E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=5.4299999999999997E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.47823530779E-05,
+                  VALE_REFE=-9.3984400000000001E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,
+                  ),
+          )
+
+#
+#
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401250869441,
+                  VALE_REFE=4.01834E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.49E-3,
+                  ),
+          )
+
+#
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108205196121,
+                  VALE_REFE=1.08427E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=2.0799999999999998E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-6.34738844843E-06,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRX',
+                  VALE_CALC=8.1005405613E-06,
+                  VALE_REFE=8.0699200000000001E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=3.82E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRY',
+                  VALE_CALC=4.82603969211E-05,
+                  VALE_REFE=4.8522900000000003E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=5.4299999999999997E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1P,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.47823530769E-05,
+                  VALE_REFE=-9.3984400000000001E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=8.500000000000002E-3,
+                  ),
+          )
+
+#
+#
+########################################################################
+#
+#            A N A L Y S E   N O N    LINEAIRE    GRANDES   ROTATIONS
+########################################################################
+#
+#
+
+COQUE1E=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CHMAT,
+                         CARA_ELEM=CAREL,
+                             EXCIT=_F(
+                CHARGE = CHART,
+                FONC_MULT = FONCT),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                DEFORMATION = 'GROT_GDEP',
+               ),
+                         INCREMENT=_F(
+                LIST_INST = LI2PAS),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_MAXI = 1.E-3,
+                ITER_GLOB_MAXI = 25,
+                ARRET = 'OUI')
+              )
+
+########################################################################
+#
+#
+# ON TESTE LE NOMBRE D ITERATION = 4 DE NEWTON SUR LE PAS 1
+######################################################################
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='ITER_GLOB',
+                  VALE_CALC_I=2,
+                  RESULTAT=COQUE1E,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+#
+#
+########################################################################
+#
+# ON TESTE LES DEPLACEMENTS COQUE1E D UNE MANIERE NON REGRESSIVE
+##################################################################
+#
+#
+#
+#
+#     N1157
+###########
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000650245435162,
+                  VALE_REFE=6.5127100000000003E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.6100000000000001E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00107980096393,
+                  VALE_REFE=1.08154E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=1.64E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1157',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.000583111650189,
+                  VALE_REFE=5.8465500000000001E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=2.65E-3,
+                  ),
+          )
+
+#
+#
+#
+#     N1104
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000128493207386,
+                  VALE_REFE=1.2883E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=2.7399999999999998E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00109301441792,
+                  VALE_REFE=1.09424E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=1.15E-3,
+                  ),
+          )
+
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRX',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRY',
+                  VALE_CALC=0.,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1104',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=0.000681603031152,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+#
+#     N1109
+###########
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401172295517,
+                  VALE_REFE=4.01834E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.6900000000000001E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108279245373,
+                  VALE_REFE=1.08427E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=1.39E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DZ',
+                  VALE_CALC=6.62516146394E-06,
+                  VALE_REFE=6.3466000000000004E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=0.043979999999999998,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRX',
+                  VALE_CALC=-8.0356985674E-06,
+                  VALE_REFE=-8.0699200000000001E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=4.2500000000000003E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRY',
+                  VALE_CALC=-4.87924500575E-05,
+                  VALE_REFE=-4.8522900000000003E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=5.6499999999999996E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1109',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.5631385769E-05,
+                  VALE_REFE=-9.3984400000000001E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=0.018,
+                  ),
+          )
+
+#
+#
+#
+#
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000401172295517,
+                  VALE_REFE=4.01834E-4,
+                  CRITERE='RELATIF',
+                  PRECISION=1.6900000000000001E-3,
+                  ),
+          )
+
+#
+
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00108279245373,
+                  VALE_REFE=1.08427E-3,
+                  CRITERE='RELATIF',
+                  PRECISION=1.39E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-6.62516146393E-06,
+                  VALE_REFE=-6.3466000000000004E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=0.043979999999999998,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRX',
+                  VALE_CALC=8.03569856737E-06,
+                  VALE_REFE=8.0699200000000001E-06,
+                  CRITERE='RELATIF',
+                  PRECISION=4.2500000000000003E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRY',
+                  VALE_CALC=4.87924500575E-05,
+                  VALE_REFE=4.8522900000000003E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=5.6499999999999996E-3,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=COQUE1E,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1099',
+                  NOM_CMP='DRZ',
+                  VALE_CALC=-9.56313857691E-05,
+                  VALE_REFE=-9.3984400000000001E-05,
+                  CRITERE='RELATIF',
+                  PRECISION=0.018,
+                  ),
+          )
+
+#
+#
+#
+FIN( )
+#

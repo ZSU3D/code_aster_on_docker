@@ -1,0 +1,159 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS_TEST__: SDLL02A
+# SDLL02/A                 COMMANDES                             16/1/95
+# POUTRE ELANCEE ENCASTREE-LIBRE REPLIEE SUR ELLE-MEME
+# SECTION RECT: 5*50MM --- L=2*0.5M --- 2D
+#                                                  REF: SFM.VPCS SDLL02
+# MODELISATION POU_D_E: 21 NOEUDS  --   20 MAILLES SEG2
+# POINTS  A    B    C
+# MODELISATION :
+#    CONDITIONS AUX LIMITES IMPOSEES PAR AFFE_CHAR_MECA
+#    RECHERCHE DES ELEMENTS PROPRES : METHODE TRI_DIAG
+#=======================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",  )
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                  AFFE=_F(  TOUT = 'OUI',    PHENOMENE = 'MECANIQUE',
+                         MODELISATION = 'POU_D_E')  )
+
+CARELEM=AFFE_CARA_ELEM(  MODELE=MO,
+             POUTRE=_F(
+       GROUP_MA = 'TOUT',
+     SECTION = 'RECTANGLE',
+                      CARA = (  'HY',   'HZ', ),
+                      VALE = ( 0.005,  0.050, ))  )
+
+MAT=DEFI_MATERIAU( ELAS=_F(  E = 2.1E+11,    NU = 0.3,    RHO = 7800.) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+          AFFE=_F(  TOUT = 'OUI',     MATER = MAT) )
+
+#   PB PLAN --- POINT A ENCASTRE
+CH1=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+       _F(  TOUT = 'OUI', DZ = 0., DRX = 0., DRY = 0.),
+                _F(  NOEUD = 'A',   DX = 0., DY = 0.,  DRZ = 0.)) )
+
+# ------------------------------------------------------------------
+# MODELISATION
+
+MELR1=CALC_MATR_ELEM(  MODELE=MO,           CHARGE=CH1,
+                        CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,   OPTION='RIGI_MECA' )
+
+MELM1=CALC_MATR_ELEM(  MODELE=MO,           CHARGE=CH1,
+                        CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,   OPTION='MASS_MECA' )
+
+NUM1=NUME_DDL(  MATR_RIGI=MELR1 )
+
+MATASSR1=ASSE_MATRICE(  MATR_ELEM=MELR1,   NUME_DDL=NUM1 )
+
+MATASSM1=ASSE_MATRICE(  MATR_ELEM=MELM1,   NUME_DDL=NUM1 )
+
+#--------------------------------------------------------------------
+
+
+FREQ1=CALC_MODES(CALC_FREQ=_F(NMAX_FREQ=8,
+                              ),
+                 OPTION='PLUS_PETITE',
+                 MATR_RIGI=MATASSR1,
+                 TITRE='METHODE DE LANCZOS',
+                 MATR_MASS=MATASSM1,
+                 SOLVEUR_MODAL=_F(METHODE='TRI_DIAG',
+                                  ),
+                 )
+
+# ---------------------------------------------------------------------
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=11.7641834045,
+                   VALE_REFE=11.76,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=11.7641834381,
+                   VALE_REFE=11.76,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=105.881130032,
+                   VALE_REFE=105.88,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=105.881203672,
+                   VALE_REFE=105.88,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=294.177995325,
+                   VALE_REFE=294.1,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=294.180625511,
+                   VALE_REFE=294.1,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=576.98022671,
+                   VALE_REFE=576.44,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   RESULTAT=FREQ1,
+                   VALE_CALC=577.007933722,
+                   VALE_REFE=576.44,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                ),)
+
+
+FIN()

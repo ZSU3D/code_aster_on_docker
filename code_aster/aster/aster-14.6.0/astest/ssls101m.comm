@@ -1,0 +1,237 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#--------------------------------------------------------------
+# Validation de LIAISON_MAIL / TYPE_RACCORD='COQUE_MASSIF'  (Coque / 3D)
+#                            / TYPE_RACCORD='MASSIF_COQUE'  (3D / Coque)
+# On maille 1/4 de la plaque.
+# on teste la valeur de la fleche au centre de la plaque.
+# la valeur est analytique
+#--------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+T=0.1
+R=1.
+R2=0.3
+P=1.
+
+
+MAILL=LIRE_MAILLAGE(FORMAT='MED',)
+DEFI_GROUP(reuse=MAILL, MAILLAGE=MAILL, CREA_GROUP_NO= _F(TOUT_GROUP_MA='OUI',))
+
+
+MAILL=MODI_MAILLAGE(reuse =MAILL, MAILLAGE=MAILL,
+                   ORIE_PEAU_3D=_F(GROUP_MA='ADE2',),);
+
+MATER=DEFI_MATERIAU(  ELAS=_F(  E = 1.,      NU = 0.3) )
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAILL, AFFE=_F(  TOUT = 'OUI',   MATER = MATER) )
+
+MODEL=AFFE_MODELE(  MAILLAGE=MAILL,
+                    AFFE=(_F(GROUP_MA='DBCE', MODELISATION = 'DKT', PHENOMENE = 'MECANIQUE'),
+                          _F(GROUP_MA='ADET', MODELISATION = '3D',  PHENOMENE = 'MECANIQUE')))
+
+CARELEM=AFFE_CARA_ELEM(  MODELE=MODEL,
+                         COQUE=_F(  GROUP_MA = 'DBCE', COQUE_NCOU=9,
+                                    EPAIS = T,  ANGL_REP = (0., 0.,)))
+
+P2=DEFI_CONSTANTE(VALE=0.)
+
+CHARGE=AFFE_CHAR_MECA(  MODELE=MODEL, INFO=1,
+               PRES_REP=_F(GROUP_MA='ADE2',   PRES =  P),
+               FORCE_COQUE=_F(GROUP_MA='DBCE', PRES = P))
+
+CHARGE2=AFFE_CHAR_MECA_F(  MODELE=MODEL, INFO=1,
+               PRES_REP=_F(GROUP_MA='DBCE',   PRES =  P2))
+
+#
+# ON RAJOUTE UNE CHARGE SUIVEUSE NULLE POUR VERIFIER QUE LES DKT
+# PRESENTS DANS LE MODELE N'INTERFERENT PAS AVEC LE 3D DANS LE CAS
+# D'UN CHARGEMENT SUIVEUR
+#
+PRSUIV=AFFE_CHAR_MECA(  MODELE=MODEL, INFO=1,
+               PRES_REP=(_F(GROUP_MA='ADE2',   PRES =  0),
+                         _F(GROUP_MA='DBCE', PRES = 0.),
+                     ),)
+
+PRSUIV2=AFFE_CHAR_MECA_F(  MODELE=MODEL, INFO=1,
+               PRES_REP=_F(GROUP_MA='DBCE',   PRES =  P2))
+
+PRSUIV3=AFFE_CHAR_MECA(  MODELE=MODEL, INFO=1,
+               FORCE_COQUE=(_F(GROUP_MA='ADE2',   PRES =  0.),
+                         _F(GROUP_MA='DBCE', PRES = 0.),
+                     ),)
+
+PRSUIV4=AFFE_CHAR_MECA_F(  MODELE=MODEL, INFO=1,
+               FORCE_COQUE=_F(GROUP_MA='DBCE',   PRES =  P2))
+
+# 1er calcul avec TYPE_RACCORD='COQUE_MASSIF' :
+#------------------------------------------------
+DEFI_GROUP(reuse=MAILL, MAILLAGE=MAILL,
+          CREA_GROUP_NO=(
+             _F(NOM = 'DBMD' , DIFFE=('DB','D')),
+             _F(NOM = 'CEME' , DIFFE=('CE','E')),
+          ))
+
+CHNOR = CREA_CHAMP( TYPE_CHAM = 'NOEU_GEOM_R', OPERATION = 'NORMALE', MODELE    = MODEL,
+                GROUP_MA  = 'DBCE'  , INFO=1   )
+RACCOR1=AFFE_CHAR_MECA(MODELE=MODEL,
+     LIAISON_MAIL =_F(TYPE_RACCORD='COQUE_MASSIF', GROUP_NO_ESCL='ED', GROUP_MA_MAIT='ADET',CHAM_NORMALE=CHNOR, EPAIS=T,))
+
+BLOQ1=AFFE_CHAR_MECA(  MODELE=MODEL, INFO=1,
+            DDL_IMPO=(_F( GROUP_MA = 'BC',    DX = 0.,  DY = 0.,   DZ = 0.),
+                      _F( GROUP_NO = 'DBMD',  DY = 0.,  DRX = 0.,  DRZ = 0.),
+                      _F( GROUP_NO = 'CEME',  DX = 0.,  DRY = 0.,  DRZ = 0.),
+                      _F( GROUP_MA = 'ADAD',  DY = 0.),
+                      _F( GROUP_MA = 'EAEA',  DX = 0.),
+                     ))
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+INTERVALLE=(_F(JUSQU_A=1,  NOMBRE=1,),
+),)
+
+# On utilise STAT_NON_LINE a la place de MECA_STATIQUE afin de permettre
+# a CALC_CHAMP de pouvoir calculer VARI_NOEU
+RESU1=STAT_NON_LINE( MODELE=MODEL, CHAM_MATER=CHMAT, CARA_ELEM=CARELEM,
+          EXCIT=(_F(CHARGE = CHARGE),
+                 _F(CHARGE = CHARGE2),
+                 _F(CHARGE = PRSUIV,  TYPE_CHARGE='SUIV'),
+                 _F(CHARGE = PRSUIV2, TYPE_CHARGE='SUIV'),
+                 _F(CHARGE = PRSUIV3, TYPE_CHARGE='SUIV'),
+                 _F(CHARGE = PRSUIV4, TYPE_CHARGE='SUIV'),
+                 _F(CHARGE = RACCOR1),
+                 _F(CHARGE = BLOQ1)),
+          INCREMENT=_F(LIST_INST=LINST,),COMPORTEMENT=_F(RELATION='ELAS',))
+
+RESPOS=CALC_CHAMP(GROUP_MA='ADET',RESULTAT=RESU1,VARI_INTERNE=('VARI_ELNO','VARI_NOEU',))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A1',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-693.806768612,
+                  VALE_REFE=-695.62559999999996,
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+# 2eme calcul avec TYPE_RACCORD='MASSIF_COQUE' :
+#------------------------------------------------
+DEFI_GROUP(reuse =MAILL, MAILLAGE=MAILL,
+      CREA_GROUP_NO= _F(NOM = 'CYL1', OPTION = 'ENV_CYLINDRE', POINT = (0.,0., 0.), RAYON=R2,
+                         PRECISION = 0.01, VECT_NORMALE = (0.,0.,1.)))
+DEFI_GROUP(reuse =MAILL, MAILLAGE=MAILL,
+      CREA_GROUP_MA= _F(NOM = 'CYL1', OPTION='APPUI', TYPE_APPUI='TOUT', GROUP_NO='CYL1', TYPE_MAILLE='2D'))
+
+RACCOR2=AFFE_CHAR_MECA(MODELE=MODEL,
+      LIAISON_MAIL =_F(TYPE_RACCORD='MASSIF_COQUE', GROUP_MA_ESCL='CYL1', GROUP_MA_MAIT='DBCE'))
+
+DEFI_GROUP(reuse=MAILL, MAILLAGE=MAILL,
+          CREA_GROUP_NO=(
+             _F(NOM = 'ADADM' , DIFFE=('ADAD','CYL1')),
+             _F(NOM = 'EAEAM' , DIFFE=('EAEA','CYL1')),
+          ))
+BLOQ2=AFFE_CHAR_MECA(  MODELE=MODEL, INFO=1,
+            DDL_IMPO=(_F( GROUP_MA = 'BC',  DX = 0.,  DY = 0.,   DZ = 0.),
+                      _F( GROUP_MA = 'DB',  DY = 0.,  DRX = 0.,  DRZ = 0.),
+                      _F( GROUP_MA = 'CE',  DX = 0.,  DRY = 0.,  DRZ = 0.),
+                      _F( GROUP_NO = 'ADADM',  DY = 0.),
+                      _F( GROUP_NO = 'EAEAM',  DX = 0.),
+                     ))
+
+RESU2=MECA_STATIQUE( MODELE=MODEL, CHAM_MATER=CHMAT, CARA_ELEM=CARELEM,
+          EXCIT=(_F(CHARGE = CHARGE),_F(CHARGE = RACCOR2),_F(CHARGE = BLOQ2)))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A1',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-690.4806067320188,
+                  VALE_REFE=-695.62559999999996,
+                  PRECISION=1.E-2,),
+          )
+
+# Test with COQUE_3D
+MAIL2=CREA_MAILLAGE(MAILLAGE=MAILL,
+                    LINE_QUAD=_F(TOUT='OUI',),);
+
+MAILAST=CREA_MAILLAGE(MAILLAGE    = MAIL2,
+                      MODI_MAILLE = (_F(
+                                        OPTION     = 'QUAD8_9',
+                                        GROUP_MA   = 'DBCE', 
+                                        PREF_NOEUD = 'NX',
+                                       ),
+                                     _F(
+                                        OPTION     = 'TRIA6_7',
+                                        GROUP_MA   = 'DBCE',
+                                        PREF_NOEUD = 'NX',
+                                       ),
+                                    ),
+                       );
+
+MODEL2=AFFE_MODELE(  MAILLAGE=MAILAST,
+                    AFFE=(_F(GROUP_MA='DBCE', MODELISATION = 'COQUE_3D', PHENOMENE = 'MECANIQUE'),
+                          _F(GROUP_MA='ADET', MODELISATION = '3D'      ,  PHENOMENE = 'MECANIQUE')))
+
+CHNOR2=CREA_CHAMP(TYPE_CHAM = 'NOEU_GEOM_R', 
+                  OPERATION = 'NORMALE', 
+                  MODELE    = MODEL2,
+                  GROUP_MA  = 'DBCE'  )
+
+RACCOR3=AFFE_CHAR_MECA(MODELE=MODEL2,
+                       LIAISON_MAIL =_F(TYPE_RACCORD='COQUE_MASSIF', GROUP_NO_ESCL='ED', GROUP_MA_MAIT='ADET',CHAM_NORMALE=CHNOR2, EPAIS=T,))
+
+BLOQ3=AFFE_CHAR_MECA(  MODELE=MODEL2, INFO=1,
+            DDL_IMPO=(_F( GROUP_MA = 'BC',    DX = 0.,  DY = 0.,   DZ = 0.),
+                      _F( GROUP_NO = 'DBMD',  DY = 0.,  DRX = 0.,  DRZ = 0.),
+                      _F( GROUP_NO = 'CEME',  DX = 0.,  DRY = 0.,  DRZ = 0.),
+                      _F( GROUP_MA = 'ADAD',  DY = 0.),
+                      _F( GROUP_MA = 'EAEA',  DX = 0.),
+                     ))
+
+CHMAT2=AFFE_MATERIAU(  MAILLAGE=MAILAST, AFFE=_F(  TOUT = 'OUI',   MATER = MATER) )
+
+CARELEM2=AFFE_CARA_ELEM(  MODELE=MODEL2,
+                         COQUE=_F(  GROUP_MA = 'DBCE', COQUE_NCOU=9,
+                                    EPAIS = T,  ANGL_REP = (0., 0.,)))
+
+CHARGE3=AFFE_CHAR_MECA(  MODELE=MODEL2, INFO=1,
+               PRES_REP=_F(GROUP_MA='ADE2',   PRES =  P),
+               FORCE_COQUE=_F(GROUP_MA='DBCE', PRES = P))
+
+RESU3=MECA_STATIQUE( MODELE=MODEL2, CHAM_MATER=CHMAT2, CARA_ELEM=CARELEM2,
+          EXCIT=(_F(CHARGE = CHARGE3),_F(CHARGE = RACCOR3),_F(CHARGE = BLOQ3)))
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A1',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU3,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-756.794672367 ,
+                  VALE_REFE=-695.62559999999996,
+                  PRECISION=0.09,),
+          )
+
+IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=RESU3),)
+FIN()

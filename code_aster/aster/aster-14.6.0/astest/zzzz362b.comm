@@ -1,0 +1,809 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      PAR_LOT = 'NON',
+      IGNORE_ALARM=('MODELISA4_6','SUPERVIS_1'),
+      DEBUG=_F(SDVERI='OUI'),
+      )
+
+# ###################################################
+# ###################################################
+#
+# Utilisation d'un maillage lineaire pour tester la
+# coherence entre les modelisations suivantes :
+#
+#  - MECANIQUE / C_PLAN
+#  - MECANIQUE / C_PLAN / avec contact
+#  - MECANIQUE / D_PLAN
+#  - MECANIQUE / D_PLAN / avec contact
+#  - MECANIQUE / AXIS
+#  - THERMIQUE / PLAN
+#  - THERMIQUE / AXIS
+#  - MECANIQUE / D_PLAN_HM
+#  - MECANIQUE / D_PLAN_HM / avec contact
+#
+# ###################################################
+# ###################################################
+
+# ###################################################
+# Maillage
+# ###################################################
+
+MA1 = LIRE_MAILLAGE(FORMAT = 'MED',);
+
+MAILLALI = CREA_MAILLAGE(MAILLAGE = MA1,
+                         CREA_POI1 = (_F(NOM_GROUP_MA = 'POCOUPE1',
+                                         GROUP_NO = 'NORPHHAU',),
+                                      _F(NOM_GROUP_MA = 'POCOUPE2',
+                                         GROUP_NO = 'NORPHBAS',),),)
+
+# ###################################################
+# Definition des modeles sains
+# ###################################################
+
+# MLMECPS : Modele Lineaire MEcanique Contraintes Planes Sain
+MLMECPS = AFFE_MODELE(MAILLAGE = MAILLALI,
+                      AFFE = (
+                              _F(TOUT = 'OUI',
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = 'C_PLAN',),
+                              _F(GROUP_MA = ('POCOUPE1','POCOUPE2',),
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = '2D_DIS_T',),
+                              ),)
+
+# MLMEDPS : Modele Lineaire MEcanique Deformations Planes Sain
+MLMEDPS = AFFE_MODELE(MAILLAGE = MAILLALI,
+                      AFFE = (
+                              _F(TOUT = 'OUI',
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = 'D_PLAN',),
+                              _F(GROUP_MA = ('POCOUPE1','POCOUPE2',),
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = '2D_DIS_T',),
+                              ),)
+
+# MLMEAXS : Modele Lineaire MEcanique AXis Sain
+MLMEAXS = AFFE_MODELE(MAILLAGE = MAILLALI,
+                      AFFE = (
+                              _F(TOUT = 'OUI',
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = 'AXIS',),
+                              ),)
+
+# MLTHPLS : Modele Lineaire THermique PLan Sain
+MLTHPLS = AFFE_MODELE(MAILLAGE = MAILLALI,
+                      AFFE = _F(TOUT = 'OUI',
+                                PHENOMENE = 'THERMIQUE',
+                                MODELISATION = 'PLAN',),)
+
+# MLTHAXS : Modele Lineaire THermique AXis Sain
+MLTHAXS = AFFE_MODELE(MAILLAGE = MAILLALI,
+                      AFFE = _F(TOUT = 'OUI',
+                                PHENOMENE = 'THERMIQUE',
+                                MODELISATION = 'AXIS',),)
+
+# ###################################################
+# Definition des fissures
+# ###################################################
+
+a = 10.
+h = a/18.
+
+FISSLI1 = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                        TYPE_DISCONTINUITE = 'FISSURE',
+                        DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                       PFON = (0.25*a, 0.25*a, 0.),
+                                       DTAN = (1., 0., 0.),),)
+
+FISSLI2 = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                        TYPE_DISCONTINUITE = 'FISSURE',
+                        DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                       PFON = (0.25*a, 0.75*a, 0.),
+                                       DTAN = ( 1., 0., 0.),),)
+
+FISSLI3 = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                        TYPE_DISCONTINUITE = 'FISSURE',
+                        DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                       PFON = (a-1.5*h, 0.5*h, 0.),
+                                       DTAN = (-1., 0., 0.),),)
+
+# "subtilite" due au contact : on va definir 3 modeles enrichis avec contact,
+# or MODI_MODELE_XFEM ecrit dans les sd_fiss_xfem (base globale) l'objet
+# '.MAILFISS.CONT' donc on ne peut pas utiliser deux fois le meme jeu
+# de fissures, d'ou les definitions redondantes ci-dessous
+
+FISSLI1C = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (0.25*a, 0.25*a, 0.),
+                                        DTAN = (1., 0., 0.),),)
+
+FISSLI2C = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (0.25*a, 0.75*a, 0.),
+                                        DTAN = ( 1., 0., 0.),),)
+
+FISSLI3C = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (a-1.5*h, 0.5*h, 0.),
+                                        DTAN = (-1., 0., 0.),),)
+
+FISSLI1D = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (0.25*a, 0.25*a, 0.),
+                                        DTAN = (1., 0., 0.),),)
+
+FISSLI2D = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (0.25*a, 0.75*a, 0.),
+                                        DTAN = ( 1., 0., 0.),),)
+
+FISSLI3D = DEFI_FISS_XFEM(MAILLAGE = MAILLALI,
+                         TYPE_DISCONTINUITE = 'FISSURE',
+                         DEFI_FISS = _F(FORM_FISS = 'DEMI_DROITE',
+                                        PFON = (a-1.5*h, 0.5*h, 0.),
+                                        DTAN = (-1., 0., 0.),),)
+
+# ###################################################
+# Definition des modeles enrichis
+# ###################################################
+
+# MLMECPX  : Modele Lineaire MEcanique Contraintes Planes Xfem
+MLMECPX  = MODI_MODELE_XFEM(MODELE_IN = MLMECPS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),)
+
+# MLMECPXC : Modele Lineaire MEcanique Contraintes Planes Xfem Contact
+MLMECPXC = MODI_MODELE_XFEM(MODELE_IN = MLMECPS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),
+                            CONTACT = 'STANDARD')
+
+# MLMEDPX  : Modele Lineaire MEcanique Deformations Planes Xfem
+MLMEDPX  = MODI_MODELE_XFEM(MODELE_IN = MLMEDPS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),)
+
+# MLMEDPXC : Modele Lineaire MEcanique Deformations Planes Xfem Contact
+MLMEDPXC = MODI_MODELE_XFEM(MODELE_IN = MLMEDPS,
+                            FISSURE = (FISSLI1C,FISSLI2C,FISSLI3C),
+                            CONTACT = 'STANDARD')
+
+# MLMEAXX : Modele Lineaire MEcanique AXis Xfem
+MLMEAXX  = MODI_MODELE_XFEM(MODELE_IN = MLMEAXS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),)
+
+# MLMEAXX : Modele Lineaire MEcanique AXis Xfem
+MLMEAXXC = MODI_MODELE_XFEM(MODELE_IN = MLMEAXS,
+                            FISSURE = (FISSLI1D,FISSLI2D,FISSLI3D),)
+
+# MLTHPLX : Modele Lineaire THermique PLan Xfem
+MLTHPLX  = MODI_MODELE_XFEM(MODELE_IN = MLTHPLS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),)
+
+# MLTHAXX : Modele Lineaire THermique AXis Xfem
+MLTHAXX  = MODI_MODELE_XFEM(MODELE_IN = MLTHAXS,
+                            FISSURE = (FISSLI1,FISSLI2,FISSLI3),)
+
+# ###################################################
+# Impression du contenu des modeles xfem obtenus :
+# ###################################################
+
+DEFI_FICHIER(UNITE=31, FICHIER='./fort.31')
+DEFI_FICHIER(UNITE=32, FICHIER='./fort.32')
+DEFI_FICHIER(UNITE=33, FICHIER='./fort.33')
+DEFI_FICHIER(UNITE=34, FICHIER='./fort.34')
+DEFI_FICHIER(UNITE=35, FICHIER='./fort.35')
+DEFI_FICHIER(UNITE=36, FICHIER='./fort.36')
+DEFI_FICHIER(UNITE=37, FICHIER='./fort.37')
+DEFI_FICHIER(UNITE=38, FICHIER='./fort.38')
+
+IMPR_CO(UNITE=31,CONCEPT=_F(NOM=MLMECPX ),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=32,CONCEPT=_F(NOM=MLMECPXC),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=33,CONCEPT=_F(NOM=MLMEDPX ),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=34,CONCEPT=_F(NOM=MLMEDPXC),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=35,CONCEPT=_F(NOM=MLMEAXX ),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=36,CONCEPT=_F(NOM=MLTHPLX ),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=37,CONCEPT=_F(NOM=MLTHAXX ),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=38,CONCEPT=_F(NOM=MLMEAXXC),NIVEAU=-1,PERMUTATION='NON',)
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=31)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=32)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=33)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=34)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=35)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=36)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=37)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=38)
+
+# ###################################################
+# "Post-traitements" des fichiers obtenus avec IMPR_CO
+# ###################################################
+
+File31 = open('./fort.31', "r")
+File32 = open('./fort.32', "r")
+File33 = open('./fort.33', "r")
+File34 = open('./fort.34', "r")
+File35 = open('./fort.35', "r")
+File36 = open('./fort.36', "r")
+File37 = open('./fort.37', "r")
+File38 = open('./fort.38', "r")
+
+LinesFile31 = File31.readlines()
+LinesFile32 = File32.readlines()
+LinesFile33 = File33.readlines()
+LinesFile34 = File34.readlines()
+LinesFile35 = File35.readlines()
+LinesFile36 = File36.readlines()
+LinesFile37 = File37.readlines()
+LinesFile38 = File38.readlines()
+
+File31.close()
+File32.close()
+File33.close()
+File34.close()
+File35.close()
+File36.close()
+File37.close()
+File38.close()
+
+ListLMECP  = [] # 31 <-> MLMECPX
+ListLMECPC = [] # 32 <-> MLMECPXC
+ListLMEDP  = [] # 33 <-> MLMEDPX
+ListLMEDPC = [] # 34 <-> MLMEDPXC
+ListLMEAX  = [] # 35 <-> MLMEAXX
+ListLTHPL  = [] # 36 <-> MLTHPLX
+ListLTHAX  = [] # 37 <-> MLTHAXX
+ListLMEAXC = [] # 38 <-> MLMEAXXC
+
+# 31 <-> ListLMECP  / MLMECPX
+nommo  = 'MLMECPX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile31:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMECP.append(lsplit)
+
+# 32 <-> ListLMECPC / MLMECPXC
+nommo  = 'MLMECPXC'
+nommo += (8-len(nommo))*" "
+for line in LinesFile32:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMECPC.append(lsplit)
+
+# 33 <-> ListLMEDP  / MLMEDPX
+nommo  = 'MLMEDPX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile33:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMEDP.append(lsplit)
+
+# 34 <-> ListLMEDPC / MLMEDPXC
+nommo  = 'MLMEDPXC'
+nommo += (8-len(nommo))*" "
+for line in LinesFile34:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMEDPC.append(lsplit)
+
+# 35 <-> ListLMEAX  / MLMEAXX
+nommo  = 'MLMEAXX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile35:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMEAX.append(lsplit)
+
+# 36 <-> ListLTHPL  / MLTHPLX
+nommo  = 'MLTHPLX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile36:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLTHPL.append(lsplit)
+
+# 37 <-> ListLTHAX  / MLTHAXX
+nommo  = 'MLTHAXX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile37:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLTHAX.append(lsplit)
+
+# 38 <-> ListLMEAXC / MLMEAXXC
+nommo  = 'MLMEAXXC'
+nommo += (8-len(nommo))*" "
+for line in LinesFile38:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListLMEAXC.append(lsplit)
+
+
+## pour debug
+#assert len(ListLMECP ) == len(ListLMECPC)
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLMECPC[i]
+  #print ListLMECP[i]
+  #print ListLMECPC[i]
+#print "&&"
+#assert len(ListLMECP ) == len(ListLMEDP )
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLMEDP[i]
+  #print ListLMECP[i]
+  #print ListLMEDP[i]
+#print "&&"
+#assert len(ListLMECP ) == len(ListLMEDPC)
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLMEDPC[i]
+  #print ListLMECP[i]
+  #print ListLMEDPC[i]
+#print "&&"
+#assert len(ListLMECP ) == len(ListLMEAX )
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLMEAX[i]
+  #print ListLMECP[i]
+  #print ListLMEAX[i]
+#print "&&"
+#assert len(ListLMECP ) == len(ListLTHPL )
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLTHPL[i]
+  #print ListLMECP[i]
+  #print ListLTHPL[i]
+#print "&&"
+#assert len(ListLMECP ) == len(ListLTHAX )
+#for i in range(len(ListLMECP )):
+  #print ListLMECP[i] == ListLTHAX[i]
+  #print ListLMECP[i]
+  #print ListLTHAX[i]
+#print "&&"
+
+# ###################################################
+# Tests une fois les infos extraites de ces fichiers
+# ###################################################
+
+# -------
+# nobj_ok == 1 si il y a le meme nombre de cham_elem out
+# de TOPOSE et TOPOFA d'un modele a l'autre
+# nobj_ok == 0 sinon
+# -------
+
+# TABTAIL1 -> entre MLMECPX et MLMECPXC
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLMECPC)) : nobj_ok = 1
+TABTAIL1 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL2 -> entre MLMECPX et MLMEDPX
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLMEDP )) : nobj_ok = 1
+TABTAIL2 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL3 -> entre MLMECPX et MLMEDPXC
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLMEDPC)) : nobj_ok = 1
+TABTAIL3 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL4 -> entre MLMECPX et MLMEAXX
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLMEAX )) : nobj_ok = 1
+TABTAIL4 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL5 -> entre MLMECPX et MLTHPLX
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLTHPL )) : nobj_ok = 1
+TABTAIL5 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL6 -> entre MLMECPX et MLTHAXX
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLTHAX )) : nobj_ok = 1
+TABTAIL6 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+# TABTAIL7 -> entre MLMECPX et MLMEAXXC
+nobj_ok = 0
+if (len(ListLMECP ) > 0) and (len(ListLMECP ) == len(ListLMEAXC)) : nobj_ok = 1
+TABTAIL7 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL5,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL6,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL7,)
+
+## -------
+## vale_ok == 1 si le "resume" (IMPR_CO/NIVEAU=-1) des .CELV
+## ou .VALE des cham_elem issus de TOPOSE et TOPOFA et contenus
+## dans les deux modeles sont identiques (au nom du modele pres)
+## vale_ok == 0 sinon
+## -------
+
+# TARESUM1 -> entre MLMECPX et MLMECPXC
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLMECPC) : vale_ok = 1
+TARESUM1 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM2 -> entre MLMECPX et MLMEDPX
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLMEDP ) : vale_ok = 1
+TARESUM2 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM3 -> entre MLMECPX et MLMEDPXC
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLMEDPC) : vale_ok = 1
+TARESUM3 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM4 -> entre MLMECPX et MLMEAXX
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLMEAX ) : vale_ok = 1
+TARESUM4 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM5 -> entre MLMECPX et MLTHPLX
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLTHPL ) : vale_ok = 1
+TARESUM5 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM6 -> entre MLMECPX et MLTHAXX
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLTHAX ) : vale_ok = 1
+TARESUM6 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+# TARESUM7 -> entre MLMECPX et MLMEAXXC
+vale_ok = 0
+if (ListLMECP != []) and (ListLMECP == ListLMEAXC) : vale_ok = 1
+TARESUM7 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM5,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM6,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM7,)
+
+# ###################################################
+# ###################################################
+#
+# Utilisation d'un maillage quadratique pour tester la
+# coherence entre les modelisations suivantes :
+#
+#  - MECANIQUE / D_PLAN
+#  - MECANIQUE / D_PLAN_HM
+#
+# Rq :
+#
+# -> pour la definition du modele enrichi HM, il n'existe
+#    pas d'elements cracktip. On travaille donc uniquement
+#    avec une interface
+#
+# ###################################################
+# ###################################################
+
+MAILLAQU = CREA_MAILLAGE(MAILLAGE = MA1,
+                         LINE_QUAD = _F(TOUT = 'OUI'))
+
+# ################################################################
+# Definition des modeles sains
+# ################################################################
+
+# MQMEDPS : Modele Quadratique MEcanique Deformations Planes Sain
+MQMEDPS = AFFE_MODELE(MAILLAGE = MAILLAQU,
+                      AFFE = _F(TOUT = 'OUI',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'D_PLAN',),)
+
+# MQHMDPS : Modele Quadratique Hydro-Mecanique Deformations Planes Sain
+MQHMDPS = AFFE_MODELE(MAILLAGE = MAILLAQU,
+                      AFFE = _F(TOUT = 'OUI',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'D_PLAN_HM',),)
+
+# ###################################################
+# Definition de l'interface
+# ###################################################
+
+LN = FORMULE(VALE='Y-0.25*a',
+             a=a,
+             NOM_PARA=['X', 'Y'],)
+
+INTEQU = DEFI_FISS_XFEM(MAILLAGE = MAILLAQU,
+                        TYPE_DISCONTINUITE = 'INTERFACE',
+                        DEFI_FISS = _F(FONC_LN = LN,),)
+
+# ###################################################
+# Definition des modeles enrichis
+# ###################################################
+
+# MQMEDPX : Modele Quadratique MEcanique Deformations Planes Xfem
+MQMEDPX = MODI_MODELE_XFEM(MODELE_IN = MQMEDPS,
+                           FISSURE  = INTEQU,)
+
+# MQHMDPX : Modele Quadratique Hydro-Mecanique Deformations Planes Xfem
+MQHMDPX = MODI_MODELE_XFEM(MODELE_IN = MQHMDPS,
+                           FISSURE  = INTEQU,)
+
+# MQHMDPXC : Modele Quadratique Hydro-Mecanique Deformations Planes Xfem avec contact
+MQHMDPXC = MODI_MODELE_XFEM(MODELE_IN = MQHMDPS,
+                            FISSURE  = INTEQU,
+                            CONTACT = 'STANDARD')
+
+# ###################################################
+# Impression du contenu des modeles xfem obtenus :
+# ###################################################
+
+DEFI_FICHIER(UNITE=31, FICHIER='./fort.31')
+DEFI_FICHIER(UNITE=32, FICHIER='./fort.32')
+DEFI_FICHIER(UNITE=33, FICHIER='./fort.33')
+
+IMPR_CO(UNITE=31,CONCEPT=_F(NOM=MQMEDPX),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=32,CONCEPT=_F(NOM=MQHMDPX),NIVEAU=-1,PERMUTATION='NON',)
+IMPR_CO(UNITE=33,CONCEPT=_F(NOM=MQHMDPXC),NIVEAU=-1,PERMUTATION='NON',)
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=31)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=32)
+DEFI_FICHIER(ACTION='LIBERER',UNITE=33)
+
+# ###################################################
+# "Post-traitements" des fichiers obtenus avec IMPR_CO
+# ###################################################
+
+File31 = open('./fort.31', "r")
+File32 = open('./fort.32', "r")
+File33 = open('./fort.33', "r")
+
+LinesFile31 = File31.readlines()
+LinesFile32 = File32.readlines()
+LinesFile33 = File33.readlines()
+
+File31.close()
+File32.close()
+File33.close()
+
+ListQMEDP = [] # 31 <-> MQMEDPX
+ListQHMDP = [] # 32 <-> MQHMDPX
+ListQHMDPC = [] # 33 <-> MQHMDPXC
+
+# 31 <-> ListQMEDP / MQMEDPX
+nommo  = 'MQMEDPX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile31:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListQMEDP.append(lsplit)
+
+# 32 <-> ListQHMDP / MQHMDPX
+nommo  = 'MQHMDPX'
+nommo += (8-len(nommo))*" "
+for line in LinesFile32:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListQHMDP.append(lsplit)
+
+# 33 <-> ListQHMDP / MQHMDPXC
+nommo  = 'MQHMDPXC'
+nommo += (8-len(nommo))*" "
+for line in LinesFile33:
+  if ('TOPOFAC' in line) and ('.CELV' in line) or \
+     ('TOPOSE'  in line) and ('.CELV' in line) :
+    lsplit = line.split("|")
+    assert nommo in lsplit[1]
+    # on remplace le nom du modele par 8 " "
+    lsplit[1] = lsplit[1].replace(nommo," "*8)
+    ListQHMDPC.append(lsplit)
+
+## pour debug
+#assert len(ListQMEDP) == len(ListQHMDP)
+#for i in range(len(ListQMEDP)):
+  #print ListQMEDP[i] == ListQHMDP[i]
+  #print ListQMEDP[i]
+  #print ListQHMDP[i]
+#print "&&"
+
+# ###################################################
+# Tests une fois les infos extraites de ces fichiers
+# ###################################################
+
+# -------
+# nobj_ok == 1 si il y a le meme nombre de cham_elem out
+# de TOPOSE et TOPOFA d'un modele a l'autre
+# nobj_ok == 0 sinon
+# -------
+
+# TABTAIL8 -> entre MQMEDPX et MQHMDPX
+nobj_ok = 0
+if (len(ListQMEDP) > 0) and (len(ListQMEDP) == len(ListQHMDP)) : nobj_ok = 1
+TABTAIL8 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL8,)
+
+## -------
+## vale_ok == 1 si le "resume" (IMPR_CO/NIVEAU=-1) des .CELV
+## ou .VALE des cham_elem issus de TOPOSE et TOPOFA et contenus
+## dans les deux modeles sont identiques (au nom du modele pres)
+## vale_ok == 0 sinon
+## -------
+
+# TARESUM8 -> entre MQMEDPX et MQHMDPX
+vale_ok = 0
+if (ListQMEDP != []) and (ListQMEDP == ListQHMDP) : vale_ok = 1
+TARESUM8 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM8,)
+
+# TABTAIL9 -> entre MQMEDPX et MQHMDPXC
+nobj_ok = 0
+if (len(ListQMEDP) > 0) and (len(ListQMEDP) == len(ListQHMDPC)) : nobj_ok = 1
+TABTAIL9 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [nobj_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABTAIL9,)
+
+# TARESUM9 -> entre MQMEDPX et MQHMDPXC
+vale_ok = 0
+if (ListQMEDP != []) and (ListQMEDP == ListQHMDPC) : vale_ok = 1
+TARESUM9 = CREA_TABLE(TITRE = '',
+                      LISTE = _F( LISTE_I = [vale_ok], PARA = 'BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TARESUM9,)
+
+FIN()

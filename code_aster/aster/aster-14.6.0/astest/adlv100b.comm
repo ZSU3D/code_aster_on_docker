@@ -1,0 +1,131 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+#      PISTON COUPLE A UNE COLONNE DE FLUIDE
+
+#                CALCUL 2D
+
+#              CAS TEST ADLV100B
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+MAYA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                     UNITE=19,
+                     )
+
+EAU=DEFI_MATERIAU( FLUIDE=_F( RHO = 1000.,  CELE_R = 1400.))
+
+AIR=DEFI_MATERIAU( FLUIDE=_F( RHO = 1.2,    CELE_R = 340.))
+
+ACIER=DEFI_MATERIAU( ELAS=_F( RHO = 7800.,  NU = 0.3,  E = 2.E+11))
+
+CHAMPMAT=AFFE_MATERIAU(  MAILLAGE=MAYA,AFFE=(
+                       _F( GROUP_MA = ('EAU',  'COUPLDRO',),  MATER = EAU),
+                       _F( GROUP_MA = ('AIR',  'COUPLGAU',),  MATER = AIR),
+                       _F( GROUP_MA = 'PISTON',             MATER = ACIER))
+                            )
+
+COLONNE=AFFE_MODELE( MAILLAGE=MAYA,AFFE=(
+                     _F( GROUP_MA = ('EAU',  'AIR',),
+                       MODELISATION = '2D_FLUIDE',  PHENOMENE = 'MECANIQUE'),
+                     _F( GROUP_MA = ('COUPLGAU',  'COUPLDRO',),
+                     MODELISATION = '2D_FLUI_STRU', PHENOMENE = 'MECANIQUE'),
+                     _F( GROUP_MA = 'PISTON',
+                       MODELISATION = 'D_PLAN',     PHENOMENE = 'MECANIQUE'))
+                          )
+
+SURFLIBR=AFFE_CHAR_MECA( MODELE=COLONNE,
+                    DDL_IMPO=_F( GROUP_NO = 'NOEUSURF',  PRES = 0.,  PHI = 0.))
+
+GUIDAGE=AFFE_CHAR_MECA( MODELE=COLONNE,
+                     DDL_IMPO=_F( GROUP_NO = 'NOEUPIST',  DY = 0.))
+
+MATELE_K=CALC_MATR_ELEM( MODELE=COLONNE,
+                              CHAM_MATER=CHAMPMAT,  OPTION='RIGI_MECA',
+                               CHARGE=(SURFLIBR, GUIDAGE,))
+
+MATELE_M=CALC_MATR_ELEM( MODELE=COLONNE,
+                              CHAM_MATER=CHAMPMAT,  OPTION='MASS_MECA',
+                               CHARGE=(SURFLIBR, GUIDAGE,))
+
+# CHARGE:(SURFLIBR GUIDAGE)
+
+
+NUM=NUME_DDL( MATR_RIGI=MATELE_K)
+
+MATASK=ASSE_MATRICE( MATR_ELEM=MATELE_K,  NUME_DDL=NUM)
+
+MATASM=ASSE_MATRICE( MATR_ELEM=MATELE_M,  NUME_DDL=NUM)
+
+MODES=CALC_MODES(MATR_RIGI=MATASK,
+                 OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                 CALC_FREQ=_F(FREQ=(10.,20.,),),
+                 SOLVEUR_MODAL=_F(PREC_INV=1.E-7),
+                 MATR_MASS=MATASM,
+                 )
+
+
+MASSES=POST_ELEM(
+                             MODELE=COLONNE,
+                         CHAM_MATER=CHAMPMAT,
+                          MASS_INER=_F(
+                                      TOUT = 'OUI')
+                     )
+
+TEST_TABLE(
+           VALE_CALC=12.2545,
+           
+           NOM_PARA='MASSE',
+           TABLE=MASSES,)
+
+TEST_TABLE(
+           VALE_CALC=0.02013189,
+           
+           NOM_PARA='CDG_X',
+           TABLE=MASSES,)
+
+TEST_TABLE(
+           VALE_CALC=2.5530207999999999E-3,
+           
+           NOM_PARA='IX_G',
+           TABLE=MASSES,)
+
+TEST_TABLE(
+           VALE_CALC=3.8438576999999998E-3,
+           
+           NOM_PARA='IY_G',
+           TABLE=MASSES,)
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODES,
+                  VALE_CALC=13.827700577,
+                  VALE_REFE=13.82,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+FIN()
+#

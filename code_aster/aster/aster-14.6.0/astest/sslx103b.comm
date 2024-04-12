@@ -1,0 +1,156 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+MA=LIRE_MAILLAGE(FORMAT='MED');
+
+# section acier
+SA = 3e-3 
+
+Dimp =0.001;
+EB = 30E9;
+NUB = 0.2;
+RHOB = 2500; 
+
+EA = 200E9;
+NUA = 0.25;
+RHOA = 7500;
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+        AFFE=(_F(GROUP_MA='BETON' ,
+                PHENOMENE='MECANIQUE',
+                MODELISATION='3D',),
+            _F( GROUP_MA='ACIER',
+                PHENOMENE='MECANIQUE',
+                MODELISATION='BARRE',)
+                ),);
+
+BETON = DEFI_MATERIAU(
+        ELAS=_F(E=EB, 
+                NU=NUB,),);
+                
+ACIER = DEFI_MATERIAU(
+        ELAS=_F(E=EA, 
+                NU=NUA,),);
+
+MATE=AFFE_MATERIAU(MAILLAGE=MA, 
+                    AFFE=(_F(GROUP_MA =('BETON'),
+                             MATER=BETON,),
+                          _F(GROUP_MA =('ACIER'),
+                             MATER=ACIER,),));
+                    
+CAREL=AFFE_CARA_ELEM(MODELE=MO,
+                     BARRE=(_F( GROUP_MA = 'ACIER',
+                                SECTION = 'GENERALE',
+                                CARA = 'A',
+                                VALE = SA,),));
+                              
+CLIM=AFFE_CHAR_MECA(MODELE=MO,
+        FACE_IMPO=_F(GROUP_MA='SLEFT',
+                     DX = 0),
+        DDL_IMPO=(_F(GROUP_NO='PMID', 
+                     DY=0,DZ=0),
+                  _F(GROUP_NO='P12',
+                     DY=0),)); 
+                    
+CHARGE = AFFE_CHAR_MECA(MODELE=MO,
+                        FACE_IMPO=_F(GROUP_MA='SRIGHT',
+                                     DZ =Dimp,));
+
+LIST = DEFI_LIST_REEL(DEBUT= 0.,
+                       INTERVALLE = (_F(JUSQU_A = 1, NOMBRE = 1),),);
+
+RES =  MECA_STATIQUE(MODELE=MO,
+                     CHAM_MATER=MATE,
+                     CARA_ELEM = CAREL,
+                     EXCIT=(_F(CHARGE=CLIM,),
+                            _F(CHARGE=CHARGE),),);
+RES=CALC_CHAMP(reuse =RES,
+                   RESULTAT=RES,
+                   GROUP_MA='ACIER',
+                   CONTRAINTE=('EFGE_ELNO',),);
+# " deplacement milieu de poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='MID',
+                  REFERENCE='SOURCE_EXTERNE',
+                  RESULTAT=RES,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC= 3.31643876E-04,
+                  VALE_REFE=3.3164199999999999E-4,
+                  PRECISION=1.E-2,),
+          )
+
+# contraintes beton milieu poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='SOURCE_EXTERNE',
+                  POINT=19,
+                  RESULTAT=RES,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIXX',
+                  VALE_CALC= 7.71443845E+05,
+                  VALE_REFE=7.65317E5,
+                  PRECISION=1.E-2,
+                  MAILLE='M795',),
+          )
+
+# effort acier milieu poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='SOURCE_EXTERNE',
+                  POINT=1,
+                  RESULTAT=RES,
+                  NOM_CHAM='EFGE_ELNO',
+                  NOM_CMP='N',
+                  VALE_CALC= 1.61313100E+04,
+                  VALE_REFE=1.6260E4,
+                  PRECISION=1.E-2,
+                  MAILLE='M21',),
+          )
+
+# " deplacement milieu de poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='MID',
+                  RESULTAT=RES,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=3.3164387632833001E-4,),
+          )
+
+# contraintes beton milieu poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  POINT=19,
+                  RESULTAT=RES,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=7.7144384489478997E5,
+                  MAILLE='M795',),
+          )
+
+# effort acier milieu poutre
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  POINT=1,
+                  RESULTAT=RES,
+                  NOM_CHAM='EFGE_ELNO',
+                  NOM_CMP='N',
+                  VALE_CALC=1.6131310005641E4,
+                  MAILLE='M21',),
+          )
+
+FIN()

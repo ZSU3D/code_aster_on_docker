@@ -1,0 +1,163 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# SOUMISE A UNE TRACTION UNIFORME A L'INFINI (MATERIAU HOMOGENE)
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',)
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+               CREA_GROUP_NO=_F( GROUP_MA = ( 'LL2',  'LL4', ))
+                 )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                 AFFE=_F(  TOUT = 'OUI',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = 'C_PLAN')  )
+
+MAT=DEFI_MATERIAU( ELAS=_F(  E = 2.E11,
+                            NU = 0.3,
+                            ALPHA = 0.)  )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                      AFFE=_F(  TOUT = 'OUI',  MATER = MAT)
+                      )
+
+CH=AFFE_CHAR_MECA(  MODELE=MO,
+                    DDL_IMPO=( _F(  GROUP_NO = 'PS6',  DX = 0.),
+                               _F(  GROUP_NO = 'LL4',  DY = 0.)),
+                    FORCE_CONTOUR=_F( GROUP_MA = 'LL2',  FY = 100.E6)
+                    )
+
+CHAMDEPL=MECA_STATIQUE(  MODELE=MO,
+                         CHAM_MATER=CHMAT,
+                         EXCIT=_F( CHARGE = CH)
+                          )
+
+FOND1=DEFI_FOND_FISS(  MAILLAGE=MA, SYME='NON',
+                       FOND_FISS=_F( GROUP_NO = ('P0',)),
+                       LEVRE_SUP=_F(GROUP_MA='LPOP8',),
+                       LEVRE_INF=_F(GROUP_MA='LPOP8B',),
+                     )
+
+
+G01=CALC_G(          RESULTAT=CHAMDEPL,
+                     THETA=_F(
+                              R_INF=0.00001875,
+                              FOND_FISS=FOND1,
+                              R_SUP=0.000075,),
+                   )
+
+GK01=CALC_G(              RESULTAT=CHAMDEPL,
+                          THETA=_F(
+                                   R_INF = 0.00001875,
+                                   R_SUP = 0.000075,
+                                   FOND_FISS=FOND1),
+                          OPTION='CALC_K_G'
+                      )
+
+# references analytiques
+#sigma=100.E6
+#beta=37.0
+#a=1E-3
+#E=2.E11
+#K1ref=sigma*sqrt(pi*a)*(cos(beta*pi/180.0))**2
+#K2ref=sigma*sqrt(pi*a)*cos(beta*pi/180.0)*sin(beta*pi/180.0)
+#Gref=1/E*(K1ref**2+K2ref**2)
+
+Gref  = 1.0018832364198484E02
+K1ref = 3.5749680873316796E06
+K2ref = 2.6939316811970267E06
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=101.260230471,
+           VALE_REFE=Gref,
+           NOM_PARA='G',
+           TABLE=GK01,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=3603805.51009,
+           VALE_REFE=K1ref,
+           NOM_PARA='K1',
+           TABLE=GK01,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=2700250.01907,
+           VALE_REFE=K2ref,
+           NOM_PARA='K2',
+           TABLE=GK01,)
+
+# ------------------------------------------------------------------
+
+TABL_K=POST_K1_K2_K3(  RESULTAT = CHAMDEPL,
+                       FOND_FISS = FOND1,
+                       )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.040000000000000001,
+           VALE_CALC=96.8520054838,
+           VALE_REFE=Gref,
+           NOM_PARA='G',
+           TABLE=TABL_K,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.012,
+           VALE_CALC=3537930.71598,
+           VALE_REFE=K1ref,
+           NOM_PARA='K1',
+           TABLE=TABL_K,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=2617908.96436,
+           VALE_REFE=K2ref,
+           NOM_PARA='K2',
+           TABLE=TABL_K,)
+
+# ---------------
+# on double ces tests de tests de non-regression
+
+TEST_TABLE(
+           VALE_CALC=96.8520054838,
+
+           NOM_PARA='G',
+           TABLE=TABL_K,
+           )
+
+TEST_TABLE(
+           VALE_CALC=3537930.71598,
+
+           NOM_PARA='K1',
+           TABLE=TABL_K,
+           )
+
+TEST_TABLE(
+           VALE_CALC=2617908.96436,
+
+           NOM_PARA='K2',
+           TABLE=TABL_K,
+           )
+
+FIN()
+#

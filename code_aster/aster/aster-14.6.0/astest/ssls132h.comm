@@ -1,0 +1,230 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#-----------------------------------------------------------------------
+# VALIDATION DES MEMBRANES SUR POUTRE CONSOLE (QUADRANGLE)
+# VERIFICATION DE LA PREDEFORMATION
+#-----------------------------------------------------------------------
+
+MAILL1=LIRE_MAILLAGE(FORMAT='MED'   )
+
+MAILL2=CREA_MAILLAGE(
+               MAILLAGE=MAILL1,
+               CREA_MAILLE=_F(
+                   NOM = 'ACPLUS',
+                   GROUP_MA = 'CONSOLE',
+                   PREF_MAILLE = 'B',
+                              )
+                           )
+
+
+MAILTOT=CREA_MAILLAGE(
+               MAILLAGE=MAILL2,
+               CREA_MAILLE=_F(
+                   NOM = 'ACMOINS',
+                   GROUP_MA = 'CONSOLE',
+                   PREF_MAILLE = 'C',
+                              )
+                           )
+MAILTOT = DEFI_GROUP(
+             reuse    = MAILTOT,
+             MAILLAGE = MAILTOT,
+             CREA_GROUP_NO = _F(
+                   TOUT_GROUP_MA = 'OUI'))
+
+# -----------------------------------------------------
+# DEFINITION DES MATERIAUX
+# -----------------------------------------------------
+
+E_A = 2.E11
+section_l = 0.2
+
+ACIER=DEFI_MATERIAU(ELAS_MEMBRANE =_F(M_LLLL = E_A*section_l,
+                                      M_LLTT = 0.,
+                                      M_LLLT = 0.,
+                                      M_TTTT = 0.,
+                                      M_TTLT = 0.,
+                                      M_LTLT = 0.,),)
+
+
+E = DEFI_CONSTANTE(VALE = 1E4)
+NU = DEFI_CONSTANTE(VALE = 0.)
+BETON=DEFI_MATERIAU(
+            ELAS_FO=_F(  E = E,   NU = NU, K_DESSIC=0., B_ENDOGE=0.),
+                          )
+
+HYDR=CREA_CHAMP(OPERATION='AFFE',
+                 TYPE_CHAM='NOEU_HYDR_R',
+                 MAILLAGE=MAILTOT,
+                 AFFE=_F( TOUT = 'OUI',
+                          NOM_CMP = ('HYDR',),
+                          VALE = (0.,)
+                         )
+                )
+
+SECH=CREA_CHAMP(OPERATION='AFFE',
+                 TYPE_CHAM='NOEU_TEMP_R',
+                 MAILLAGE=MAILTOT,
+                 AFFE=_F( TOUT = 'OUI',
+                          NOM_CMP = ('TEMP',),
+                          VALE = (0.,)
+                         )
+                )
+
+# -------------------------------------------------
+# AFFECTATION DES MATERIAUX
+# -------------------------------------------------
+
+MATAF=AFFE_MATERIAU(    MAILLAGE=MAILTOT,
+                          AFFE=(
+                          _F(  GROUP_MA = ('ACPLUS','ACMOINS'),
+                                 MATER = ACIER,
+                               ),
+                          _F(  GROUP_MA = ('CONSOLE'),
+                                 MATER = BETON,
+                               )
+                               ),
+                          AFFE_VARC = (_F( GROUP_MA = ('CONSOLE'), NOM_VARC = 'HYDR', CHAM_GD=HYDR),
+                                       _F( GROUP_MA = ('CONSOLE'), NOM_VARC = 'SECH', CHAM_GD=SECH, VALE_REF=0.),
+                                      )
+                                 
+                      )
+
+# -------------------------------------------------
+# AFFECTATION DES MODELES
+# -------------------------------------------------
+
+LEMOD=AFFE_MODELE(    MAILLAGE=MAILTOT,     
+                        AFFE=(
+                              _F(  GROUP_MA = ('ACPLUS','ACMOINS'),
+                               PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'MEMBRANE',
+                             ),
+                              _F(  GROUP_MA = ('CONSOLE',),
+                               PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DKT',
+                             )
+                          )
+                      )
+
+# -------------------------------------------------
+# AFFECTATION DES CARACTERISTIQUES
+# -------------------------------------------------
+
+LACAR=AFFE_CARA_ELEM(    MODELE=LEMOD,
+                      COQUE=(
+                          _F( GROUP_MA = ('CONSOLE', 'B0X','B1X','B0Y','B1Y',),
+                                EPAIS = .2,
+                                ANGL_REP = (0.0, 0.0,),
+                             ),
+                             ),
+                       MEMBRANE=(
+                                 _F( GROUP_MA = 'ACPLUS',
+                                     ANGL_REP_1=(0,0),
+                                     EPAIS = 1.0),
+                                 _F( GROUP_MA = 'ACMOINS',
+                                     ANGL_REP_1=(0,0),
+                                     EPAIS = 1.0),
+                                )
+                        )
+
+# ----------------------------------------------
+# CHARGEMENT
+# ----------------------------------------------
+
+ZCHM=AFFE_CHAR_MECA(
+             MODELE=LEMOD,
+            DDL_IMPO=(
+                   _F( GROUP_MA  = 'B0X',
+                       DX = 0., DY=0., DZ = 0., DRX = 0., DRY = 0., DRZ = 0. ),
+                  ),
+            PRE_EPSI = _F(
+                   GROUP_MA = ('ACPLUS','ACMOINS'),
+                   EXX     = 1.E-3,),
+            # chargement nul pour tester le bon fonctionnement de l'option
+            PRES_REP = _F(
+                   GROUP_MA = ('ACPLUS','ACMOINS'),
+                   PRES     = 0.,),
+
+            )
+
+# ----------------------------------------------
+# CALCUL
+# ----------------------------------------------
+
+ZLIST=DEFI_LIST_REEL(   DEBUT=0.,
+             INTERVALLE=_F( JUSQU_A = 1.0,  NOMBRE = 1, )
+           )
+
+LEDEP=STAT_NON_LINE(
+                            MODELE=LEMOD,
+                        CHAM_MATER=MATAF,
+                         CARA_ELEM=LACAR,
+                             EXCIT=_F(
+                CHARGE = ZCHM,
+                ),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                ),
+                         INCREMENT=_F(
+                LIST_INST = ZLIST,
+                NUME_INST_FIN = 1,
+                ),
+              )
+
+LEDEP=CALC_CHAMP(reuse =LEDEP,
+                 RESULTAT=LEDEP,
+                 CONTRAINTE=('EFGE_ELNO',),
+                 DEFORMATION=('EPSI_ELGA','EPSI_ELNO',),
+                 VARI_INTERNE=('VARI_ELNO',),
+                 FORCE=('FORC_NODA','REAC_NODA'),);
+
+#
+# -------------------------------------------------
+# POST TRAITEMENT DES RESULTATS
+# -------------------------------------------------
+
+TAB = POST_RELEVE_T(
+        ACTION = _F(
+               OPERATION = 'MOYENNE',
+               INTITULE = 'RESU',
+               GROUP_NO = 'B1X',
+               RESULTAT = LEDEP,
+               NOM_CHAM = 'DEPL',
+               TOUT_ORDRE = 'OUI',
+               NOM_CMP = 'DX'))
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.099999997,
+           VALE_REFE=0.10000000000000001,
+           NOM_PARA='DX',
+           TABLE=TAB,
+           FILTRE=(_F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   _F(CRITERE='ABSOLU',
+                      CRIT_COMP='GT',
+                      PRECISION=0.0,
+                      NOM_PARA='INST',
+                      VALE=0.0,),
+                   ),
+           )
+
+FIN()

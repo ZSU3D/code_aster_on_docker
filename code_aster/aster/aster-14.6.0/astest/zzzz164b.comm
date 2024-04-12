@@ -1,0 +1,319 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# - ROTATION, TRANSLATION, CHANGEMENT DE REPERE
+#   ET D'ECHELLE D'UN MAILLAGE 3D OU 2D
+# - COMPARAISON AVEC RESULTATS ANALYTIQUES
+# - ON VALIDE AUSSI LE PASSAGE DES NOEUDS MILIEU AU QUART DE L ELEMENT
+#   POUR LES PYRA13
+#********************************************************************
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+#
+MA = LIRE_MAILLAGE ( FORMAT="ASTER", UNITE = 21 )
+
+MA2 = COPIER(CONCEPT=MA)
+#
+IMPR_RESU(FORMAT="RESULTAT", RESU = _F ( MAILLAGE = MA , ) , )
+#
+MA = MODI_MAILLAGE (  reuse = MA ,
+                       MAILLAGE = MA ,
+                       TRANSLATION = ( 2.5 , 3.9  ) ,
+                       ROTATION = ( _F ( POIN_1 = ( 10. , 0.5 , ) ,
+                                         ANGLE= 33.  ,  )  ,
+                                    _F ( POIN_1 = ( -3.  , 0.5 , ) ,
+                                         ANGLE= -161.   , ) , ) ,
+                       ECHELLE = 5. ,
+                       )
+#
+IMPR_RESU( FORMAT = 'MED',
+           RESU = _F ( MAILLAGE = MA , ) , )
+#
+CHCO3 = CREA_CHAMP ( OPERATION = 'EXTR' ,
+                     TYPE_CHAM = 'NOEU_GEOM_R' ,
+                     NOM_CHAM = 'GEOMETRIE' ,
+                     MAILLAGE = MA ,
+                     INFO = 2 , )
+#
+CHC23 = CREA_CHAMP ( OPERATION = 'ASSE' ,
+                     MAILLAGE = MA ,
+                     TYPE_CHAM = 'NOEU_DEPL_R' ,
+                     ASSE = _F ( TOUT = 'OUI' ,
+                                 CHAM_GD = CHCO3 ,
+                                 NOM_CMP = ( 'X' , 'Y' , ) ,
+                                 NOM_CMP_RESU = ('DX' , 'DY'  , ) ,
+                                 ) , )
+
+#
+RES1 = CREA_RESU ( OPERATION  = 'AFFE' ,
+                   TYPE_RESU = 'EVOL_ELAS' ,
+                   NOM_CHAM  = 'DEPL' ,
+                   AFFE = _F ( INST = 1.0 ,
+#                        NUME_ORDRE_INIT = 1 ,
+                               CHAM_GD = CHC23 , ) , )
+#
+PREC1 = 1.E-13
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-39.97521927792913,
+                   VALE_REFE=-39.975219277929149,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.42222814000070,
+                   VALE_REFE=0.42222814000069997,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P3',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-31.23336535045659,
+                   VALE_REFE=-31.233365350456598,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P3',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=-12.75274775791779,
+                   VALE_REFE=-12.752747757917799,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P4',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-28.15505797382830,
+                   VALE_REFE=-28.155057973828299,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P4',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=-8.81269398988418,
+                   VALE_REFE=-8.8126939898842007,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                ),
+          )
+
+#
+IMPR_RESU(FORMAT="RESULTAT", RESU = _F ( MAILLAGE = MA , ) , )
+#
+IMPR_RESU(FORMAT="RESULTAT", RESU = _F ( MAILLAGE = MA2 , ) , )
+#
+MA2 = MODI_MAILLAGE ( reuse=MA2 ,
+                      MAILLAGE = MA2 ,
+                      MODI_BASE = _F( VECT_X = ( 1.23 , 0.23 , ) , ) ,
+                      ECHELLE = 5. ,
+                    )
+#
+CHCO4 = CREA_CHAMP ( OPERATION = 'EXTR' ,
+                     TYPE_CHAM = 'NOEU_GEOM_R' ,
+                     NOM_CHAM = 'GEOMETRIE' ,
+                     MAILLAGE = MA2 ,
+                     INFO = 2 , )
+#
+CHC24 = CREA_CHAMP ( OPERATION = 'ASSE' ,
+                     MAILLAGE = MA2 ,
+                     TYPE_CHAM = 'NOEU_DEPL_R' ,
+                     ASSE = _F ( TOUT = 'OUI' ,
+                                 CHAM_GD = CHCO4 ,
+                                 NOM_CMP = ( 'X' , 'Y'  , ) ,
+                                 NOM_CMP_RESU = ('DX' , 'DY' , )
+                                 , ) , )
+
+#
+RES2 = CREA_RESU ( OPERATION  = 'AFFE' ,
+                   TYPE_RESU = 'EVOL_ELAS' ,
+                   NOM_CHAM  = 'DEPL' ,
+                   AFFE = _F ( INST = 1.0 ,
+#                        NUME_ORDRE_INIT = 1 ,
+                               CHAM_GD = CHC24 , ) , )
+#
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.0,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=0.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.0,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=0.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P3',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=7.67190274379882,
+                   VALE_REFE=7.6719027437988201,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P3',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=13.82540806955412,
+                   VALE_REFE=13.82540806955412,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P4',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=2.75709004855270,
+                   VALE_REFE=2.7570900485526999,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P4',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RES2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=14.74443808573835,
+                   VALE_REFE=14.74443808573835,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-13,),
+                ),
+          )
+
+#
+IMPR_RESU(FORMAT="RESULTAT", RESU = _F ( MAILLAGE = MA2 , ) , )
+
+
+#==========================================================================================
+# Couverture de barpyr ; MODI_MAILLAGE > OPTION = NOEUD_QUART pour un pyra13
+#
+
+MA3 = LIRE_MAILLAGE ( UNITE = 20,
+                      FORMAT= 'MED',
+                      INFO = 2 )
+
+
+CH_POS2=CREA_CHAMP(TITRE = 'POSITION DES NOEUDS MILIEU',
+                  INFO = 2 ,
+                  TYPE_CHAM = 'NOEU_GEOM_R',
+                  OPERATION = 'EXTR',
+                  MAILLAGE = MA3 ,
+                  NOM_CHAM ='GEOMETRIE',);
+
+MA3=MODI_MAILLAGE( reuse = MA3,
+                   MAILLAGE = MA3,
+                   MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                   GROUP_MA_FOND='gr_seg3',),
+                   INFO= 2,
+                   )
+
+
+CH_POS=CREA_CHAMP(TITRE = 'POSITION DES NOEUDS MILIEU',
+                  INFO = 2 ,
+                  TYPE_CHAM = 'NOEU_GEOM_R',
+                  OPERATION = 'EXTR',
+                  MAILLAGE = MA3 ,
+                  NOM_CHAM ='GEOMETRIE',);
+                  
+
+POS_N17 = POST_RELEVE_T(ACTION=_F(INTITULE = 'POSITION',
+                                 OPERATION = 'EXTRACTION',
+                                 NOEUD = 'N17',
+                                 CHAM_GD = CH_POS,
+                                 TOUT_CMP ='OUI'),
+                                 INFO = 2,)
+
+POS_N24 = POST_RELEVE_T(ACTION=_F(INTITULE = 'POSITION',
+                                 OPERATION = 'EXTRACTION',
+                                 NOEUD = 'N24',
+                                 CHAM_GD = CH_POS,
+                                 TOUT_CMP ='OUI'),
+                                 INFO = 2,)
+
+POS_N12 = POST_RELEVE_T(ACTION=_F(INTITULE = 'POSITION',
+                                 OPERATION = 'EXTRACTION',
+                                 NOEUD = 'N12',
+                                 CHAM_GD = CH_POS,
+                                 TOUT_CMP ='OUI'),
+                                 INFO = 2,)
+#
+TEST_TABLE(TABLE=POS_N12,
+           NOM_PARA='COOR_Z',
+           VALE_REFE= 50.0,
+           VALE_CALC= 50.0,
+           REFERENCE='ANALYTIQUE')
+#
+TEST_TABLE(TABLE=POS_N17,
+           NOM_PARA='COOR_Y',
+           VALE_REFE= 150.0,
+           VALE_CALC= 150.0,
+           REFERENCE='ANALYTIQUE')
+#
+TEST_TABLE(TABLE=POS_N24,
+           NOM_PARA='COOR_X',
+           VALE_REFE= 75.0,
+           VALE_CALC= 75.0,
+           REFERENCE='ANALYTIQUE')
+#
+TEST_TABLE(TABLE=POS_N24,
+           NOM_PARA='COOR_Y',
+           VALE_REFE= 125.0,
+           VALE_CALC= 125.0,
+           REFERENCE='ANALYTIQUE')
+#
+TEST_TABLE(TABLE=POS_N24,
+           NOM_PARA='COOR_Z',
+           VALE_REFE= 75.0,
+           VALE_CALC= 75.0,
+           REFERENCE='ANALYTIQUE')
+#
+FIN ()

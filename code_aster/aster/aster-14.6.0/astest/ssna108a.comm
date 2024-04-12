@@ -1,0 +1,540 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+#......................................................................
+
+
+M=LIRE_MAILLAGE(FORMAT='MED', )
+
+MO=AFFE_MODELE(   MAILLAGE=M,
+            AFFE=_F( TOUT = 'OUI',PHENOMENE = 'MECANIQUE',MODELISATION = 'AXIS')
+           )
+
+COMP=DEFI_FONCTION(    NOM_PARA='EPSI',
+                                         PROL_DROITE='LINEAIRE',
+                                         PROL_GAUCHE='LINEAIRE',
+                                        VALE=(0.002775,  555.,
+                                              0.005000,  588.7,
+                                              0.010000,  631.,
+                                              0.0150,    657.,
+                                              0.0200,    676.,
+                                              0.0250,    691.,
+                                              0.0300,    704.,
+                                              0.0400,    725.,
+                                              0.0500,    741.,
+                                              0.0750,    772.,
+                                              0.1000,    794.,
+                                              0.1250,    812.,
+                                              0.1500,    827.,
+                                              0.2000,    851.,
+                                              0.3000,    887.,
+                                              0.4000,    912.,
+                                              0.5000,    933.,
+                                              0.6000,    950.,
+                                              0.7000,    965.,
+                                              0.8000,    978.,
+                                              0.9000,    990.,
+                                              ))
+
+ACIER=DEFI_MATERIAU(
+               ELAS=_F(  E = 200000.,  NU = 0.3,  ALPHA = 0.),
+               TRACTION=_F(  SIGM = COMP),
+               WEIBULL=_F( M = 8., VOLU_REFE = 1.E-3, SIGM_REFE = 2630.0E0)
+             )
+
+CM=AFFE_MATERIAU(   MAILLAGE=M,
+                         AFFE=_F(  TOUT = 'OUI', MATER = ACIER)  )
+
+ZERO=DEFI_FONCTION(        NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                            VALE=(   0.,  0.,
+                                   100.,  0., )    )
+
+TRAC=DEFI_FONCTION(        NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                            VALE=(   0.,  0.,
+                                   100.,  1., )    )
+
+CHARG=AFFE_CHAR_MECA_F(   MODELE=MO,DDL_IMPO=(
+                    _F(  GROUP_NO = 'DEPLIMPO',  DY = TRAC),
+                    _F(  GROUP_NO = 'SYMETRIE',  DX = ZERO),
+                    _F(  GROUP_NO = 'LIGAMENT',  DY = ZERO))
+                          )
+
+L_INST=DEFI_LIST_REEL(    DEBUT=0.,
+                            INTERVALLE=_F(  JUSQU_A = 100.,  NOMBRE = 100)
+                        )
+#CALCUL MECANIQUE HPP
+T=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CM,
+                             EXCIT=_F(
+                CHARGE = CHARG),
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ISOT_TRAC'),
+                         INCREMENT=_F(
+                LIST_INST = L_INST,
+                NUME_INST_FIN = 10),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.0E-04,
+                ITER_GLOB_MAXI = 25)
+              )
+
+U=EXTR_RESU(RESULTAT=T,ARCHIVAGE=_F(NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),))
+
+U=CALC_CHAMP(reuse=U,
+             RESULTAT=U,
+             CONTRAINTE=('SIGM_ELNO'),
+             VARI_INTERNE=('VARI_ELNO'),
+             DEFORMATION=('EPSG_ELGA','EPSL_ELGA'))
+
+#CALCUL MECANIQUE SIMO_MIEHE
+TSM=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CM,
+                             EXCIT=_F(
+                CHARGE = CHARG),
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ISOT_TRAC',
+                DEFORMATION='SIMO_MIEHE',),
+                         INCREMENT=_F(
+                LIST_INST = L_INST,
+                NUME_INST_FIN = 10),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.0E-04,
+                ITER_GLOB_MAXI = 25)
+              )
+
+USM=EXTR_RESU(RESULTAT=TSM,ARCHIVAGE=_F(NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),))
+
+USM=CALC_CHAMP(reuse=USM,
+             RESULTAT=USM,
+             CONTRAINTE=('SIGM_ELNO'),
+             VARI_INTERNE=('VARI_ELNO'),
+             DEFORMATION=('EPSG_ELGA','EPSL_ELGA'))
+#CALCUL MECANIQUE GDEF_LOG
+TLOG=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CM,
+                             EXCIT=_F(
+                CHARGE = CHARG),
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ISOT_TRAC',
+                DEFORMATION='GDEF_LOG',),
+                         INCREMENT=_F(
+                LIST_INST = L_INST,
+                NUME_INST_FIN = 10),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.0E-04,
+                ITER_GLOB_MAXI = 25)
+              )
+
+ULOG=EXTR_RESU(RESULTAT=TLOG,ARCHIVAGE=_F(NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),))
+
+ULOG=CALC_CHAMP(reuse=ULOG,
+             RESULTAT=ULOG,
+             CONTRAINTE=('SIGM_ELNO'),
+             VARI_INTERNE=('VARI_ELNO'),
+             DEFORMATION=('EPSG_ELGA','EPSL_ELGA'))
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   PARA='INST',
+                   RESULTAT=U,
+                   VALE_CALC=10.0,),
+                _F(NUME_ORDRE=10,
+                   PARA='ITER_GLOB',
+                   VALE_CALC_I=3,
+                   RESULTAT=U,
+                   CRITERE='ABSOLU',
+                   ),
+                ),
+          )
+
+
+# WEIBULL AVEC OPTION SIGM_ELGA
+WEIB=POST_ELEM(
+                      RESULTAT=U,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       WEIBULL=_F(  TOUT = 'OUI',
+                                    OPTION = 'SIGM_ELGA',
+                                    CORR_PLAST = 'NON')
+                   )
+
+WEIBSM=POST_ELEM(
+                      RESULTAT=USM,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       WEIBULL=_F(  TOUT = 'OUI',
+                                    OPTION = 'SIGM_ELGA',
+                                    CORR_PLAST = 'NON')
+                   )
+                   
+WEIBLOG=POST_ELEM(
+                      RESULTAT=ULOG,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       WEIBULL=_F(  TOUT = 'OUI',
+                                    OPTION = 'SIGM_ELGA',
+                                    CORR_PLAST = 'NON')
+                   )
+# WEIBULL AVEC OPTION SIGM_ELMOY ET COOR_PLAST = NON
+WEIB2=POST_ELEM(
+                      RESULTAT=U,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       WEIBULL=_F(  TOUT = 'OUI',
+                                    OPTION = 'SIGM_ELMOY',
+                                    CORR_PLAST = 'NON')
+                   )
+
+# WEIBULL AVEC OPTION SIGM_ELMOY ET COOR_PLAST = OUI
+WEIB3=POST_ELEM(
+                      RESULTAT=U,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       WEIBULL=_F(  TOUT = 'OUI',
+                                    OPTION = 'SIGM_ELMOY',
+                                    CORR_PLAST = 'OUI')
+                   )
+
+# RICE ET TRACEY
+RET=POST_ELEM(
+                      RESULTAT=U,
+                      NUME_ORDRE=(1,2,3,4,5,6,7,8,9,10),
+                       RICE_TRACEY=_F(  TOUT = 'OUI',
+                                        OPTION = 'SIGM_ELMOY',
+                                        LOCAL = 'OUI')
+                   )
+
+
+# TESTS WEIBULL
+
+TEST_TABLE(VALE_CALC=1407.53403673,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+TEST_TABLE(VALE_CALC=1404.61024322,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIBSM,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+TEST_TABLE(VALE_CALC=1404.42658281,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIBLOG,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=2496.61331174,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=4,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3333.27614652 ,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=6,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3753.58246426,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=8,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=4047.46288576,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=10,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+
+TEST_TABLE(VALE_CALC=1406.28037174,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB2,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=2488.72079771,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB2,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=4,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3325.55620691,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB2,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=6,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3744.29558422,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB2,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=8,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=4035.87975341,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB2,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=10,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+
+TEST_TABLE(VALE_CALC=1404.03531336,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB3,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=2482.37793065,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB3,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=4,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3313.52881313,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB3,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=6,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3723.13758365,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB3,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=8,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=4003.81872251,
+           NOM_PARA='SIGMA_WEIBULL',
+           TABLE=WEIB3,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=10,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='M',),
+                   ),
+           )
+
+
+# TESTS RICE ET TRACEY
+
+TEST_TABLE(VALE_CALC=1.0,
+           NOM_PARA='TX_CROIS_CAVITES',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=1,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA101',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=3.7499996127251,
+           NOM_PARA='VOLUME_CONCERNE',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=1,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA101',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=1.0014485993172,
+           NOM_PARA='TX_CROIS_CAVITES',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=3,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA281',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=0.62371880346227,
+           NOM_PARA='VOLUME_CONCERNE',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=3,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA281',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=1.00756193304,
+           NOM_PARA='TX_CROIS_CAVITES',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=5,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA281',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=1.0169786668374,
+           NOM_PARA='TX_CROIS_CAVITES',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=7,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA281',),
+                   ),
+           )
+
+TEST_TABLE(VALE_CALC=1.0314647146418,
+           NOM_PARA='TX_CROIS_CAVITES',
+           TABLE=RET,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=10,),
+                   _F(NOM_PARA='LIEU',
+                      VALE_K='MA281',),
+                   ),
+           )
+
+#####################################################
+#Pour validation de POST_BORDET
+
+SIGY=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(0.,555.,
+                         100.,555.,
+                         ),PROL_DROITE='CONSTANT',PROL_GAUCHE='CONSTANT',)
+
+SIGU=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(0.,2630.,
+                         100.,2630.,
+                         ),PROL_DROITE='CONSTANT',PROL_GAUCHE='CONSTANT',)
+
+
+#Calcul de bordet
+BORDET=POST_BORDET(
+            TOUT='OUI',
+            INST=9.9999,
+            CRITERE='ABSOLU',
+            PRECISION=0.0001,
+            PROBA_NUCL='NON',
+            PARAM=_F(M=8.,
+                     SIG_CRIT=600,
+                     SEUIL_REFE=555.,
+                     VOLU_REFE=1.E-3,
+                     SIGM_REFE=SIGU,
+                     SEUIL_CALC=SIGY,
+                     ),
+            RESULTAT=U,
+            TEMP=20,
+             )
+
+
+
+
+TEST_TABLE(VALE_CALC=0.0,
+           NOM_PARA='SIG_BORDET',
+           TABLE=BORDET,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+TEST_TABLE(VALE_CALC=721.812609143,
+           NOM_PARA='SIG_BORDET',
+           TABLE=BORDET,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=4.0,),
+           )
+
+TEST_TABLE(VALE_CALC=1302.39030027,
+           NOM_PARA='SIG_BORDET',
+           TABLE=BORDET,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=6.0,),
+           )
+
+TEST_TABLE(VALE_CALC=1730.51576629,
+           NOM_PARA='SIG_BORDET',
+           TABLE=BORDET,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=8.0,),
+           )
+
+TEST_TABLE(VALE_CALC=2022.46437272,
+           NOM_PARA='SIG_BORDET',
+           TABLE=BORDET,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=10.0,),
+           )
+
+FIN( )
+#

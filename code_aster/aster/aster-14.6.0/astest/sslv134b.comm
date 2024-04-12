@@ -1,0 +1,456 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# QUART DE FISSURE. TEST DE POST_K1_K2_K3. MAILLAGE BARSOUM
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',)
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+                     CREA_GROUP_NO=_F(
+              GROUP_MA = ('SLA2_I', 'SLA2_S', 'SAV_I', 'SAV_S',))
+                 )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                      AFFE=_F(  TOUT = 'OUI',
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = '3D') )
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=_F(GROUP_MA=('SLA2_I','SLA2_S','SAV_I','SAV_S',),),
+                 );
+
+#Barsoum
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                                GROUP_MA_FOND='LFF1'),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(  E = 2.E11,
+                             NU = 0.3,
+                             ALPHA = 0.) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',
+                              MATER = MAT) )
+
+SYMETR1=AFFE_CHAR_MECA(MODELE=MO,
+                       DDL_IMPO=_F(GROUP_NO='D',
+                                   DZ=0.0,),
+                       FACE_IMPO=_F(GROUP_MA=('SLA2_I','SLA2_S',),
+                                    DNOR=0.0,),);
+
+SYMETR2=AFFE_CHAR_MECA(MODELE=MO,
+                       FACE_IMPO=_F(GROUP_MA=('SAV_I','SAV_S',),
+                                    DNOR=0.0,),);
+
+PRESSION=AFFE_CHAR_MECA(    MODELE=MO,FORCE_FACE=(
+        _F(  GROUP_MA = 'SINF_S', FZ = 1.E6),
+        _F(  GROUP_MA = 'SINF_1', FZ = -1.E6))
+                         )
+
+CHAMDEPL=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=(_F(CHARGE=PRESSION,),
+                              _F(CHARGE=SYMETR1,),
+                              _F(CHARGE=SYMETR2,),),);
+
+CHAMDEPL=CALC_CHAMP(reuse=CHAMDEPL,CONTRAINTE=('SIGM_ELNO'),RESULTAT=CHAMDEPL)
+
+
+CHAMDEPL=CALC_CHAMP( reuse=CHAMDEPL,
+                           CONTRAINTE='SIGM_NOEU',
+                         RESULTAT=CHAMDEPL )
+
+
+
+TB2=MACR_LIGN_COUPE( RESULTAT= CHAMDEPL,
+                     NOM_CHAM= 'SIGM_NOEU',
+                     LIGN_COUPE = _F( TYPE='ARC',
+                                      NB_POINTS= 16,
+                                      CENTRE= (0. , 2., 0.), #N1710
+                                      COOR_ORIG= (9.18855088244361E-17,  1.76000036554081E+00, -4.18878807815594E-04),#N4968
+                                      ANGLE=360.,
+                                      DNOR=(1.,0.,0.),
+                                      DISTANCE_MAX=0.001,
+                                      ),)
+IMPR_TABLE(TABLE=TB2)
+
+TEST_TABLE(
+           VALE_CALC=-244010.244875,
+           
+           NOM_PARA='SIXX',
+           TABLE=TB2,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=36775.6852001,
+           
+           NOM_PARA='SIYY',
+           TABLE=TB2,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=357165.944264,
+           
+           NOM_PARA='SIZZ',
+           TABLE=TB2,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TB2L=MACR_LIGN_COUPE( RESULTAT= CHAMDEPL,
+                     NOM_CHAM= 'SIGM_NOEU',
+                     LIGN_COUPE = _F( TYPE='ARC',
+                                      NB_POINTS= 16,
+                                      CENTRE= (0. , 2., 0.), #N1710
+                                      COOR_ORIG= (9.18855088244361E-17,  1.76000036554081E+00, -4.18878807815594E-04),#N4968
+                                      ANGLE=360.,REPERE='CYLINDRIQUE',
+                                      DNOR=(1.,0.,0.),
+                                      DISTANCE_MAX=0.001,
+                                      ),)
+IMPR_TABLE(TABLE=TB2L)
+
+TEST_TABLE(
+           VALE_CALC=684614.135805,
+           
+           NOM_PARA='SIXX',
+           TABLE=TB2L,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-244010.244875,
+           
+           NOM_PARA='SIYY',
+           TABLE=TB2L,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-290672.506342,
+           
+           NOM_PARA='SIZZ',
+           TABLE=TB2L,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=45.0,),
+           )
+
+TB2M = MACR_LIGN_COUPE(LIGN_COUPE=_F(ANGLE=360.0,
+                                     CENTRE=(0.0, 2.0, 0.0),
+                                     COOR_ORIG=(9.18855088244361e-17, 1.76000036554081, -0.000418878807815594),
+                                     DISTANCE_MAX=0.001,
+                                     DNOR=(1.0, 0.0, 0.0),
+                                     NB_POINTS=16,
+                                     OPERATION='MOYENNE',
+                                     TYPE='ARC'),
+                       NOM_CHAM='SIGM_NOEU',
+                       RESULTAT=CHAMDEPL)
+
+TEST_TABLE(FILTRE=_F(NOM_PARA='QUANTITE',
+                     VALE_K='MOMENT_0'),
+           NOM_PARA='SIZZ',
+           TABLE=TB2M,
+           VALE_CALC=1188664.62838)
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MA, SYME='NON',
+                    FOND_FISS=_F(GROUP_MA = 'LFF1',
+                                 GROUP_NO_ORIG = 'NFF1',
+                                 GROUP_NO_EXTR = 'NFF2',),
+                    LEVRE_SUP=_F(  GROUP_MA = 'LEVINFS'),
+                    LEVRE_INF=_F(  GROUP_MA = 'LEVINF1'),
+                   )
+
+RSUP=0.5
+
+RINF=0.2
+
+# VALEUR DE REFERENCE MILIEU INFINI :
+Gref  = 11.58648
+K1ref =  1.595769E6
+
+GLOC1=CALC_G(           RESULTAT=CHAMDEPL,
+                        THETA=_F(FOND_FISS=FISS,),
+                    )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=11.762186947,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC1,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N49',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7545188214,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC1,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N1710',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=11.7268586465,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC1,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N77',),
+           )
+
+RAY_INF1=DEFI_CONSTANTE(VALE=RINF)
+
+RAY_SUP1=DEFI_CONSTANTE(VALE=RSUP)
+
+MOD_T1=DEFI_CONSTANTE(   VALE=1.    )
+
+# POST_K1_K2_K3
+
+
+TABL_K1=POST_K1_K2_K3(  FOND_FISS = FISS,
+                        RESULTAT = CHAMDEPL,
+                      )
+
+IMPR_TABLE(TABLE=TABL_K1)
+
+
+TABL_KTO=POST_K1_K2_K3(  FOND_FISS = FISS,
+              RESULTAT=CHAMDEPL,
+              PREC_VIS_A_VIS = 0.05,
+           )
+
+IMPR_TABLE(TABLE=TABL_KTO,);
+
+# ---------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1607011.55098,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7503118686,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+# ---------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1606939.95235,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N1710',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7492648475,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N1710',),
+           )
+
+# ---------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1606211.36862,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N77',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7386130711,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K1,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N77',),
+           )
+
+# ---------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1607011.55098,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_KTO,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+# TEST INFORMATIQUE : VALIDATION DE DEFI_FOND_FISS
+FISSM=DEFI_FOND_FISS(MAILLAGE=MA, SYME='NON',
+                     FOND_FISS=_F(GROUP_MA = 'LFF1',),
+                     LEVRE_SUP=_F(  GROUP_MA = 'LEVINFS'),
+                     LEVRE_INF=_F(  GROUP_MA = 'LEVINF1'),
+                    )
+
+TABL_KTM=POST_K1_K2_K3(FOND_FISS = FISSM,
+                       RESULTAT=CHAMDEPL,
+                       PREC_VIS_A_VIS = 0.05,
+           )
+
+IMPR_TABLE(TABLE=TABL_KTM,);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1607011.55098,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_KTM,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+MA = DEFI_GROUP (reuse = MA,
+                    MAILLAGE = MA,
+                    CREA_GROUP_NO =_F( NOM = 'NLFF1',
+                                       OPTION = 'NOEUD_ORDO',
+                                       GROUP_MA = 'LFF1')
+                   )
+
+# Barsoum
+MA=MODI_MAILLAGE(reuse=MA,
+                MAILLAGE=MA,
+                MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                               GROUP_NO_FOND='NLFF1'))
+
+FISSN=DEFI_FOND_FISS(MAILLAGE=MA, SYME='NON',
+                     FOND_FISS=_F(GROUP_MA = 'LFF1',),
+                     LEVRE_SUP=_F(GROUP_MA = 'LEVINFS'),
+                     LEVRE_INF=_F(GROUP_MA = 'LEVINF1'),
+                    )
+TABL_KTN=POST_K1_K2_K3(FOND_FISS = FISSN,
+                       RESULTAT=CHAMDEPL,
+                       PREC_VIS_A_VIS = 0.05,
+           )
+
+IMPR_TABLE(TABLE=TABL_KTN,);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1607011.55098,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_KTN,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+# POST_K1_K2_K3 : VALIDATION GROUP_NO
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+               CREA_GROUP_NO=(_F( NOEUD = ('N49','N56',),
+                                  NOM = 'NOFF1'),
+                              _F( NOEUD = ('N1388','N1346'),
+                                 NOM = 'NOFF2'),),);
+
+TABL_K4=POST_K1_K2_K3(FOND_FISS = FISSN,
+                      RESULTAT = CHAMDEPL,
+                      GROUP_NO = ('NOFF1','NOFF2',),
+                      PREC_VIS_A_VIS = 0.05,
+                   )
+
+IMPR_TABLE(TABLE=TABL_K4)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1607011.55098,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K4,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+# POST_K1_K2_K3 : VALIDATION TYPE_MA = LIBRE
+TABL_K5=POST_K1_K2_K3(FOND_FISS = FISSN,
+                      RESULTAT = CHAMDEPL,
+                      TYPE_MAILLAGE = 'LIBRE',
+                      NB_NOEUD_COUPE = 4,
+                      PREC_VIS_A_VIS = 0.05,
+                      )
+
+IMPR_TABLE(TABLE=TABL_K5,);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1601977.9909364379,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K5,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+# POST_K1_K2_K3/LIBRE : VALIDATION INFORMATIQUE (SENS PROPA.)
+TABL_K6=POST_K1_K2_K3(FOND_FISS = FISSN,
+                      RESULTAT = CHAMDEPL,
+                      TYPE_MAILLAGE = 'LIBRE',
+                      NB_NOEUD_COUPE = 4,
+                      GROUP_NO = ('NOFF1','NOFF2',),
+                      PREC_VIS_A_VIS = 0.05,
+                   )
+
+IMPR_TABLE(TABLE=TABL_K6)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=1601977.9909364379,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K6,
+           FILTRE=_F(NOM_PARA='NOEUD_FOND',
+                     VALE_K='N49',),
+           )
+
+FIN()

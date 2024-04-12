@@ -1,0 +1,162 @@
+# -*- coding: utf-8 -*-
+
+###
+### This file is generated automatically by SALOME v6.4.0 with dump python functionality
+###
+
+import sys
+import salome
+salome.salome_init()
+theStudy = salome.myStudy
+import salome_notebook
+notebook = salome_notebook.notebook
+
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+
+###
+### GEOM component
+###
+
+import GEOM
+from salome.geom import geomBuilder
+geompy = geomBuilder.New(salome.myStudy)
+import math
+import SALOMEDS
+
+NO7 = geompy.MakeVertex(0, 0, 6)
+B = geompy.MakeVertex(5, 2, 0)
+C = geompy.MakeVertex(20, 0, 6)
+D = geompy.MakeVertex(5, -0.1, 0)
+DCB_1 = geompy.MakeBoxTwoPnt(NO7, B)
+DCB_2 = geompy.MakeBoxTwoPnt(C, B)
+DCB_J = geompy.MakeBoxTwoPnt(C, D)
+DCB = geompy.MakePartition([NO7, DCB_1, DCB_2, DCB_J], [], [], [], geompy.ShapeType["SOLID"], 0, [], 0)
+NO7_1 = geompy.CreateGroup(DCB, geompy.ShapeType["VERTEX"])
+geompy.UnionIDs(NO7_1, [8])
+DCB_GB = geompy.CreateGroup(DCB, geompy.ShapeType["EDGE"])
+geompy.UnionIDs(DCB_GB, [6])
+JOINT_B = geompy.CreateGroup(DCB, geompy.ShapeType["FACE"])
+geompy.UnionIDs(JOINT_B, [69])
+JOINT_H = geompy.CreateGroup(DCB, geompy.ShapeType["FACE"])
+geompy.UnionIDs(JOINT_H, [38])
+DCB_1_1 = geompy.CreateGroup(DCB, geompy.ShapeType["SOLID"])
+geompy.UnionIDs(DCB_1_1, [2])
+DCB_2_1 = geompy.CreateGroup(DCB, geompy.ShapeType["SOLID"])
+geompy.UnionIDs(DCB_2_1, [36])
+DCB_J_1 = geompy.CreateGroup(DCB, geompy.ShapeType["SOLID"])
+geompy.UnionIDs(DCB_J_1, [60])
+geompy.addToStudy( B, 'B' )
+geompy.addToStudy( NO7, 'NO7' )
+geompy.addToStudy( C, 'C' )
+geompy.addToStudy( D, 'D' )
+geompy.addToStudy( DCB_1, 'DCB_1' )
+geompy.addToStudy( DCB_2, 'DCB_2' )
+geompy.addToStudy( DCB_J, 'DCB_J' )
+geompy.addToStudy( DCB, 'DCB' )
+geompy.addToStudyInFather( DCB, NO7_1, 'NO7' )
+geompy.addToStudyInFather( DCB, DCB_GB, 'DCB_GB' )
+geompy.addToStudyInFather( DCB, JOINT_B, 'JOINT_B' )
+geompy.addToStudyInFather( DCB, JOINT_H, 'JOINT_H' )
+geompy.addToStudyInFather( DCB, DCB_1_1, 'DCB_1' )
+geompy.addToStudyInFather( DCB, DCB_2_1, 'DCB_2' )
+geompy.addToStudyInFather( DCB, DCB_J_1, 'DCB_J' )
+
+
+###
+### SMESH component
+###
+
+import SMESH, SALOMEDS
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+from salome.StdMeshers import StdMeshersBuilder
+
+DCB_3 = smesh.Mesh(DCB)
+Regular_1D = DCB_3.Segment()
+Max_Size_1 = Regular_1D.MaxSize(0.5)
+Quadrangle_2D = DCB_3.Quadrangle()
+Hexa_3D = smesh.CreateHypothesis('Hexa_3D')
+status = DCB_3.AddHypothesis(Hexa_3D)
+isDone = DCB_3.Compute()
+smeshObj_1 = DCB_3.GroupOnGeom(NO7_1,'NO7',SMESH.NODE)
+NO7_2 = DCB_3.GroupOnGeom(NO7_1,'NO7',SMESH.NODE)
+DCB_GB_1 = DCB_3.GroupOnGeom(DCB_GB,'DCB_GB',SMESH.EDGE)
+DCB_GB_2 = DCB_3.GroupOnGeom(DCB_GB,'DCB_GB',SMESH.NODE)
+JOINT_B_1 = DCB_3.GroupOnGeom(JOINT_B,'JOINT_B',SMESH.FACE)
+JOINT_B_2 = DCB_3.GroupOnGeom(JOINT_B,'JOINT_B',SMESH.NODE)
+JOINT_H_1 = DCB_3.GroupOnGeom(JOINT_H,'JOINT_H',SMESH.FACE)
+JOINT_H_2 = DCB_3.GroupOnGeom(JOINT_H,'JOINT_H',SMESH.NODE)
+DCB_1_2 = DCB_3.GroupOnGeom(DCB_1_1,'DCB_1',SMESH.VOLUME)
+DCB_2_2 = DCB_3.GroupOnGeom(DCB_2_1,'DCB_2',SMESH.VOLUME)
+DCB_J_2 = DCB_3.GroupOnGeom(DCB_J_1,'DCB_J',SMESH.VOLUME)
+DCB_3.RemoveGroup( smeshObj_1 )
+smesh.SetName(DCB_3, 'DCB')
+
+Mesh_b = smesh.Mesh(DCB)
+Regular_1D_1 = Mesh_b.Segment()
+Max_Size_2 = Regular_1D_1.MaxSize(1.5)
+Quadrangle_2D_1 = Mesh_b.Quadrangle()
+status = Mesh_b.AddHypothesis(Hexa_3D)
+isDone = Mesh_b.Compute()
+Max_Size_2.SetLength( 1.2 )
+isDone = Mesh_b.Compute()
+Max_Size_2.SetLength( 1 )
+isDone = Mesh_b.Compute()
+NO7_3 = Mesh_b.GroupOnGeom(NO7_1,'NO7',SMESH.NODE)
+DCB_GB_3 = Mesh_b.GroupOnGeom(DCB_GB,'DCB_GB',SMESH.EDGE)
+smeshObj_2 = Mesh_b.GroupOnGeom(DCB_GB,'DCB_GB',SMESH.NODE)
+JOINT_B_3 = Mesh_b.GroupOnGeom(JOINT_B,'JOINT_B',SMESH.FACE)
+JOINT_B_4 = Mesh_b.GroupOnGeom(JOINT_B,'JOINT_B',SMESH.NODE)
+JOINT_H_3 = Mesh_b.GroupOnGeom(JOINT_H,'JOINT_H',SMESH.FACE)
+JOINT_H_4 = Mesh_b.GroupOnGeom(JOINT_H,'JOINT_H',SMESH.NODE)
+DCB_1_3 = Mesh_b.GroupOnGeom(DCB_1_1,'DCB_1',SMESH.VOLUME)
+DCB_2_3 = Mesh_b.GroupOnGeom(DCB_2_1,'DCB_2',SMESH.VOLUME)
+DCB_J_3 = Mesh_b.GroupOnGeom(DCB_J_1,'DCB_J',SMESH.VOLUME)
+Mesh_b.RemoveGroup( smeshObj_2 )
+smesh.SetName(Mesh_b, 'Mesh_b')
+
+## some objects were removed
+aStudyBuilder = theStudy.NewBuilder()
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_1))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_2))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+## set object names
+smesh.SetName(DCB_3.GetMesh(), 'DCB')
+smesh.SetName(Regular_1D.GetAlgorithm(), 'Regular_1D')
+smesh.SetName(Max_Size_1, 'Max Size_1')
+smesh.SetName(Quadrangle_2D.GetAlgorithm(), 'Quadrangle_2D')
+smesh.SetName(Hexa_3D, 'Hexa_3D')
+smesh.SetName(NO7_2, 'NO7')
+smesh.SetName(DCB_GB_1, 'DCB_GB')
+smesh.SetName(DCB_GB_2, 'DCB_GB')
+smesh.SetName(JOINT_B_1, 'JOINT_B')
+smesh.SetName(JOINT_B_2, 'JOINT_B')
+smesh.SetName(JOINT_H_1, 'JOINT_H')
+smesh.SetName(JOINT_H_2, 'JOINT_H')
+smesh.SetName(DCB_1_2, 'DCB_1')
+smesh.SetName(DCB_2_2, 'DCB_2')
+smesh.SetName(DCB_J_2, 'DCB_J')
+smesh.SetName(Mesh_b.GetMesh(), 'Mesh_b')
+smesh.SetName(Max_Size_2, 'Max Size_2')
+smesh.SetName(NO7_3, 'NO7')
+smesh.SetName(DCB_GB_3, 'DCB_GB')
+smesh.SetName(JOINT_B_3, 'JOINT_B')
+smesh.SetName(JOINT_B_4, 'JOINT_B')
+smesh.SetName(JOINT_H_3, 'JOINT_H')
+smesh.SetName(JOINT_H_4, 'JOINT_H')
+smesh.SetName(DCB_1_3, 'DCB_1')
+smesh.SetName(DCB_2_3, 'DCB_2')
+smesh.SetName(DCB_J_3, 'DCB_J')
+
+
+########Export du maillage au format MMED########
+Mesh_b.ExportMED( r''+ExportPATH+'forma08b.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+
+if salome.sg.hasDesktop():
+  salome.sg.updateObjBrowser(1)

@@ -1,0 +1,949 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+########################################################################
+# DYNAMIQUE TRANSITOIRE SUR BASE MODALE SYSTEME MASSE ET RESSORT
+# INTEGRATION SUR BASE MODALE : 1- SCHEMA FU-DEVOGELAERE
+#                                  PAS DE TEMPS = 1.E-4 S
+#                               2- SCHEMA DELTA T ADAPTATIF
+#                                  PAS DE TEMPS MAX = 1.E-4 S
+#                               3- SCHEMA RUNGE KUTTA ORDRE 2 (3/2)
+#                                  PAS DE TEMPS INITIAL = 1.E-4 S
+#                               4- SCHEMA RUNGE KUTTA ORDRE 4 (5/4)
+#                                  PAS DE TEMPS INITIAL = 1.E-4 S
+# AMORTISSEMENT = (AMORTISSEMENT CRITIQUE)*0.01
+# EXCITATION SINUSOIDALE
+#
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET') ,DEBUG=_F(SDVERI='OUI'));
+
+#
+
+RESSORT0=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+RESSORT=CREA_MAILLAGE(MAILLAGE=RESSORT0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='N2',   NOEUD = 'N2',),
+    ),
+)
+
+MODELE=AFFE_MODELE(   MAILLAGE=RESSORT,AFFE=(
+                        _F(  GROUP_MA='N2',  PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DIS_T'),
+                        _F( MAILLE='AB',   PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DIS_T'))            )
+
+#
+ELEMNT=AFFE_CARA_ELEM(  MODELE=MODELE,DISCRET=(
+                 _F(  MAILLE = 'AB',
+                           CARA = 'K_T_D_L',
+                           VALE = (25.E3,  1., 2., )),
+                 _F(  MAILLE = 'AB',
+                           CARA = 'M_T_L',
+                           VALE = (0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                           0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,)),
+
+                 _F(  MAILLE = 'AB',
+                           CARA = 'A_T_D_L',
+                           VALE = (1.E1, 0., 0., )),
+
+                 _F(  GROUP_MA = 'N2',
+                           CARA = 'M_T_D_N',
+                           VALE = 10.))
+                          )
+
+#
+
+CONDLIM=AFFE_CHAR_MECA(  MODELE=MODELE,
+                          FORCE_NODALE=_F(  NOEUD = 'N2',  FX = 5.),
+                           DDL_IMPO=_F(  NOEUD = 'N1', DX = 0., DY = 0., DZ = 0.)
+                        )
+
+CH =AFFE_CHAR_MECA(MODELE=MODELE,
+                   FORCE_NODALE=_F(  NOEUD = 'N2',  FX = 5.),
+                   )
+
+CL =AFFE_CHAR_MECA(MODELE=MODELE,
+                    DDL_IMPO=_F(  NOEUD = 'N1', DX = 0., DY = 0., DZ = 0.)
+                    )
+
+#
+# DEFINITION DE L'EXCITATION SINUSOIDALE
+# --------------------------------------
+#
+SINOMEGT = FORMULE(VALE='sin(50.*INST) ',
+                   NOM_PARA='INST',)
+#
+
+dt = 0.0001
+LIEXCIT=DEFI_LIST_REEL(    DEBUT=0.,
+                            INTERVALLE=_F(  JUSQU_A = 5. + dt, PAS = dt) )
+
+#
+
+FONCMULT=CALC_FONC_INTERP(   FONCTION=SINOMEGT,
+                                LIST_PARA=LIEXCIT,
+                               NOM_PARA = 'INST',
+                               NOM_RESU='ALPHA',
+#                               INTERPOL='INT',
+                               INTERPOL='LIN',
+                               TITRE='SINUS OMEGA T'
+                            )
+
+L_REELD=( 0.06, 0.13, 0.25, 0.69, 1.01, 2.32, 3.64, 4.96, )
+L_REELV=( 0.04, 0.10, 0.22, 0.66, 1.04, 2.36, 3.68, 5.00, )
+AR_LIST = list(L_REELD) + list(L_REELV)
+AR_LIST.sort()
+
+#
+# 1- SCHEMA FU-DEVOGELAERE
+#
+
+DNPYDEV=DYNA_LINE(TYPE_CALCUL='TRAN',
+                  BASE_CALCUL='GENE',
+                  MODELE=MODELE,
+                  CARA_ELEM=ELEMNT,
+                  SCHEMA_TEMPS=_F(SCHEMA='DEVOGE',PAS_MINI=0.0001, PAS_MAXI=0.0001),
+                  CHARGE = CL,
+                  BANDE_ANALYSE=(.0,10.),
+                  AMORTISSEMENT=_F(TYPE_AMOR='MODAL',AMOR_REDUIT=( 0., 0., 0.01, ),),
+                  EXCIT=_F(CHARGE = CH, FONC_MULT = FONCMULT),
+                  INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 5.,PAS = 0.0001),
+                  BASE_RESU = CO('MODES2'),
+                  RESU_GENE = CO('DNMODEV'),
+                  ENRI_STAT = 'NON',
+                  ARCHIVAGE=_F(INST=AR_LIST, PAS_ARCH=1.E8),
+                 )
+
+#
+# 2- SCHEMA PAS ADAPTATIF
+#
+
+DNPYDAD=DYNA_LINE(TYPE_CALCUL='TRAN',
+                  BASE_CALCUL='GENE',
+                  MODELE=MODELE,
+                  CARA_ELEM=ELEMNT,
+                  SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+# POUR AMELIORER LE TEMPS CPU ON A IMPOSE UN PAS_MAXI PLUS GRAND QUE PAS
+                                             PAS_MAXI = 0.00001,
+                                             NMAX_ITER_PAS=50,),
+                  CHARGE = CL,
+                  BANDE_ANALYSE=(.0,10.),
+                  AMORTISSEMENT=_F(TYPE_AMOR='RAYLEIGH'),
+                  EXCIT=_F(CHARGE = CH, FONC_MULT = SINOMEGT),
+                  INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 5.,PAS = 0.000005),
+                  BASE_RESU = CO('MODES3'),
+                  RESU_GENE = CO('DNMODAD'),
+                  ENRI_STAT = 'NON',
+                  ARCHIVAGE=_F(INST=AR_LIST, PAS_ARCH=1.E8),
+                 )
+
+#
+# 3- SCHEMAS RUNGE-KUTTA
+#
+
+DNPY_54=DYNA_LINE(TYPE_CALCUL='TRAN',
+                  BASE_CALCUL='GENE',
+                  MODELE=MODELE,
+                  CARA_ELEM=ELEMNT,
+                  SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_54',TOLERANCE=1.0E-06, 
+                                             PAS_MAXI = 0.001,),
+                  CHARGE = CL,
+                  BANDE_ANALYSE=(.0,10.),
+                  AMORTISSEMENT=_F(TYPE_AMOR='RAYLEIGH'),
+                  EXCIT=_F(CHARGE = CH, FONC_MULT = SINOMEGT),
+                  INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 5.,PAS = 0.00001),
+                  BASE_RESU = CO('MODES4'),
+                  RESU_GENE = CO('DNMO_54'),
+                  ENRI_STAT = 'NON',
+                  ARCHIVAGE=_F(INST=AR_LIST, PAS_ARCH=1.E8),
+                 )
+
+DNPY_32=DYNA_LINE(TYPE_CALCUL='TRAN',
+                  BASE_CALCUL='GENE',
+                  MODELE=MODELE,
+                  CARA_ELEM=ELEMNT,
+                  SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_32',TOLERANCE=1.0E-06, 
+                                             PAS_MAXI = 0.001,),
+                  CHARGE = CL,
+                  BANDE_ANALYSE=(.0,10.),
+                  AMORTISSEMENT=_F(TYPE_AMOR='RAYLEIGH'),
+                  EXCIT=_F(CHARGE = CH, FONC_MULT = SINOMEGT),
+                  INCREMENT=_F(INST_INIT = 0.,  INST_FIN = 5.,PAS = 0.00001),
+                  BASE_RESU = CO('MODES5'),
+                  RESU_GENE = CO('DNMO_32'),
+                  ENRI_STAT = 'NON',
+                  ARCHIVAGE=_F(INST=AR_LIST, PAS_ARCH=1.E8),
+                 )
+
+#
+# DEFINITION DES INSTANTS DE CALCUL DE LA SOLUTION
+#-------------------------------------------------
+LISTRD=DEFI_LIST_REEL(  VALE=L_REELD )
+LISTRV=DEFI_LIST_REEL(  VALE=L_REELV )
+
+#
+# RETOUR DANS L'ESPACE PHYSIQUE
+# -----------------------------
+
+DTRAFUD=REST_GENE_PHYS(  RESU_GENE=DNMODEV,    NOM_CHAM='DEPL',
+                            LIST_INST=LISTRD,   INTERPOL='NON'    )
+
+DTRAADD=REST_GENE_PHYS(  RESU_GENE=DNMODAD,    NOM_CHAM='DEPL',
+                            LIST_INST=LISTRD,   INTERPOL='NON'    )
+
+DTR_54D=REST_GENE_PHYS(  RESU_GENE=DNMO_54,    NOM_CHAM='DEPL',
+                            LIST_INST=LISTRD,   INTERPOL='NON'    )
+
+DTR_32D=REST_GENE_PHYS(  RESU_GENE=DNMO_32,    NOM_CHAM='DEPL',
+                            LIST_INST=LISTRD,   INTERPOL='NON'    )
+
+DTRAFUV=REST_GENE_PHYS(  RESU_GENE=DNMODEV,    NOM_CHAM='VITE',
+                            LIST_INST=LISTRV,   INTERPOL='NON'    )
+
+DTRAADV=REST_GENE_PHYS(  RESU_GENE=DNMODAD,    NOM_CHAM='VITE',
+                            LIST_INST=LISTRV,   INTERPOL='NON'    )
+
+DTR_54V=REST_GENE_PHYS(  RESU_GENE=DNMO_54,    NOM_CHAM='VITE',
+                            LIST_INST=LISTRV,   INTERPOL='NON'    )
+
+DTR_32V=REST_GENE_PHYS(  RESU_GENE=DNMO_32,    NOM_CHAM='VITE',
+                            LIST_INST=LISTRV,   INTERPOL='NON'    )
+
+#
+# TESTS PAR RAPPORT A SOLUTION DE REFERENCE
+#
+#
+#DEPLACEMENTS
+#
+TEST_RESU(RESU=_F(INST=0.059999999999999998,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000306501923761,
+                  VALE_REFE=3.0650300000000002E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.13,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000593805996587,
+                  VALE_REFE=-5.9380700000000002E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.25,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00117871717996,
+                  VALE_REFE=-1.1787200000000001E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.68999999999999995,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00291787141788,
+                  VALE_REFE=2.9178799999999999E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.01,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00383900338305,
+                  VALE_REFE=-3.8390099999999999E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3199999999999998,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00668205099725,
+                  VALE_REFE=6.6820600000000001E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6400000000000001,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00819819301747,
+                  VALE_REFE=-8.1982099999999992E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=4.96,
+                  RESULTAT=DTRAFUD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00900844772522,
+                  VALE_REFE=9.0084699999999993E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.059999999999999998,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000306502669283,
+                  VALE_REFE=3.065030E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.13,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000593805882508,
+                  VALE_REFE=-5.9380700000000002E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.25,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00117871964713,
+                  VALE_REFE=-1.178720E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.68999999999999995,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00291787197958,
+                  VALE_REFE=2.9178799999999999E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.01,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00383900874942,
+                  VALE_REFE=-3.8390099999999999E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3199999999999998,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00668206670041,
+                  VALE_REFE=6.6820600000000001E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6400000000000001,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00819821787559,
+                  VALE_REFE=-8.19821E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=4.96,
+                  RESULTAT=DTRAADD,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0090084667637,
+                  VALE_REFE=9.00847E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.059999999999999998,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00030650256228,
+                  VALE_REFE=3.065030000E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.13,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000593807233511,
+                  VALE_REFE=-5.938070000E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.25,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00117871963504,
+                  VALE_REFE=-1.1787200E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.68999999999999995,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00291787749276,
+                  VALE_REFE=2.91788E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.01,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00383901137329,
+                  VALE_REFE=-3.83901E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3199999999999998,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00668206489109,
+                  VALE_REFE=6.682060E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6400000000000001,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00819821005094,
+                  VALE_REFE=-8.19821E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=4.96,
+                  RESULTAT=DTR_54D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00900846643223,
+                  VALE_REFE=9.00847E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.059999999999999998,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.000306501879448,
+                  VALE_REFE=3.0650300E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.13,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.000593804435781,
+                  VALE_REFE=-5.938070E-4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.25,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00117871032818,
+                  VALE_REFE=-1.1787200E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.68999999999999995,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0029178170172,
+                  VALE_REFE=2.91788E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.01,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.00383889668805,
+                  VALE_REFE=-3.83901E-3,
+                  CRITERE='ABSOLU',
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3199999999999998,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00668166639015,
+                  VALE_REFE=6.682060E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6400000000000001,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0081975346556,
+                  VALE_REFE=-8.19821E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=4.96,
+                  RESULTAT=DTR_32D,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00900757987686,
+                  VALE_REFE=9.00847E-03,
+                  REFERENCE='ANALYTIQUE',
+                  CRITERE='RELATIF',
+                  PRECISION=5.E-3,),
+          )
+
+#
+#VITESSES
+#
+TEST_RESU(RESU=_F(INST=0.04,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00895995043357,
+                  VALE_REFE=8.9599699999999994E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.1,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0233270733816,
+                  VALE_REFE=-0.0233271,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.22,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0520588938919,
+                  VALE_REFE=-0.052059000000000001,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.140500094838,
+                  VALE_REFE=0.1405,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.04,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.199888536205,
+                  VALE_REFE=0.19988900000000001,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3599999999999999,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.339932494123,
+                  VALE_REFE=-0.33993299999999999,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.68,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.410584253162,
+                  VALE_REFE=0.41058499999999998,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=5.0,
+                  RESULTAT=DTRAFUV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.445307666232,
+                  VALE_REFE=-0.44530900000000001,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.040000000000000001,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.0089598856957,
+                  VALE_REFE=8.9599699999999994E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.1,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0233271963141,
+                  VALE_REFE=-0.0233271,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.22,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.052058092328,
+                  VALE_REFE=-0.052059,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.140500330516,
+                  VALE_REFE=0.14050,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.04,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.199892367555,
+                  VALE_REFE=0.19988900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3599999999999999,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.3399485498,
+                  VALE_REFE=-0.339933,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6800000000000002,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.410594322504,
+                  VALE_REFE=0.410585,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=5.0,
+                  RESULTAT=DTRAADV,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.445331934833,
+                  VALE_REFE=-0.445309,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=7.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.040000000000000001,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00895996909917,
+                  VALE_REFE=8.95997E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.10000000000000001,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0233271219744,
+                  VALE_REFE=-0.0233271,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.22,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0520590023245,
+                  VALE_REFE=-0.05205900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.140500387359,
+                  VALE_REFE=0.140500,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.04,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.199888952232,
+                  VALE_REFE=0.19988900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3599999999999999,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.339933200922,
+                  VALE_REFE=-0.339933,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6800000000000002,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.41058510625,
+                  VALE_REFE=0.410585,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=5.0,
+                  RESULTAT=DTR_54V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.445308591004,
+                  VALE_REFE=-0.44530900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.040000000000000001,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.00895995751029,
+                  VALE_REFE=8.95997E-3,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.10000000000000001,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0233270471439,
+                  VALE_REFE=-0.0233271,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.22,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.0520586493693,
+                  VALE_REFE=-0.0520590,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.66000000000000003,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.140497595145,
+                  VALE_REFE=0.14050000,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=1.04,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.199882882968,
+                  VALE_REFE=0.19988900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=2.3599999999999999,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.339912535345,
+                  VALE_REFE=-0.339933,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.6800000000000002,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.410550930116,
+                  VALE_REFE=0.410585,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+
+TEST_RESU(RESU=_F(INST=5.0,
+                  RESULTAT=DTR_32V,
+                  NOM_CHAM='VITE',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.445264491621,
+                  VALE_REFE=-0.44530900,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=5.E-3,),
+          )
+
+#--- FIN test DYNA_LINE 
+FIN( )
+#

@@ -1,0 +1,419 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#       CAS_TEST SSNV209S: 3D, ELEMENTS QUAD8, METHODE XFEM
+
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),
+      IGNORE_ALARM=('MODELE1_63'))
+
+#......................................................
+#  CALCUL TEST ELEMENTS FINIS XFEM ET CONTACT 3D QUAD8
+#  PLAQUE EN CONTACT FROTTANT SUR BATI RIGIDE
+#  AVEC XFEM
+#......................................................
+#
+# Cas 3D
+# La fissure passe au milieu des mailles, le decoupage
+# est active.
+#
+#----------------------------------------------
+#                MAILLAGE
+#----------------------------------------------
+
+MAILLAG0=LIRE_MAILLAGE(FORMAT='MED',VERI_MAIL=_F(VERIF='OUI'));
+
+MAILLAG1=CREA_MAILLAGE(MAILLAGE=MAILLAG0,
+                      CREA_POI1 =(_F(NOM_GROUP_MA = 'RESSORT1',
+                                     NOEUD = 'N230'),
+                                  _F(NOM_GROUP_MA = 'RESSORT2',
+                                     NOEUD = 'N111'),),);
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO= (_F(GROUP_MA='VOLU',),
+                                    _F(GROUP_MA='LIG3',),
+                                    _F(GROUP_MA='SUR1',
+                                       NOM='NSUR1',),
+                                    _F(NOM='P4P',
+                                       OPTION='ENV_SPHERE',
+                                       POINT=(0.0,0.04,0.001,),
+                                       RAYON=1.E-4,
+                                       PRECISION=1.E-4,),
+                                    _F(NOM='P3P',
+                                       OPTION='ENV_SPHERE',
+                                       POINT=(0.08,0.04,0.001,),
+                                       RAYON=1.E-4,
+                                       PRECISION=1.E-4,),
+                                    # PLAN DE SYMETRIE EN X
+                                    _F(OPTION='PLAN',
+                                       NOM='BLOCAX',
+                                       POINT=(0.04,0.,0.),
+                                       VECT_NORMALE=(1.,0.,0.),
+                                       PRECISION=1.E-3,),
+                                    # BATI
+                                    _F(OPTION='PLAN',
+                                       NOM='BATI',
+                                       POINT=(0.,-0.0092307692307692307692307692/2.,0.),
+                                       VECT_NORMALE=(0.,1.,0.),
+                                       PRECISION=1.E-2,),
+                                    ),
+                    INFO=1);
+
+MAILLAG2=CREA_MAILLAGE(MAILLAGE=MAILLAG1,
+                       LINE_QUAD=_F(TOUT='OUI',),
+                       );
+
+y0=0.005
+
+MAILLAG2=DEFI_GROUP(reuse =MAILLAG2,
+                    MAILLAGE=MAILLAG2,
+                    CREA_GROUP_NO=(_F(NOM='NFISSU',
+                                      OPTION='PLAN',
+                                      POINT=(0.,0.,0.),
+                                      VECT_NORMALE=(0.,1.,0.),
+                                      PRECISION=1.2E-3),
+                                  # Set des noeuds au dessus de la fissure
+                                   _F(NOM='NFISSH',
+                                      OPTION='PLAN',
+                                      POINT=(0.,y0,0.),
+                                      VECT_NORMALE=(0.,1.,0.),
+                                      PRECISION=3.0E-3),
+                                   ),
+                    INFO=1);
+
+
+MAILLAG2=MODI_MAILLAGE(reuse=MAILLAG2,
+                       MAILLAGE=MAILLAG2,
+                       ORIE_PEAU_3D=(_F(GROUP_MA = 'SUR2',),
+                                     _F(GROUP_MA = 'SUR3',),
+                                     _F(GROUP_MA = 'SUR4',),),);
+
+#----------------------------------------------
+#                   MODELE ET FISSURE
+#----------------------------------------------
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG2,
+                     AFFE=(_F(GROUP_MA = 'RESSORT1',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = 'DIS_T'),
+                           _F(GROUP_MA = 'RESSORT2',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = 'DIS_T'),
+                           _F(GROUP_MA=('SUR3',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),
+                           _F(GROUP_MA=('SUR1',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),
+                           _F(GROUP_MA=('VOLU',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),
+                           _F(GROUP_MA=('SUR2',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),
+                           _F(GROUP_MA=('SUR4',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),),
+                              INFO=1);
+
+cara_ele=AFFE_CARA_ELEM(MODELE=MODELEIN,
+                        DISCRET=(_F(GROUP_MA='RESSORT1',
+                                    REPERE='GLOBAL',
+                                    CARA='K_T_D_N',
+                                    VALE=(0.,1.E3,0.)),
+                                    _F(GROUP_MA='RESSORT2',
+                                       REPERE='GLOBAL',
+                                       CARA='K_T_D_N',
+                                       VALE=(0.,1.E3,0.)),),);
+
+# FORME ANALYTIQUE POUR LA FISSURE
+
+LN = FORMULE(VALE='Y',
+             NOM_PARA=['X', 'Y', 'Z'],)
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MAILLAG2,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    DEFI_FISS=_F(FONC_LN=LN),)
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=FISS,
+                         CONTACT='STANDARD',
+                         INFO=1,
+                         );
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=1.3E11
+nu=0.2
+rho=7800.
+
+CHABNO=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                  OPERATION='EXTR',
+                  FISSURE=FISS,
+                  NOM_CHAM='LNNO');
+
+MATVAR=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=rho));
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG2,
+                       MODELE=MODELEK,
+                       AFFE=(_F(GROUP_MA=('VOLU'),
+                                MATER=MATVAR,),),
+                       AFFE_VARC=_F(NOM_VARC='NEUT1',CHAM_GD=CHABNO),
+                       );
+
+#----------------------------------------------
+#                   CHARGEMENTS
+#----------------------------------------------
+
+CTXFEM = DEFI_CONTACT(MODELE         = MODELEK,
+                      FORMULATION    = 'XFEM',
+                      FROTTEMENT     = 'COULOMB',
+                      ITER_CONT_MAXI = 5,
+                      REAC_GEOM      = 'CONTROLE',
+                      NB_ITER_GEOM   = 2,ELIM_ARETE     = 'ELIM',
+                      ZONE=(
+                            _F(
+                               FISS_MAIT      = FISS,
+                               INTEGRATION    = 'NOEUD',
+                               CONTACT_INIT   = 'OUI',
+                               COULOMB        = 1.,
+                               ALGO_CONT      = 'STANDARD',
+                               COEF_CONT      = 100000.,
+                               ALGO_FROT      = 'STANDARD',
+                               COEF_FROT      = 100000.,
+                             ),
+                         ),
+                   );
+
+H_plus=-2
+
+CH=AFFE_CHAR_MECA(MODELE=MODELEK,
+                  DDL_IMPO=(
+#                            ENCASTREMENT DU BAS
+                             _F(GROUP_NO='BATI',
+                                    DX=0.,
+                                    DY=0.,
+                                    DZ=0.,),
+#                            BLOCAGE CORPS RIGIDES
+                             _F(GROUP_NO=('P3','P4','P4P','P3P',),
+                                DZ=0.,),
+                             _F(GROUP_NO=('BLOCAX'),
+                                DX=0.,),
+                             ),
+                  LIAISON_GROUP=(
+                                 # --- DX ---
+                                 _F(GROUP_NO_1 = ('NFISSH'),
+                                    GROUP_NO_2 = ('NFISSH'),
+                                    SANS_GROUP_NO = 'BLOCAX',
+                                    DDL_1      = ('DX', 'H1X'),
+                                    DDL_2      = ('DX', 'H1X'),
+                                    COEF_MULT_1= (0., 0.),
+                                    COEF_MULT_2= (1., H_plus),
+                                    COEF_IMPO= 0.),
+                                 # --- DY ---
+                                 _F(GROUP_NO_1 = ('NFISSH'),
+                                    GROUP_NO_2 = ('NFISSH'),
+                                    SANS_GROUP_NO = 'BLOCAX',
+                                    DDL_1      = ('DY', 'H1Y'),
+                                    DDL_2      = ('DY', 'H1Y'),
+                                    COEF_MULT_1= (0., 0.),
+                                    COEF_MULT_2= (1., H_plus),
+                                    COEF_IMPO= 0.),
+                                 # --- DZ ---
+                                 _F(GROUP_NO_1 = ('NFISSH'),
+                                    GROUP_NO_2 = ('NFISSH'),
+                                    DDL_1      = ('DZ', 'H1Z'),
+                                    DDL_2      = ('DZ', 'H1Z'),
+                                    COEF_MULT_1= (0., 0.),
+                                    COEF_MULT_2= (1., H_plus),
+                                    COEF_IMPO= 0.),
+                                ),
+                  );
+
+CHMECA=AFFE_CHAR_MECA(MODELE=MODELEK,
+#                     FORCE IMPOSEE EN A
+                      PRES_REP=(_F(GROUP_MA = 'SUR3',
+                                   PRES = 5.E07,),),);
+
+def pr(y) :
+   if y  < -1.E-15:  return 0.E07
+   if y  > +1.E-15:  return 15.E7
+   return 0.
+
+FCTPRES = FORMULE(VALE='pr(Y)',
+                  pr=pr,
+                  NOM_PARA=['X', 'Y'],)
+
+CHAF=AFFE_CHAR_MECA_F(MODELE=MODELEK,
+                      PRES_REP=_F(GROUP_MA = ('SUR2','SUR4',),
+                                  PRES=FCTPRES,),);
+
+#----------------------------------------------
+#                   RESOLUTION
+#----------------------------------------------
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    PROL_GAUCHE='LINEAIRE',
+                    PROL_DROITE='LINEAIRE',
+                    VALE=(0.0,0.0,1.0,1.0,),)
+
+L_INS1=DEFI_LIST_REEL(DEBUT=0.0,INTERVALLE=_F(JUSQU_A=1.0,NOMBRE=1,),);
+
+UTOT1=STAT_NON_LINE(MODELE=MODELEK,
+                    CHAM_MATER=CHAMPMA1,
+                    CARA_ELEM=cara_ele,
+                    EXCIT=(
+                           _F(CHARGE=CHMECA,
+                              FONC_MULT=RAMPE),
+                          _F(CHARGE=CH,
+                             FONC_MULT=RAMPE),
+                           _F(CHARGE=CHAF,
+                              FONC_MULT=RAMPE),
+                           ),
+                    CONTACT  = CTXFEM,
+                    COMPORTEMENT=_F(RELATION='ELAS',
+                                 GROUP_MA='VOLU',),
+                    INCREMENT=_F(LIST_INST=L_INS1,
+                                 INST_FIN=1.0,),
+                    CONVERGENCE=_F(ARRET='OUI',
+                                   ITER_GLOB_MAXI=50,
+                                   RESI_GLOB_RELA=1.E-6),
+                    SOLVEUR=_F(METHODE='MUMPS',
+                               PCENT_PIVOT=30,
+                               NPREC=-1,
+                               RESI_RELA=-1.),
+                    NEWTON=_F(REAC_ITER=1,),
+                    ARCHIVAGE=_F(CHAM_EXCLU='VARI_ELGA',),
+                    );
+
+#-----------------------------------------------------------
+#             POST-TRAITEMENT POUR LA VISUALISATION
+#-----------------------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(
+                       MODELE        = MODELEK,)
+
+MA_XFEM=DEFI_GROUP(reuse=MA_XFEM,
+                   MAILLAGE=MA_XFEM,
+                   CREA_GROUP_NO=(_F(OPTION='ENV_SPHERE',
+                                     NOM='PPA',
+                                     POINT=(0.,0.,0.),
+                                     RAYON=0.000001,
+                                     PRECISION=0.00001,),
+                                  _F(OPTION='ENV_SPHERE',
+                                     NOM='PPC',
+                                     POINT=(0.005,0.,0.),
+                                     RAYON=0.000001,
+                                     PRECISION=0.00001,),
+                                   ),
+                   INFO=1);
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D',),)
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,
+                        )
+
+#----------------------------------------------
+#                   POST RELEVE
+#----------------------------------------------
+
+DEP_NFI=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                GROUP_NO=('NFISSU',),
+                                RESULTAT=RES_XFEM,
+                                NOM_CHAM='DEPL',
+                                INST=1.0,
+                                TOUT_CMP='OUI',
+                                OPERATION='EXTRACTION',),);
+
+DEP_NFI = CALC_TABLE(reuse = DEP_NFI,
+                     TABLE = DEP_NFI,
+                     ACTION = (_F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = 'N[^M]',),),);
+
+DEP_NFI = CALC_TABLE(reuse = DEP_NFI,
+                     TABLE = DEP_NFI,
+                     ACTION=_F(OPERATION='TRI',
+                               NOM_PARA='COOR_X',
+                               ORDRE='CROISSANT',),);
+
+IMPR_TABLE(TABLE=DEP_NFI,);
+
+DEP_PPA=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                GROUP_NO=('PPA',),
+                                RESULTAT=RES_XFEM,
+                                NOM_CHAM='DEPL',
+                                INST=1.0,
+                                TOUT_CMP='OUI',
+                                OPERATION='EXTRACTION',),);
+DEP_PPA = CALC_TABLE(reuse = DEP_PPA,
+                     TABLE = DEP_PPA,
+                     ACTION = (_F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = 'N[^M]',),),);
+
+DEP_PPC=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                GROUP_NO=('PPC',),
+                                RESULTAT=RES_XFEM,
+                                NOM_CHAM='DEPL',
+                                INST=1.0,
+                                TOUT_CMP='OUI',
+                                OPERATION='EXTRACTION',),);
+DEP_PPC = CALC_TABLE(reuse = DEP_PPC,
+                     TABLE = DEP_PPC,
+                     ACTION = (_F(OPERATION = 'FILTRE',
+                                  NOM_PARA  = 'NOEUD',
+                                  CRIT_COMP = 'REGEXP',
+                                  VALE_K    = 'N[^M]',),),);
+
+#----------------------------------------------
+#                   TEST TABLE
+#----------------------------------------------
+
+# fortes tolerances : maillage plus grossier pour temps de calcul
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=3.E-2,
+           VALE_CALC=2.99548026064E-05,
+           VALE_REFE=3.06971229984E-05,
+           NOM_PARA='DX',
+           TYPE_TEST='MAX',
+           TABLE=DEP_PPA,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=5.E-2,
+           VALE_CALC=2.3742271698E-05,
+           VALE_REFE=2.47360419196E-05,
+           NOM_PARA='DX',
+           TYPE_TEST='MAX',
+           TABLE=DEP_PPC,)
+
+FIN();

@@ -1,0 +1,165 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+jeu = 2.9E-4
+Ko = 4.E+6 #/ 5
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F( SDVERI     = 'OUI',),
+     )
+
+maill=LIRE_MAILLAGE(UNITE=20, FORMAT='MED',
+                    INFO=1,);
+
+modele=AFFE_MODELE(MAILLAGE=maill,
+                   INFO=1,
+                   AFFE=( _F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='POU_D_E',),
+                   ),);
+
+mat=DEFI_MATERIAU(ELAS=_F(E=2.056E+11,
+                          NU=0.3,
+                          RHO=8357.0,),);
+
+affemat=AFFE_MATERIAU(MAILLAGE=maill,
+                      AFFE=_F(TOUT='OUI',
+                              MATER=mat,),);
+
+carel=AFFE_CARA_ELEM(MODELE=modele,
+                     POUTRE=_F(GROUP_MA='Tube',
+                               SECTION='CERCLE',
+                               CARA=('R','EP',),
+                               VALE=(11.11E-3, 1.27E-3,),),
+                    );
+
+carm=AFFE_CHAR_CINE(MODELE=modele,
+                   MECA_IMPO=(_F(GROUP_NO='BaseL',
+                                 DX=0., DY=0., DZ=0.,
+                                 DRX=0., DRY=0., DRZ=0.,),
+                              _F(GROUP_NO='BaseR',
+                                 DX=0., DY=0., DZ=0.,
+                                 DRX=0., DRY=0., DRZ=0.,),
+                             )
+                    );
+
+K_ELEM=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                      MODELE=modele,
+                      CHAM_MATER=affemat,
+                      CARA_ELEM=carel,);
+
+M_ELEM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=modele,
+                      CHAM_MATER=affemat,
+                      CARA_ELEM=carel,);
+
+NUM=NUME_DDL(MATR_RIGI=K_ELEM,);
+
+
+K_ASSE=ASSE_MATRICE(MATR_ELEM=K_ELEM,
+                    NUME_DDL=NUM,
+                    CHAR_CINE=carm,);
+
+M_ASSE=ASSE_MATRICE(MATR_ELEM=M_ELEM,
+                    NUME_DDL=NUM,
+                    CHAR_CINE=carm,);
+
+MODES=CALC_MODES(MATR_RIGI=K_ASSE,
+                 CALC_FREQ=_F(FREQ=(3.,7.,),
+                              ),
+                 OPTION='BANDE',
+                 SOLVEUR=_F(METHODE='MUMPS',
+                            ),
+                 MATR_MASS=M_ASSE,
+                 SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                  ),
+                 )
+
+ndiscr=10
+decal=0.1*jeu
+
+hu=1
+hf=201
+eta=2.5e-5
+nbranch=10
+
+MNL=MODE_NON_LINE(ETAT_INIT=_F(MODE_LINE = MODES,NUME_ORDRE = 1,
+                               DIR_EVOLUTION =-1,),
+                  MATR_RIGI=K_ASSE,
+                  MATR_MASS=M_ASSE,
+                  RESOLUTION=_F(METHODE='EHMAN',
+                                NB_HARM_LINE=hu,
+                                NB_HARM_NONL=hf,
+                                NB_PAS_MAN=ndiscr,
+                                NB_BRANCHE=nbranch,
+                                CRIT_ORDR_BIFURCATION=5, 
+                                RESI_RELA_BIFURCATION=1.E-10,
+                                ),
+                  CHOC=(
+                      _F(OBSTACLE='CERCLE',
+                         GROUP_NO='ObsL',
+                         NOM_CMP=('DX','DY'),
+                         JEU=jeu,
+                         RIGI_NOR=Ko,
+                         PARA_REGUL=eta,
+                         ORIG_OBST=(0.,decal,0.),
+                         ),
+                      _F(OBSTACLE='CERCLE',
+                         GROUP_NO='ObsR',
+                         NOM_CMP=('DX','DY'),
+                         JEU=jeu,
+                         RIGI_NOR=Ko,
+                         PARA_REGUL=eta,
+                         ORIG_OBST=(0.,decal,0.),
+                         ),
+                      ),
+         ) 
+
+
+#IMPR_TABLE(TABLE = MNL)
+
+ENRGC=RECU_FONCTION(TABLE=MNL,
+                    PARA_X='FREQUENCE',
+                    PARA_Y='ENERGIE',
+                    INTERPOL=('LOG',),
+                    )
+FREQC=RECU_FONCTION(TABLE=MNL,
+                    PARA_Y='FREQUENCE',
+                    PARA_X='ENERGIE',
+                    INTERPOL=('LOG',),
+                    )
+
+##valeurs calculees sur machine locale
+fi=5.25698E+00  
+ei=7.83624E-05
+
+TEST_FONCTION(VALEUR=_F(VALE_PARA=fi,
+                       VALE_CALC=ei,
+                       REFERENCE='AUTRE_ASTER',
+                       VALE_REFE=ei,
+                       FONCTION=ENRGC,),
+             )
+
+TEST_FONCTION(VALEUR=_F(VALE_PARA=ei,
+                       VALE_CALC=fi,
+                       REFERENCE='AUTRE_ASTER',
+                       VALE_REFE=fi,
+                       FONCTION=FREQC,),
+             )
+FIN()

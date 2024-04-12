@@ -1,0 +1,188 @@
+# -*- coding: utf-8 -*-
+
+###
+### This file is generated automatically by SALOME v6.3.0 with dump python functionality
+###
+
+import sys
+import salome
+salome.salome_init()
+theStudy = salome.myStudy
+import salome_notebook
+notebook = salome_notebook.notebook
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+
+###
+### GEOM component
+###
+
+import GEOM
+from salome.geom import geomBuilder
+geompy = geomBuilder.New(salome.myStudy)
+import math
+import SALOMEDS
+
+
+geomObj_1 = geompy.MakeSketcher("Sketcher:F 0.000000 0.000000:TT 3.000000 0.000000:TT 4.000000 0.000000:TT 5.000000 0.000000:TT 5.000000 1.000000:TT 5.000000 2.000000:TT 5.000000 4.000000:TT 5.000000 5.000000:TT 0.000000 5.000000:TT 0.000000 4.000000:WW", [0, 0, 0, 0, 0, 1, 1, 0, 0])
+geomObj_2 = geompy.MakeFaceWires([geomObj_1], 1)
+geomObj_3 = geompy.GetSubShape(geomObj_2, [7])
+geomObj_4 = geompy.GetSubShape(geomObj_2, [15])
+geomObj_5 = geompy.MakeLineTwoPnt(geomObj_3, geomObj_4)
+geomObj_6 = geompy.GetSubShape(geomObj_2, [21])
+geomObj_7 = geompy.MakeLineTwoPnt(geomObj_3, geomObj_6)
+geomObj_8 = geompy.GetSubShape(geomObj_2, [13])
+geomObj_9 = geompy.GetSubShape(geomObj_2, [17])
+Wire_1 = geompy.MakeSketcher("Sketcher:F 0.000000 0.000000:TT 3.000000 0.000000:TT 4.000000 0.000000:TT 5.000000 0.000000:TT 5.000000 1.000000:TT 5.000000 2.000000:TT 5.000000 4.000000:TT 5.000000 5.000000:TT 0.000000 5.000000:TT 0.000000 4.000000:WW", [0, 0, 0, 0, 0, 1, 1, 0, 0])
+Wire_1_vertex_20 = geompy.GetSubShape(Wire_1, [20])
+Wire_1_vertex_8 = geompy.GetSubShape(Wire_1, [8])
+Line_1 = geompy.MakeLineTwoPnt(Wire_1_vertex_20, Wire_1_vertex_8)
+Wire_1_vertex_14 = geompy.GetSubShape(Wire_1, [14])
+Line_2 = geompy.MakeLineTwoPnt(Wire_1_vertex_20, Wire_1_vertex_14)
+Wire_1_vertex_6 = geompy.GetSubShape(Wire_1, [6])
+Wire_1_vertex_10 = geompy.GetSubShape(Wire_1, [10])
+Circle_1 = geompy.MakeCircleCenter2Pnt(Wire_1_vertex_8, Wire_1_vertex_6, Wire_1_vertex_10)
+Wire_1_vertex_4 = geompy.GetSubShape(Wire_1, [4])
+Wire_1_vertex_12 = geompy.GetSubShape(Wire_1, [12])
+Arc_1 = geompy.MakeArcCenter(Wire_1_vertex_8, Wire_1_vertex_4, Wire_1_vertex_12,False)
+Face_1 = geompy.MakeFaceWires([Wire_1], 1)
+Partition_1 = geompy.MakePartition([Face_1], [Line_1], [], [], geompy.ShapeType["FACE"], 0, [], 0)
+Partition_2 = geompy.MakePartition([Partition_1], [Line_2], [], [], geompy.ShapeType["FACE"], 0, [], 0)
+Partition_3 = geompy.MakePartition([Partition_2], [Arc_1], [], [], geompy.ShapeType["FACE"], 0, [], 0)
+Face_2 = geompy.MakeFaceWires([Circle_1], 1)
+Cut_1 = geompy.MakeCut(Partition_3, Face_2)
+[Edge_1,Edge_2,Edge_3,Edge_4,Edge_5,Edge_6,Edge_7,Edge_8,Edge_9,Edge_10,Edge_11,Edge_12,Edge_13,Edge_14,Edge_15] = geompy.ExtractShapes(Cut_1, geompy.ShapeType["EDGE"], True)
+geompy.addToStudy( Wire_1, 'Wire_1' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_20, 'Wire_1:vertex_20' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_8, 'Wire_1:vertex_8' )
+geompy.addToStudy( Line_1, 'Line_1' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_14, 'Wire_1:vertex_14' )
+geompy.addToStudy( Line_2, 'Line_2' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_6, 'Wire_1:vertex_6' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_10, 'Wire_1:vertex_10' )
+geompy.addToStudy( Circle_1, 'Circle_1' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_4, 'Wire_1:vertex_4' )
+geompy.addToStudyInFather( Wire_1, Wire_1_vertex_12, 'Wire_1:vertex_12' )
+geompy.addToStudy( Arc_1, 'Arc_1' )
+geompy.addToStudy( Face_1, 'Face_1' )
+geompy.addToStudy( Partition_1, 'Partition_1' )
+geompy.addToStudy( Partition_2, 'Partition_2' )
+geompy.addToStudy( Partition_3, 'Partition_3' )
+geompy.addToStudy( Face_2, 'Face_2' )
+geompy.addToStudy( Cut_1, 'Cut_1' )
+geompy.addToStudyInFather( Cut_1, Edge_1, 'Edge_1' )
+geompy.addToStudyInFather( Cut_1, Edge_2, 'Edge_2' )
+geompy.addToStudyInFather( Cut_1, Edge_3, 'Edge_3' )
+geompy.addToStudyInFather( Cut_1, Edge_4, 'Edge_4' )
+geompy.addToStudyInFather( Cut_1, Edge_5, 'Edge_5' )
+geompy.addToStudyInFather( Cut_1, Edge_6, 'Edge_6' )
+geompy.addToStudyInFather( Cut_1, Edge_7, 'Edge_7' )
+geompy.addToStudyInFather( Cut_1, Edge_8, 'Edge_8' )
+geompy.addToStudyInFather( Cut_1, Edge_9, 'Edge_9' )
+geompy.addToStudyInFather( Cut_1, Edge_10, 'Edge_10' )
+geompy.addToStudyInFather( Cut_1, Edge_11, 'Edge_11' )
+geompy.addToStudyInFather( Cut_1, Edge_12, 'Edge_12' )
+geompy.addToStudyInFather( Cut_1, Edge_13, 'Edge_13' )
+geompy.addToStudyInFather( Cut_1, Edge_14, 'Edge_14' )
+geompy.addToStudyInFather( Cut_1, Edge_15, 'Edge_15' )
+
+
+###
+### SMESH component
+###
+
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+from salome.StdMeshers import StdMeshersBuilder
+
+aMeasurements = smesh.CreateMeasurements()
+
+Mesh_1 = smesh.Mesh(Cut_1)
+Regular_1D = Mesh_1.Segment()
+Nb_Segments_1 = Regular_1D.NumberOfSegments(10)
+Nb_Segments_1.SetDistrType( 0 )
+Quadrangle_2D = Mesh_1.Quadrangle()
+isDone = Mesh_1.Compute()
+Regular_1D_1 = Mesh_1.Segment(geom=Edge_2)
+Nb_Segments_2 = Regular_1D_1.NumberOfSegments(4)
+Nb_Segments_2.SetDistrType( 0 )
+Regular_1D_2 = Mesh_1.Segment(geom=Edge_15)
+status = Mesh_1.AddHypothesis(Nb_Segments_2,Edge_15)
+Regular_1D_3 = Mesh_1.Segment(geom=Edge_8)
+Nb_Segments_3 = Regular_1D_3.NumberOfSegments(10,5.62,[  ])
+Regular_1D_4 = Mesh_1.Segment(geom=Edge_9)
+Nb_Segments_4 = Regular_1D_4.NumberOfSegments(12,5.62,[  ])
+Regular_1D_5 = Mesh_1.Segment(geom=Edge_13)
+Nb_Segments_5 = Regular_1D_5.NumberOfSegments(12,5.62,[  ])
+isDone = Mesh_1.Compute()
+Nb_Segments_3.SetNumberOfSegments( 12 )
+Nb_Segments_3.SetDistrType( 1 )
+Nb_Segments_3.SetScaleFactor( 5.62 )
+Nb_Segments_3.SetReversedEdges( [  ] )
+isDone = Mesh_1.Compute()
+Nb_Segments_5.SetNumberOfSegments( 12 )
+Nb_Segments_5.SetDistrType( 1 )
+Nb_Segments_5.SetScaleFactor( 5.62 )
+Nb_Segments_5.SetReversedEdges( [  ] )
+Nb_Segments_3.SetNumberOfSegments( 12 )
+Nb_Segments_3.SetDistrType( 1 )
+Nb_Segments_3.SetScaleFactor( 0.17794 )
+Nb_Segments_3.SetReversedEdges( [  ] )
+Nb_Segments_4.SetNumberOfSegments( 12 )
+Nb_Segments_4.SetDistrType( 1 )
+Nb_Segments_4.SetScaleFactor( 0.17794 )
+Nb_Segments_4.SetReversedEdges( [  ] )
+isDone = Mesh_1.Compute()
+Mesh_1.ExtrusionSweepObject2D( Mesh_1, SMESH.DirStruct( SMESH.PointStruct ( 0, 0, -0.1 )), 1 )
+#
+LFG_FACE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'LFG_FACE' )
+nbAdd = LFG_FACE.Add( [ 1405, 1411, 1417, 1423, 1429, 1435, 1441, 1447, 1453, 1466 ] )
+LEF_FACE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'LEF_FACE' )
+nbAdd = LEF_FACE.Add( [ 1456, 1459, 1462, 1467 ] )
+LDE_FACE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'LDE_FACE' )
+nbAdd = LDE_FACE.Add( [ 1240, 1244, 1247, 1250, 1253, 1256, 1259, 1262, 1265, 1268 ] )
+LCD_FACE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'LCD_FACE' )
+nbAdd = LCD_FACE.Add( [ 1131, 1143, 1155, 1167, 1179, 1191, 1203, 1215, 1227, 1241 ] )
+LBC_FACE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'LBC_FACE' )
+nbAdd = LBC_FACE.Add( [ 1113, 1283, 1295, 1307, 1319, 1331, 1343, 1355, 1367, 1379, 1391, 1479 ] )
+#
+isDone = Mesh_1.Compute()
+#
+smesh.SetName(Mesh_1, 'Mesh_1')
+
+SubMesh_1 = Regular_1D_1.GetSubMesh()
+SubMesh_2 = Regular_1D_2.GetSubMesh()
+SubMesh_3 = Regular_1D_3.GetSubMesh()
+SubMesh_4 = Regular_1D_4.GetSubMesh()
+SubMesh_5 = Regular_1D_5.GetSubMesh()
+
+## set object names
+smesh.SetName(Mesh_1.GetMesh(), 'Mesh_1')
+smesh.SetName(Regular_1D.GetAlgorithm(), 'Regular_1D')
+smesh.SetName(Nb_Segments_1, 'Nb. Segments_1')
+smesh.SetName(Quadrangle_2D.GetAlgorithm(), 'Quadrangle_2D')
+smesh.SetName(Nb_Segments_2, 'Nb. Segments_2')
+smesh.SetName(Nb_Segments_3, 'Nb. Segments_3')
+smesh.SetName(Nb_Segments_4, 'Nb. Segments_4')
+smesh.SetName(Nb_Segments_5, 'Nb. Segments_5')
+smesh.SetName(LCD_FACE, 'LCD_FACE')
+smesh.SetName(LBC_FACE, 'LBC_FACE')
+smesh.SetName(LDE_FACE, 'LDE_FACE')
+smesh.SetName(LEF_FACE, 'LEF_FACE')
+smesh.SetName(LFG_FACE, 'LFG_FACE')
+smesh.SetName(SubMesh_1, 'SubMesh_1')
+smesh.SetName(SubMesh_2, 'SubMesh_2')
+smesh.SetName(SubMesh_3, 'SubMesh_3')
+smesh.SetName(SubMesh_4, 'SubMesh_4')
+smesh.SetName(SubMesh_5, 'SubMesh_5')
+
+
+########Export du maillage au format MMED########
+Mesh_1.ExportMED( r''+ExportPATH+'ssnp123c.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+if salome.sg.hasDesktop():
+  salome.sg.updateObjBrowser(1)

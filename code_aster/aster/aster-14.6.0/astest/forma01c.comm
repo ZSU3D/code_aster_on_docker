@@ -1,0 +1,178 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: josselin.delmas at edf.fr
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+      DEBUG=_F(SDVERI='OUI'))
+
+MA=DEFI_MATERIAU(ELAS=_F(E=200000.0,
+                         NU=0.3,),);
+nbadap = 3
+MAIL=[None]*(nbadap+1)
+MODE=[None]*(nbadap+1)
+MATE=[None]*(nbadap+1)
+CHAR=[None]*(nbadap+1)
+RESU=[None]*(nbadap+1)
+
+MAIL[1]=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAILTR=LIRE_MAILLAGE(FORMAT='MED',UNITE=21,);
+
+for k in range(1,nbadap+1):
+
+  MODE[k]=AFFE_MODELE(MAILLAGE=MAIL[k],
+                      AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='C_PLAN',),);
+
+  if k==1:
+
+    MAIL[k]=MODI_MAILLAGE(reuse =MAIL[k],
+                          MAILLAGE=MAIL[k],
+                          ORIE_PEAU_2D=_F(GROUP_MA='haut',),);
+
+  MATE[k]=AFFE_MATERIAU(MAILLAGE=MAIL[k],
+                        AFFE=_F(TOUT='OUI',
+                                MATER=MA,),);
+
+  CHAR[k]=AFFE_CHAR_MECA(MODELE=MODE[k],
+                         DDL_IMPO=(_F(GROUP_MA='bas',
+                                      DY=0.0,),
+                                   _F(GROUP_MA='gauche',
+                                      DX=0.0,),),
+                          PRES_REP=_F(GROUP_MA='haut',
+                                      PRES=-100.0,),);
+
+  RESU[k]=MECA_STATIQUE(MODELE=MODE[k],
+                        CHAM_MATER=MATE[k],
+                        EXCIT=_F(CHARGE=CHAR[k],),);
+
+  RESU[k]=CALC_CHAMP(reuse =RESU[k],
+                     RESULTAT=RESU[k],
+                     CONTRAINTE=('SIGM_ELNO','SIGM_NOEU',),
+                     CRITERES=('SIEQ_ELNO','SIEQ_ELGA','SIEQ_NOEU'),);
+
+  nomfic="REPE_OUT/mesh_%d.med" % k
+
+  DEFI_FICHIER (UNITE=80+k,FICHIER=nomfic, TYPE='BINARY'
+                );
+
+  IMPR_RESU(FORMAT='MED',
+            UNITE=80+k,
+            RESU=_F(MAILLAGE=MAIL[k],
+                    RESULTAT=RESU[k],
+                    NOM_CHAM=('DEPL','SIGM_NOEU','SIEQ_NOEU','SIEQ_ELGA',),),);
+
+  DEFI_FICHIER(ACTION='LIBERER',UNITE=80+k,)
+
+  RESU[k]=CALC_ERREUR(reuse =RESU[k],
+                      RESULTAT=RESU[k],
+                      OPTION='ERME_ELEM',);
+
+  if k == nbadap :
+    break
+
+  MAIL[k+1]=CO('MAIL_%d' % (k+1))
+
+  MACR_ADAP_MAIL(MAILLAGE_N=MAIL[k],
+                 MAILLAGE_NP1=MAIL[k+1],
+                 ADAPTATION='RAFFINEMENT',
+                 RESULTAT_N=RESU[k],
+                 MAILLAGE_FRONTIERE=MAILTR,
+                 GROUP_MA_FRONT='trou',
+                 NOM_CHAM='ERME_ELEM',
+                 NOM_CMP='ERREST',
+                 CRIT_RAFF_PE=0.1,);
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='B',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_1,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=308.289244482,
+                  VALE_REFE=303.0,
+                  CRITERE='RELATIF',
+                  PRECISION=0.05,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_1,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-88.3181823676,
+                  VALE_REFE=-100.0,
+                  CRITERE='RELATIF',
+                  PRECISION=0.15,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='B',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_2,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=307.080134798,
+                  VALE_REFE=303.0,
+                  CRITERE='RELATIF',
+                  PRECISION=1.5E-2,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_2,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-97.3070666417,
+                  VALE_REFE=-100.0,
+                  CRITERE='RELATIF',
+                  PRECISION=0.03,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='B',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_3,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=305.800913961,
+                  VALE_REFE=303.0,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU_3,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-98.6177148224,
+                  VALE_REFE=-100.0,
+                  CRITERE='RELATIF',
+                  PRECISION=0.02,),
+          )
+
+FIN();

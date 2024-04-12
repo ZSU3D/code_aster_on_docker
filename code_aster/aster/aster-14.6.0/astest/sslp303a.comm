@@ -1,0 +1,172 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+#
+# DEFINITION DES GROUPES DE NOEUDS
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=(_F(GROUP_MA='ENCAST',),
+                               _F(GROUP_MA='SURF',),
+                               _F(GROUP_MA='BORD_CH',),),);
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_MA=_F(NOM='VOLUM',
+                                 OPTION='APPUI',
+                                 GROUP_NO='SURF',
+                                 TYPE_APPUI='AU_MOINS_UN',),);
+
+#
+# DEFINITION DU MODELE
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),);
+
+#
+# DEFINITION DU MATERIAU
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.1E11,
+                            NU=0.3,
+                            RHO=7950,),);
+
+#
+# ATTRIBUTION DU MATERIAU
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=ACIER,),);
+
+#
+# DEFINITION DES CONDITIONS AUX LIMITES ET CHARGEMENTS
+#
+# CALCUL DE LA MAISSE TESTE DEFI_GROUP : APPUI
+
+MASTOT=POST_ELEM(MASS_INER=_F(TOUT='OUI',),
+                 MODELE=MODELE,
+                 CHAM_MATER=CHMAT,);
+
+MASVOL=POST_ELEM(MASS_INER=_F(GROUP_MA='VOLUM',),
+                 MODELE=MODELE,
+                 CHAM_MATER=CHMAT,);
+
+# LA VALEUR DE LA MASSE EN VOLUM EST UN TIERS DE LA MASSE TOTALE
+
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+           VALE_CALC=39.75,
+           VALE_REFE=39.75,
+           NOM_PARA='MASSE',
+           TABLE=MASVOL,)
+
+CHARGT=AFFE_CHAR_MECA(MODELE=MODELE,
+                      DDL_IMPO=_F(GROUP_NO='ENCAST',
+                                  DX=0.0,
+                                  DY=0.0,),
+                      FORCE_CONTOUR=_F(GROUP_MA='BORD_CH',
+                                       FY=1.7E5,),);
+
+#
+# RESOLUTION
+
+DEF=MECA_STATIQUE(MODELE=MODELE,
+                  CHAM_MATER=CHMAT,
+                  SOLVEUR=_F(METHODE='MULT_FRONT'),
+                  EXCIT=_F(CHARGE=CHARGT,),
+                  INFO=1,);
+
+#
+# RECUPERATION DU CHAMP DE DEPLACEMENTS
+
+U=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+             OPERATION='EXTR',
+             RESULTAT=DEF,
+             NOM_CHAM='DEPL',
+             NUME_ORDRE=1,);
+
+#
+# CALCUL DES CONTRAINTES
+
+DEF=CALC_CHAMP(reuse=DEF,RESULTAT=DEF,CONTRAINTE=('SIGM_ELNO'))
+
+
+#
+# TEST_RESU DU DEPLACEMENT
+#
+
+# LES DIMENSIONS DE LA STRUCTURE CONDUISENT A UNE MATRICE MAL CONDITIONNEE
+# LA SOLUTION DU CALCUL EST DONC OBTENUE AVEC UNE PRECISION DE L'ORDRE DE 1.0E-5
+# C'EST POURQUOI ON N'EXIGE PAS UNE PRECISION INFERIEURE POUR LES VALEURS DE NON REGRESSION
+TEST_RESU(CHAM_NO=(_F(NOEUD='N455',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=4.0E-3,
+                      CHAM_GD=U,
+                      VALE_CALC=0.129464726961,
+                      VALE_REFE=0.129,
+                      ),
+                   _F(NOEUD='N756',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=4.0E-3,
+                      CHAM_GD=U,
+                      VALE_CALC=0.129464724923,
+                      VALE_REFE=0.129,
+                      ),
+                   ),
+          )
+
+#
+# TEST DE LA CONTRAINTE
+#
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DEF,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=208629878.365,
+                   VALE_REFE=2.04000000E8,
+                   PRECISION=0.023,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DEF,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='N201',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=101507576.776,
+                   VALE_REFE=1.02000000E8,
+                   PRECISION=5.0E-3,
+                   MAILLE='M101',),
+                ),
+          )
+
+FIN();
+
+#

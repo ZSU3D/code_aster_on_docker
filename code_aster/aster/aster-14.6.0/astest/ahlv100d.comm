@@ -1,0 +1,175 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#  GUIDE D'ONDE A SORTIE ANECHOIQUE CAS 2D
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+F=500.
+
+
+MAYA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                     UNITE=19,
+                     )
+
+AIR=DEFI_MATERIAU( FLUIDE=_F( RHO = 1.3, CELE_R = 343.))
+
+CHAMPMAT=AFFE_MATERIAU(  MAILLAGE=MAYA,
+                                 AFFE=_F( TOUT = 'OUI',  MATER = AIR) )
+
+COLONNE=AFFE_MODELE(  MAILLAGE=MAYA,     
+                            AFFE=_F( TOUT = 'OUI', MODELISATION = '2D_FLUIDE',
+                                     PHENOMENE = 'MECANIQUE') )
+
+#  --- AFIN DE TESTER UN CHARGEMENT AVEC UNE FONCTION ON DECOMPOSE
+#      VNOR = 0.014 = 0.010 (AFFE_CHAR_MECA) + 0.004 (AFFE_CHAR_MECA_F)
+
+CHARMECA=AFFE_CHAR_MECA(      MODELE=COLONNE,
+                 VITE_FACE=_F( GROUP_MA = 'ENTREE', VNOR = 0.010))
+
+#  --- CHARGEMENT IDENTIQUE MAIS AVEC UNE FONCTION ---
+
+VNOR=DEFI_FONCTION(  NOM_PARA='X',  VALE=(0., 0.004, 1., 0.004,) )
+
+CHARMECF=AFFE_CHAR_MECA_F(      MODELE=COLONNE,
+                 VITE_FACE=_F( GROUP_MA = 'ENTREE', VNOR = VNOR))
+
+IMPEMECA=AFFE_CHAR_MECA(      MODELE=COLONNE,
+                  IMPE_FACE=_F( GROUP_MA = 'SORTIE', IMPE = 445.9))
+
+MATELE_K=CALC_MATR_ELEM(   MODELE=COLONNE,  CHAM_MATER=CHAMPMAT,
+                                OPTION='RIGI_MECA', CHARGE=CHARMECA)
+
+MATELE_M=CALC_MATR_ELEM(   MODELE=COLONNE,  CHAM_MATER=CHAMPMAT,
+                                OPTION='MASS_MECA', CHARGE=CHARMECA)
+
+MATELE_I=CALC_MATR_ELEM(   MODELE=COLONNE,  CHAM_MATER=CHAMPMAT,
+                                OPTION='IMPE_MECA',   CHARGE=IMPEMECA )
+
+VECTELEM=CALC_VECT_ELEM(   OPTION='CHAR_MECA',  CHAM_MATER=CHAMPMAT,
+                                CHARGE=(CHARMECA, CHARMECF,))
+
+NUM=NUME_DDL(  MATR_RIGI=MATELE_K )
+
+MATASK=ASSE_MATRICE(  MATR_ELEM=MATELE_K,   NUME_DDL=NUM )
+
+MATASM=ASSE_MATRICE(  MATR_ELEM=MATELE_M,   NUME_DDL=NUM )
+
+MATASI=ASSE_MATRICE(  MATR_ELEM=MATELE_I,   NUME_DDL=NUM )
+
+VECTASS=ASSE_VECTEUR(  VECT_ELEM=VECTELEM,   NUME_DDL=NUM )
+
+DYNAHARM=DYNA_VIBRA(TYPE_CALCUL='HARM',BASE_CALCUL='PHYS',
+                             MATR_MASS=MATASM,  MATR_RIGI=MATASK,
+                             MATR_IMPE_PHI=MATASI,  NOM_CHAM='DEPL',
+                             FREQ=F,
+                             EXCIT=_F( VECT_ASSE = VECTASS,  COEF_MULT = 1.,
+                                    PUIS_PULS = 1,  PHAS_DEG = 90.))
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   VALE_REFE_C=('RI', -6.2426000000000004, 0.0),
+                   VALE_CALC_C=('RI', -6.2425131799044, -3.1801951571261E-04),
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N1',
+                   NOM_CMP='PRES',),
+                _F(NUME_ORDRE=1,
+                   VALE_REFE_C=('RI', -6.2426000000000004, 0.0),
+                   VALE_CALC_C=('RI', -6.2425131799044, -3.1801951570972E-04),
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N3',
+                   NOM_CMP='PRES',),
+                _F(NUME_ORDRE=1,
+                   VALE_REFE_C=('RI', 6.0236799999999997, 1.6387),
+                   VALE_CALC_C=('RI', 6.0221719417122, 1.6440674807698),
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N151',
+                   NOM_CMP='PRES',),
+                _F(NUME_ORDRE=1,
+                   VALE_REFE_C=('RI', 6.0236799999999997, 1.6387),
+                   VALE_CALC_C=('RI', 6.0221719417122, 1.6440674807698),
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N153',
+                   NOM_CMP='PRES',),
+                ),
+          )
+
+DYNAHARM=CALC_CHAMP(reuse=DYNAHARM,
+                    TOUT_ORDRE='OUI',
+                    RESULTAT=DYNAHARM,
+                    ACOUSTIQUE='PRME_ELNO',);
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='PRME_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='DB',
+                   VALE_REFE=109.8867,
+                   VALE_CALC=109.88658945712,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='PRME_ELNO',
+                   NOEUD='N3',
+                   NOM_CMP='DB',
+                   VALE_REFE=109.8867,
+                   VALE_CALC=109.88658945712,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='PRME_ELNO',
+                   NOEUD='N151',
+                   NOM_CMP='DB',
+                   VALE_REFE=109.8867,
+                   VALE_CALC=109.88664984656,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M29',),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='PRME_ELNO',
+                   NOEUD='N153',
+                   NOM_CMP='DB',
+                   VALE_REFE=109.8867,
+                   VALE_CALC=109.88664984656,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M29',),
+                ),
+          )
+
+FIN()
+#

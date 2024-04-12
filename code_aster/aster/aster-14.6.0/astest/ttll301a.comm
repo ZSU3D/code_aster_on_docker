@@ -1,0 +1,124 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#       (SINUSOIDE)
+#
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET')
+      )
+
+#
+# LECTURE DU MAILLAGE ----------------------------------------------
+#
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+# DEFINITION DES CHARGEMENTS ET DU MATERIAU ------------------------
+#
+
+TIMPO=DEFI_FONCTION(  
+       NOM_RESU='TEMP',  NOM_PARA='INST',
+       VALE=( 0.E0,     0.E0,
+             40.E0,     0.E0,)
+            )
+
+SI = FORMULE(VALE='100.*sin(pi*INST/40.)',
+             NOM_PARA='INST',)
+
+TFIN=40.E0
+
+DPAS=0.5E0
+
+LIS1=DEFI_LIST_REEL(    DEBUT=0.,
+                          INTERVALLE=_F( JUSQU_A = TFIN, PAS = DPAS))
+
+TSINUS=CALC_FONC_INTERP(   FONCTION=SI,  LIST_PARA=LIS1,
+NOM_PARA='INST',
+                                NOM_RESU='TSIN',
+#                                INTERPOL='INT'
+                                INTERPOL='LIN' )
+
+MATE=DEFI_MATERIAU( THER=_F(  LAMBDA = 35.0, RHO_CP = 3.1716E6))
+
+# AFFECTATIONS: MATERIAU, MODELE, CHARGEMENT ----------------------
+
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAIL,
+                 AFFE=_F(  TOUT = 'OUI', MATER = MATE) )
+
+MOTH=AFFE_MODELE(  MAILLAGE=MAIL,
+               AFFE=_F( TOUT = 'OUI', MODELISATION = 'PLAN',
+                                   PHENOMENE = 'THERMIQUE'))
+
+CHTH=AFFE_CHAR_THER_F(MODELE=MOTH,TEMP_IMPO=(
+          _F( NOEUD = ('N1', 'N2', ), TEMP = TIMPO),
+          _F( NOEUD = ('N21','N22',), TEMP = TSINUS))
+         )
+
+# DEFINITION DE LA STATEGIE DE CALCUL -----------------------------
+
+
+LR8=DEFI_LIST_REEL(        DEBUT=0.,INTERVALLE=(
+       _F(    JUSQU_A = 1.0,   NOMBRE = 5),
+       _F(    JUSQU_A = 10.0,   NOMBRE = 18),
+       _F(    JUSQU_A = 20.0,   NOMBRE = 20),
+       _F(    JUSQU_A = 30.0,   NOMBRE = 20),
+       _F(    JUSQU_A = 35.0,   NOMBRE = 10))
+                  )
+
+# RESOLUTION ------------------------------------------------------
+
+
+TEMPE=THER_LINEAIRE(        MODELE=MOTH,
+           ETAT_INIT=_F( VALE = 0.E0),
+           INCREMENT=_F( LIST_INST = LR8),
+             CHAM_MATER=CHMAT, EXCIT=_F( CHARGE = CHTH)
+             )
+
+# ANALYSE DES RESULTATS -------------------------------------------
+
+TEMPE=CALC_ERREUR(reuse=TEMPE,
+                  RESULTAT=TEMPE,
+                  TOUT='OUI',
+                  OPTION=('ERTH_ELEM',),);
+
+TEMP_32=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_TEMP_R',
+NOM_CHAM='TEMP', RESULTAT=TEMPE,
+            INST=32.0 )
+
+TEST_RESU(CHAM_NO=(_F(NOEUD='N17',
+                      NOM_CMP='TEMP',
+                      PRECISION=0.035000000000000003,
+                      CHAM_GD=TEMP_32,
+                      VALE_CALC=37.873832135,
+                      VALE_REFE=36.600000000000001,
+                      REFERENCE='NON_DEFINI',),
+                   _F(NOEUD='N18',
+                      NOM_CMP='TEMP',
+                      PRECISION=0.02,
+                      CHAM_GD=TEMP_32,
+                      VALE_CALC=36.979229204,
+                      VALE_REFE=36.600000000000001,
+                      REFERENCE='NON_DEFINI',),
+                   ),
+          )
+
+FIN()

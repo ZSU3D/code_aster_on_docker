@@ -1,0 +1,227 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#           VALIDATION ELEMENTAIRE SUR UN ELEMENT AXIS DE LA LOI DE
+#               COMPORTEMENT DES ACIERS 300 SOUS IRRADIATIONS
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MODEL=AFFE_MODELE(
+   MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='AXIS',),
+)
+
+# DEFINITION DU MATERIAU
+YOUNG1 = FORMULE(VALE='210000.0 - 30.0*TEMP',
+                 NOM_PARA='TEMP',)
+NU1 = FORMULE(VALE='0.30 + 5.0E-05*TEMP',
+              NOM_PARA='TEMP',)
+ALPHA1 = FORMULE(VALE='1.0E-06*(15.0+2.0E-03*TEMP)',
+                 NOM_PARA='TEMP',)
+R021 = FORMULE(VALE='(270.0-0.65*TEMP+0.001*TEMP**2)*3.0*(2.0-exp(-IRRA/3.0))',
+               NOM_PARA=['TEMP', 'IRRA'],)
+
+RM1 = FORMULE(VALE="""R021(TEMP,IRRA)+((600.0-1.5*TEMP+0.010*TEMP**2)
+            -(270.00-0.65*TEMP+0.001*TEMP**2))*0.50*
+            (0.25-0.10*(1.0-exp(-IRRA/10.0))+exp(-IRRA/3.0))""",
+              R021=R021,
+              NOM_PARA=['TEMP', 'IRRA'],)
+
+EU1 = FORMULE(VALE='log(1.0+((50.0-0.15*TEMP+0.0007*TEMP**2)*0.25*exp(-IRRA/2.0))*1.0E-02)',
+              NOM_PARA=['TEMP', 'IRRA'],)
+
+
+TEM=DEFI_LIST_REEL(DEBUT=0.,
+   INTERVALLE=_F(JUSQU_A=400.0, PAS=40.0,),
+)
+TEI=DEFI_LIST_REEL(VALE=(0.));
+
+# POUR GAGNER DU TEMPS ON INTERPOLE LES VALEURS SUR UNE LISTE DE TEMPERATURE
+YOUNG=CALC_FONC_INTERP(FONCTION=YOUNG1,LIST_PARA=TEM,
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+)
+NU=CALC_FONC_INTERP(FONCTION=NU1,LIST_PARA=TEM,
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+)
+ALPHA=CALC_FONC_INTERP(FONCTION=ALPHA1,LIST_PARA=TEM,
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+)
+
+R02=CALC_FONC_INTERP(FONCTION=R021,
+   LIST_PARA=TEM,NOM_PARA='TEMP',
+   LIST_PARA_FONC=TEI,NOM_PARA_FONC='IRRA',
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+);
+RM=CALC_FONC_INTERP(FONCTION=RM1,
+   LIST_PARA=TEM,NOM_PARA='TEMP',
+   LIST_PARA_FONC=TEI,NOM_PARA_FONC='IRRA',
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+);
+EU=CALC_FONC_INTERP(FONCTION=EU1,
+   LIST_PARA=TEM,NOM_PARA='TEMP',
+   LIST_PARA_FONC=TEI,NOM_PARA_FONC='IRRA',
+   PROL_GAUCHE='CONSTANT',
+   PROL_DROITE='CONSTANT',
+);
+
+
+# ON NE VALIDE DANS CE CAST TEST QUE LA PARTIE PLASTIQUE
+# D OU LE CHOIX DES PARAMETRES MATERIAUX
+UN   =DEFI_CONSTANTE(VALE = 1.0)
+ZERO =DEFI_CONSTANTE(VALE = 0.0)
+
+ACIER=DEFI_MATERIAU(
+   ELAS_FO=_F(E=YOUNG, NU=NU, ALPHA=ALPHA, TEMP_DEF_ALPHA=0.0 ),
+   IRRAD3M=_F(R02=R02, RM=RM, EPSI_U=EU, AI0=0.0, ETAI_S=1.E50, RG0=0.0,
+              ZETA_F=UN, ALPHA=0.0, PHI0=0.0, KAPPA=1.0, ZETA_G=ZERO,)
+)
+
+IRRA=CREA_CHAMP(
+   TYPE_CHAM='NOEU_IRRA_R',
+   OPERATION='AFFE',
+   MAILLAGE=MAIL,
+   AFFE=_F( TOUT='OUI', NOM_CMP='IRRA', VALE=0.0),
+);
+
+CL=AFFE_CHAR_MECA(
+   MODELE=MODEL,
+   DDL_IMPO=(
+      _F(GROUP_MA='AD', DX=0.,),
+      _F(GROUP_MA=('AB','DC'), DY=0.,),
+   ),
+)
+
+# RAMPE DE TEMPERATURE
+TEMP_0=CREA_CHAMP(
+   TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=0.,),
+)
+
+TEMP_1=CREA_CHAMP(
+   TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=MAIL,
+   AFFE=_F( TOUT='OUI', NOM_CMP='TEMP', VALE=400.0,),
+)
+
+LISTE=DEFI_LIST_REEL(
+   DEBUT=0.0,
+   INTERVALLE=_F(JUSQU_A=400.,NOMBRE=40,),
+)
+
+TEMPE=CREA_RESU(
+   OPERATION='AFFE',
+   TYPE_RESU='EVOL_THER',
+   NOM_CHAM='TEMP',
+   AFFE=(
+      _F(CHAM_GD=TEMP_0, INST=0.0,),
+      _F(CHAM_GD=TEMP_1, INST=400.0,),
+   ),
+)
+
+CHMAT=AFFE_MATERIAU(
+   MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', MATER=ACIER),
+   AFFE_VARC=(
+      _F(TOUT='OUI', CHAM_GD=IRRA, NOM_VARC='IRRA',),
+      _F(TOUT='OUI', EVOL=TEMPE,    NOM_VARC='TEMP',VALE_REF=0.0),
+   ),
+)
+
+# EN ABSENCE D IRRADIATION, LA CONVERGENCE DE LA SOLUTION DE LA LOI DE COMPORTEMENT
+# EST BEAUCOUP PLUS FACILE. INUTILE EN GENERAL DE REDECOUPER LOCALEMENT
+STAT=STAT_NON_LINE(
+   MODELE=MODEL,
+   CHAM_MATER=CHMAT,
+   EXCIT=_F(CHARGE=CL,),
+   CONVERGENCE=_F(ITER_GLOB_MAXI=15, RESI_GLOB_MAXI=1.0E-07),
+   COMPORTEMENT=_F(RELATION='IRRAD3M',ITER_INTE_MAXI=60,RESI_INTE_RELA=1.0E-09,),
+   NEWTON=_F(MATRICE='TANGENTE',REAC_ITER=1,REAC_INCR=1),
+   INCREMENT=_F(LIST_INST=LISTE),
+)
+
+
+
+
+# CONTRAINTES, DEPLACEMENT ET VARIABLES INTERNES
+TEST_RESU(RESU=_F(INST=200.0,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=-540.00000009755,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=400.0,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=-615.14344769815,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=200.0,
+                  RESULTAT=STAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC= 4.1170588232568E-03,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=400.0,
+                  RESULTAT=STAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N2',
+                  NOM_CMP='DX',
+                  VALE_CALC= 8.9207786839013E-03,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=200.0,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='VARI_ELGA',
+                  NOM_CMP='V1',
+                  VALE_CALC= 4.3294117628888E-04,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=400.0,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='VARI_ELGA',
+                  NOM_CMP='V1',
+                  VALE_CALC= 3.2132149106324E-03,
+                  MAILLE='M1',
+                  ),
+          )
+
+FIN();

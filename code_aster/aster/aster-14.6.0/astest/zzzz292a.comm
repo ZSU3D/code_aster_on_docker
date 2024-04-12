@@ -1,0 +1,174 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=(_F(GROUP_MA='S_HAUT',),
+                               _F(GROUP_MA='S_BAS',),),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.0E+11,
+                            NU=0.3,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(GROUP_MA=('HAUT','BAS',),
+                            MATER=ACIER,),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('HAUT','BAS',),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+BLOQ=AFFE_CHAR_CINE(MODELE=MO,
+                    MECA_IMPO=(_F(GROUP_MA='SYMETRIE',
+                                  DY=0,),
+                               _F(GROUP_NO=('A','C',),
+                                  DX=0,
+                                  DY=0,),),);
+
+DEPL=AFFE_CHAR_CINE(MODELE=MO,
+                    MECA_IMPO=(_F(GROUP_MA='F_HAUT',
+                                  DZ=-1,),
+                               _F(GROUP_MA='F_BAS',
+                                  DZ=1,),),);
+
+CONT=DEFI_CONTACT(MODELE         = MO,
+                  FORMULATION    = 'CONTINUE',
+                  FROTTEMENT     = 'COULOMB',
+                    ALGO_RESO_CONT = 'NEWTON',
+                    ALGO_RESO_GEOM = 'NEWTON',
+                    ALGO_RESO_FROT = 'NEWTON',
+                    #ADAPT_COEF     = 'OUI',
+                  ZONE=_F(GROUP_MA_MAIT='S_BAS',
+                          GROUP_MA_ESCL='S_HAUT',
+                          CONTACT_INIT='INTERPENETRE',
+                          COULOMB=0.3,
+                          SANS_GROUP_NO_FR='L_HAUT',
+                          DIRE_EXCL_FROT=(0,1,0,),),);
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,0,
+                          1,0.1,
+                          ),);
+
+TEMPS=DEFI_LIST_REEL(DEBUT=0,
+                     INTERVALLE=_F(JUSQU_A=1,
+                                   NOMBRE=1,),);
+
+RESU=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=BLOQ,),
+                          _F(CHARGE=DEPL,
+                             FONC_MULT=RAMPE,),),
+                   CONTACT=CONT,
+                   COMPORTEMENT=_F(RELATION='ELAS',),
+                   INCREMENT=_F(LIST_INST=TEMPS,),
+                   NEWTON=_F(REAC_ITER=1,),
+                   CONVERGENCE=_F(),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',
+                              RENUM='MDA',),
+                   INFO=1,);
+
+RESU=CALC_CHAMP(reuse =RESU,
+             RESULTAT=RESU,
+             FORCE='FORC_NODA',);
+
+IMPR_RESU(FORMAT="RESULTAT",UNITE=8,
+          RESU=(_F(RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO=('K','B','D',),),
+                _F(RESULTAT=RESU,
+                   NOM_CHAM='FORC_NODA',
+                   GROUP_NO='K',),),);
+
+IMPR_RESU(FORMAT='GMSH',
+          RESU=(_F(RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   TYPE_CHAM='VECT_3D',
+                   NOM_CMP=('DX','DY','DZ',),),
+                _F(RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   TYPE_CHAM='VECT_3D',
+                   NOM_CMP=('LAGS_C','LAGS_F1','LAGS_F2',),),),);
+
+TEST_RESU(RESU=(_F(GROUP_NO='K',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.030000000,
+                   VALE_REFE=0.029999999999999999,),
+                _F(GROUP_NO='K',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.030000000,
+                   VALE_REFE=0.029999999999999999,),
+                _F(GROUP_NO='K',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC= 2.07445861E-17,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.030000000,
+                   VALE_REFE=0.029999999999999999,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(GROUP_NO='K',
+                   INST=1.0,
+                   RESULTAT=RESU,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.0,
+                   CRITERE='ABSOLU',),
+                _F(GROUP_NO='K',
+                   INST=1.0,
+                   RESULTAT=RESU,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.0,
+                   CRITERE='ABSOLU',),
+                _F(GROUP_NO='K',
+                   INST=1.0,
+                   RESULTAT=RESU,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-1.250000000E9,),
+                ),
+          )
+
+FIN();

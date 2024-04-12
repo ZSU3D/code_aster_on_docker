@@ -1,0 +1,599 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+# CORRESPOND A MU=3846154 PA
+mu = 3846154 ;
+E  = 1.E+7  ;
+nu = 0.3    ;
+
+# PROPRIETES ANELASTIQUES (CAMCLAY)
+PATM   = 1.E+2 ;  # PRESSION DE REFERENCE
+                  # (QUI NE SERT PAS A GRAND-CHOSE EN REALITE)
+M      = 1.02  ;  # CORRESPOND A UN ANGLE DE FROTTEMENT DE 25.85 DEGRES
+pcr    = 500. ;
+pcr    = 0.0   ;
+n      = 0.5   ;  # POROSITE
+kapa   = 0.05  ;
+lambd  = 0.2   ;
+
+# DEFINITION DES CONSTANTES
+sigma_0 = 1.02E+5 ;        # PRESSION D'APPUI SUR LA SURFACE LIBRE
+rhol    = 1000. ;          # MASSE VOLUMIQUE LIQUIDE
+rhos    = 1900. ;          # MASSE VOLUMIQUE SOLIDE
+rho_sat = rhos+rhol*n ;    # MASSE VOLUMIQUE DU MATERIAU HOMOGENEISE
+K0_ela  = nu/(1.-nu)  ;    # COEFFICIENT DE POUSSEE DES TERRES
+                           # (SOL ELASTIQUE LINEAIRE ET ISOTROPE)
+K0_nc   = 1. - sin(25.85); # COEFFICIENT DE POUSSEE DES TERRES
+                           # (ARGILE NORMALEMENT CONSOLIDEE)
+K0      = 0.5  ;           # COEFFICIENT DE POUSSEE DES TERRES
+K0      = 1.   ;           # COEFFICIENT DE POUSSEE DES TERRES
+H       = 10.  ;           # HAUTEUR DE LA FONDATION
+G       = 9.81 ;           # ACCELERATION DE LA PESANTEUR
+
+#PRE_GIBI();
+
+MAILLAGE=LIRE_MAILLAGE(FORMAT='MED')
+# Pour eviter les "TOLE MACHINE", on perturbe legerement la geometrie du maillage :
+MODI_MAILLAGE(reuse =MAILLAGE, MAILLAGE=MAILLAGE, DEFORME=_F(OPTION='TRAN', ALEA=1.e-8,),)
+
+MAILLAGE=DEFI_GROUP(reuse =MAILLAGE,
+                    MAILLAGE=MAILLAGE,
+                    CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI'));
+
+MODMEC1=AFFE_MODELE(INFO=1,
+                    MAILLAGE=MAILLAGE,
+                    AFFE=_F(TOUT='OUI',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='D_PLAN'));
+
+MAILLAGE=MODI_MAILLAGE(reuse =MAILLAGE,
+                       MAILLAGE=MAILLAGE,
+                       ORIE_PEAU_2D=_F(GROUP_MA=('LPATM','APPUI',
+                                                 'GAUCHE','DROITE',
+                                                 'BASE')));
+
+# COMPORTEMENT PLASTIQUE DE TYPE CAMCLAY EN MECANIQUE PUR
+SOL=DEFI_MATERIAU(ELAS=_F(E     =E,
+                          NU    =nu,
+                          RHO   =rhos,
+                          ALPHA =0.),
+                  CAM_CLAY=_F(MU        =mu ,
+                              PORO      =n,
+                              LAMBDA    =lambd,
+                              KAPA      =kapa,
+                              M         =M,
+                              PRES_CRIT =pcr,
+                              #PA        =PATM,
+                              KCAM = 0.,
+                              PTRAC=0.));
+
+chmat=AFFE_MATERIAU(MAILLAGE=MAILLAGE,
+                    AFFE=_F(GROUP_MA='SOL', MATER=SOL));
+
+TM = -1000000.0
+T0 = 0.
+T12 = 2000000.0
+T1 = 10000000.0
+T2 = 20000000.0
+T3 = 100000000.0
+
+TEMPS=DEFI_LIST_REEL(DEBUT=T0,
+                     INTERVALLE=(_F(JUSQU_A=T1, NOMBRE=10),
+                                 _F(JUSQU_A=T2, NOMBRE=10),
+                                 _F(JUSQU_A=T3, NOMBRE=80)));
+
+TAN0=DEFI_LIST_REEL(DEBUT=TM,
+                    INTERVALLE=_F(JUSQU_A=T0, NOMBRE=3));
+
+TAN=DEFI_LIST_REEL(DEBUT=T0,
+                   INTERVALLE=(_F(JUSQU_A=T12, NOMBRE=40),
+                               _F(JUSQU_A=T1, NOMBRE=16),
+                               _F(JUSQU_A=T2, NOMBRE=20)));
+
+DPLY=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(       0.0, 0.0,
+                         10000000.0, 0.05,
+                         20000000.0, 0.1,
+                        100000000.0, 0.5),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE');
+
+
+#--------------------------------------------------------------------
+# CONDITIONS AUX LIMITES
+# LA PESANTEUR EST COMPTEE DANS LE POIDS DES TERRES
+#--------------------------------------------------------------------
+
+DDLIMP0=AFFE_CHAR_MECA(MODELE=MODMEC1,
+                       DDL_IMPO=(_F(GROUP_MA='BASE',
+                                    DY=0.0),
+                                 _F(GROUP_MA=('GAUCHE','DROITE'),
+                                    DX=0.0)),
+                       PRES_REP=_F(GROUP_MA='LPATM',
+                                   PRES=sigma_0));
+
+DDLIMP1=AFFE_CHAR_MECA(MODELE=MODMEC1,
+                       DDL_IMPO=_F(GROUP_MA='APPUI',
+                                   DY=0.));
+
+DDLIMP2=AFFE_CHAR_MECA(MODELE=MODMEC1,
+                       DDL_IMPO=_F(GROUP_MA='APPUI',
+                                   DY=-0.05));
+
+PESE=AFFE_CHAR_MECA(MODELE=MODMEC1,
+                    PESANTEUR=_F(GRAVITE=G,
+                                 DIRECTION=(0.0,-1.0,0.0),),);
+
+fevol = FORMULE(VALE='INST/T1',
+                T1=T1,
+                NOM_PARA='INST',)
+
+
+#-------------------------------------------------------------------
+# CREATION DES CHAMPS INITIAUX DE PRESSION ET DE CONTRAINTES
+# DANS LA FONDATION
+#-------------------------------------------------------------------
+
+#  RECUPERATION DU CHAMP DE GEOMETRIE
+#  (AUX NOEUDS PUIS AUX POINTS DE GAUSS)
+CHXN=CREA_CHAMP(TYPE_CHAM='NOEU_GEOM_R',
+                OPERATION='EXTR',
+                MAILLAGE=MAILLAGE,
+                NOM_CHAM='GEOMETRIE',);
+
+CHXG=CREA_CHAMP(TYPE_CHAM='ELGA_GEOM_R',
+                OPERATION='DISC',
+                MODELE=MODMEC1,
+                CHAM_GD=CHXN);
+
+# FORMULE DE LA CONTRAINTE EFFECTIVE EN Y (RHO HOMOGENEISE)
+SIEFY = FORMULE(VALE='-rhos*G*(H-Y) - sigma_0',
+                rhos=rhos,
+                G=G,
+                H=H,
+                sigma_0=sigma_0,
+                NOM_PARA='Y',)
+
+# FORMULES DE LA CONTRAINTE EFFECTIVE EN X ET EN Z
+SIEFX = FORMULE(VALE='K0*(SIEFY(Y) + sigma_0) - sigma_0',
+                K0=K0,
+                SIEFY=SIEFY,
+                sigma_0=sigma_0,
+                NOM_PARA='Y',)
+
+SIEFZ = FORMULE(VALE='SIEFX(Y)',
+                SIEFX=SIEFX,
+                NOM_PARA='Y',)
+
+# CHAMP DE CONTRAINTES INITIALES DANS LA FONDATION
+SIEF1=CREA_CHAMP(TYPE_CHAM='ELGA_NEUT_F',
+                OPERATION='AFFE',
+                MODELE=MODMEC1,
+                PROL_ZERO='OUI',
+                AFFE=_F(GROUP_MA='SOL',
+                        NOM_CMP=('X1','X2','X3',),
+                        VALE_F=(SIEFX,SIEFY,SIEFZ)));
+
+SIEF2=CREA_CHAMP(TYPE_CHAM='ELGA_NEUT_R',
+                 OPERATION='EVAL',
+                 CHAM_F=SIEF1,
+                 CHAM_PARA=CHXG,);
+
+SIEFINI=CREA_CHAMP(INFO=1,
+                   TYPE_CHAM='ELGA_SIEF_R',
+                   OPERATION='ASSE',
+                   MODELE=MODMEC1,
+                   PROL_ZERO='OUI',
+                   ASSE=_F(GROUP_MA='SOL',
+                           CHAM_GD=SIEF2,
+                           NOM_CMP=('X1','X2','X3',),
+                           NOM_CMP_RESU=('SIXX','SIYY','SIZZ')));
+
+#                          * * *
+
+# POUR LES ARGILES NORMALEMENT CONSOLIDEES, ON IMPOSE PCR = P/2
+PCRY = FORMULE(VALE='-(SIEFX(Y)+SIEFY(Y)+SIEFZ(Y))/6 * 1.00',
+               SIEFX=SIEFX,
+               SIEFY=SIEFY,
+               SIEFZ=SIEFZ,
+               NOM_PARA='Y',)
+
+ZERO = FORMULE(VALE='0',
+               NOM_PARA='Y',)
+
+PCR1=CREA_CHAMP(TYPE_CHAM ='ELGA_NEUT_F',
+                OPERATION ='AFFE',
+                MODELE    =MODMEC1,
+                PROL_ZERO ='OUI',
+                AFFE=_F(GROUP_MA='SOL',
+                        NOM_CMP=('X1','X2','X3','X4',
+                                 'X5','X6','X7'),
+                        VALE_F=(PCRY,ZERO,ZERO,ZERO,
+                                ZERO,ZERO,ZERO)));
+
+PCR2=CREA_CHAMP(TYPE_CHAM='ELGA_NEUT_R',
+                OPERATION='EVAL',
+                CHAM_F   =PCR1,
+                CHAM_PARA=CHXG,);
+
+# CHAMP DE VARIABLES INTERNES INITIALES DANS LA FONDATION
+VARINI=CREA_CHAMP(INFO=1,
+                  TYPE_CHAM='ELGA_VARI_R',
+                  OPERATION='ASSE',
+                  MODELE   =MODMEC1,
+                  PROL_ZERO='OUI',
+                  #OPTION='VARI_ELGA',
+                  ASSE=_F(GROUP_MA='SOL',
+                          CHAM_GD=PCR2,
+                          NOM_CMP=('X1','X2','X3','X4',
+                                   'X5','X6','X7'),
+                          NOM_CMP_RESU=('V1','V2','V3','V4',
+                                        'V5','V6','V7')));
+
+
+
+#--------------------------------------------------------------------
+#                  TEST D'EQUILIBRE AVEC CAMCLAY
+#--------------------------------------------------------------------
+
+# CE TEST SERT A S'ASSURER QU'AVEC LES CHAMPS DE CONTRAINTES
+# ET DE VARIABLES INTERNES IMPOSES, ON EST A L'EQUILIBRE
+# MECANIQUE A L'INSTANT INITIAL
+#
+# CE FAISANT, ON NE DOIT PAS VOIR NOS CHAMPS EVOLUER DANS LE TEMPS:
+# ==> VERIF OK NORMALEMENT...
+
+# CALCUL DE L'ETAT INITIAL
+resu1=STAT_NON_LINE(MODELE    =MODMEC1,
+                    CHAM_MATER=chmat,
+                    EXCIT=(_F(CHARGE=DDLIMP0),
+                           _F(CHARGE=DDLIMP1),
+                           _F(CHARGE=PESE)),
+                    COMPORTEMENT=_F(RELATION='CAM_CLAY'),
+                    ETAT_INIT=_F(SIGM=SIEFINI,
+                                 VARI=VARINI),
+                    INCREMENT=_F(LIST_INST    =TAN0,),
+                    NEWTON=_F(MATRICE  ='TANGENTE',
+                              REAC_ITER=1),
+                    CONVERGENCE=_F(RESI_GLOB_RELA=1E-06,
+                                   ITER_GLOB_MAXI=10,
+                                   ARRET         ='OUI'),
+                    );
+
+resu1=CALC_CHAMP(reuse=resu1,RESULTAT=resu1,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'))
+
+
+
+#--------------------------------------------------------------------
+#          CALCUL DE LA FONDATION FILANTE AVEC CAMCLAY
+#--------------------------------------------------------------------
+
+resu2=STAT_NON_LINE(MODELE    =MODMEC1,
+                    CHAM_MATER=chmat,
+                    EXCIT=(_F(CHARGE   =DDLIMP0,),
+                           _F(CHARGE   =PESE,),
+                           _F(CHARGE   =DDLIMP2,
+                              FONC_MULT=fevol,),),
+                    COMPORTEMENT=_F(RELATION='CAM_CLAY',),
+                    ETAT_INIT=_F(EVOL_NOLI=resu1,),
+                    INCREMENT=_F(LIST_INST    =TAN,
+                                 INST_INIT    =T0,
+                                 INST_FIN     =T2,),
+                    NEWTON=_F(MATRICE  ='TANGENTE',
+                              REAC_ITER=1,),
+                    CONVERGENCE=_F(RESI_GLOB_RELA=1E-06,
+                                   ITER_GLOB_MAXI=10,
+                                   ARRET         ='OUI',),);
+
+
+#--------------------------------------------------------------------
+#                           VALIDATION
+#--------------------------------------------------------------------
+
+resu2=CALC_CHAMP(reuse=resu2,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=resu2)
+
+
+resu2=CALC_CHAMP(reuse   =resu2,
+              VARI_INTERNE='VARI_NOEU',
+              RESULTAT=resu2);
+
+
+# Le champ de variables internes est le suivant:
+# V1 = PCR       V2 = Indice de plastification
+# V3 = P         V4 = Q
+# V5 = EPSVP     V6 = EPSDEVP
+# V7 = Indice des vides
+T_VARI_O=POST_RELEVE_T(ACTION=_F(INTITULE ='VARI_NOEU',
+                                 GROUP_NO ='O',
+                                 RESULTAT =resu2,
+                                 NOM_CHAM ='VARI_NOEU',
+                                 NOM_CMP  =('V1','V2','V3','V4','V5','V6','V7'),
+                                 OPERATION='EXTRACTION'));
+
+T_VARI_A=POST_RELEVE_T(ACTION=_F(INTITULE ='VARI_NOEU',
+                                 GROUP_NO ='A',
+                                 RESULTAT =resu2,
+                                 NOM_CHAM ='VARI_NOEU',
+                                 NOM_CMP  =('V1','V2','V3','V4','V5','V6','V7'),
+                                 OPERATION='EXTRACTION'));
+
+
+T_VARI_O=CALC_TABLE(reuse =T_VARI_O,
+               TABLE=T_VARI_O,
+               ACTION=(_F(
+                          OPERATION = 'FILTRE',
+                          NOM_PARA  = 'NUME_ORDRE',
+                          CRIT_COMP = 'GT',
+                          VALE    = 0,
+                         ),),);
+
+
+T_VARI_A=CALC_TABLE(reuse =T_VARI_A,
+               TABLE=T_VARI_A,
+               ACTION=(_F(
+                          OPERATION = 'FILTRE',
+                          NOM_PARA  = 'NUME_ORDRE',
+                          CRIT_COMP = 'GT',
+                          VALE    = 0,
+                         ),),);
+IMPR_TABLE(TABLE=T_VARI_O);
+IMPR_TABLE(TABLE=T_VARI_A);
+
+
+# TEST DU TRAJET DE CHARGEMENT DANS LE PLAN P-Q PAR RAPPORT AUX REFERENCES FLAQ
+# AU POINT O (SOUS LA FONDATION)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=4.E-2,
+
+           VALE_CALC=434.27570954,
+           VALE_REFE=450.0,
+           NOM_PARA='V4',
+           TABLE=T_VARI_O,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=200.0,
+                     NOM_PARA='V3',
+                     VALE=1.02000E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.04,
+           VALE_CALC=19467.7298244,
+           VALE_REFE=2.E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_O,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=100.0,
+                     NOM_PARA='V3',
+                     VALE=1.10000E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.02,
+           VALE_CALC=25774.0327611,
+           VALE_REFE=2.6060E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_O,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=20.0,
+                     NOM_PARA='V3',
+                     VALE=1.20000E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=1.E-2,
+           VALE_CALC=29260.7894326,
+           VALE_REFE=2.9490E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_O,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=200.0,
+                     NOM_PARA='V3',
+                     VALE=1.30000E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=1.E-2,
+           VALE_CALC=33993.5211146,
+           VALE_REFE=3.4040E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_O,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=500.0,
+                     NOM_PARA='V3',
+                     VALE=1.46000E5,),
+           )
+
+# TEST DU TRAJET DE CHARGEMENT DANS LE PLAN P-Q PAR RAPPORT AUX REFERENCES FLAQ
+# AU POINT A (JUSTE A COTE DE LA FONDATION)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=155.0,
+           VALE_CALC=227.178107509,
+           VALE_REFE=76.0,
+           NOM_PARA='V4',
+           TABLE=T_VARI_A,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=10.0,
+                     NOM_PARA='V3',
+                     VALE=1.01900E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=1.E-2,
+           VALE_CALC=4944.53968618,
+           VALE_REFE=4950.0,
+           NOM_PARA='V4',
+           TABLE=T_VARI_A,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=10.0,
+                     NOM_PARA='V3',
+                     VALE=1.E5,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.06,
+           VALE_CALC=9904.13710133,
+           VALE_REFE=1.0420E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_A,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=200.0,
+                     NOM_PARA='V3',
+                     VALE=9.8000E4,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.1,
+           VALE_CALC=15244.4804984,
+           VALE_REFE=1.6830E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_A,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=200.0,
+                     NOM_PARA='V3',
+                     VALE=9.6000E4,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.1,
+           VALE_CALC=19999.6942273,
+           VALE_REFE=2.1870E4,
+           NOM_PARA='V4',
+           TABLE=T_VARI_A,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=30.0,
+                     NOM_PARA='V3',
+                     VALE=9.4000E4,),
+           )
+
+# TEST DE LA FORCE EXERCEE SUR LA FONDATION (COMPARAISON FLAQ)
+# pour que la coupe soit bien dans la matiere, on se decale un peu vers le "bas" :
+dixm=10. - 1.e-5
+T_FORCE = MACR_LIGN_COUPE( RESULTAT =resu2, NOM_CHAM ='SIGM_ELNO',
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(0.0, dixm), COOR_EXTR=(1.0, dixm),
+                             NB_POINTS=10,
+                             NOM_CMP  ='SIYY', OPERATION='MOYENNE', INTITULE='RESULTANTE', ))
+
+
+T_FORCE=CALC_TABLE(reuse =T_FORCE,
+               TABLE=T_FORCE,
+               ACTION=(_F(
+                          OPERATION = 'FILTRE',
+                          NOM_PARA  = 'NUME_ORDRE',
+                          CRIT_COMP = 'GT',
+                          VALE    = 0,
+                         ),),);
+
+# DY = -0.005
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.02,
+           VALE_CALC=-110038.599526,
+           VALE_REFE=-1.08500E5,
+           NOM_PARA='SIYY',
+           TABLE=T_FORCE,
+           FILTRE=(_F(CRITERE='ABSOLU',
+                      PRECISION=10.0,
+                      NOM_PARA='INST',
+                      VALE=1.E6,),
+                   _F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   ),
+           )
+
+# DY = -0.02
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.05,
+           VALE_CALC=-128174.341181,
+           VALE_REFE=-1.25800E5,
+           NOM_PARA='SIYY',
+           TABLE=T_FORCE,
+           FILTRE=(_F(CRITERE='ABSOLU',
+                      PRECISION=10.0,
+                      NOM_PARA='INST',
+                      VALE=4.E6,),
+                   _F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   ),
+           )
+
+# DY = -0.04
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.05,
+           VALE_CALC=-147577.255248,
+           VALE_REFE=-1.44600E5,
+           NOM_PARA='SIYY',
+           TABLE=T_FORCE,
+           FILTRE=(_F(CRITERE='ABSOLU',
+                      PRECISION=10.0,
+                      NOM_PARA='INST',
+                      VALE=8.E6,),
+                   _F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   ),
+           )
+
+# DY = -0.06
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.05,
+           VALE_CALC=-164415.903426,
+           VALE_REFE=-1.60900E5,
+           NOM_PARA='SIYY',
+           TABLE=T_FORCE,
+           FILTRE=(_F(CRITERE='ABSOLU',
+                      PRECISION=10.0,
+                      NOM_PARA='INST',
+                      VALE=1.2000000E7,),
+                   _F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   ),
+           )
+
+# DY = -0.0875
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.05,
+           VALE_CALC=-184953.495166,
+           VALE_REFE=-1.81100E5,
+           NOM_PARA='SIYY',
+           TABLE=T_FORCE,
+           FILTRE=(_F(CRITERE='ABSOLU',
+                      PRECISION=10.0,
+                      NOM_PARA='INST',
+                      VALE=1.7500000E7,),
+                   _F(NOM_PARA='QUANTITE',
+                      VALE_K='MOMENT_0',),
+                   ),
+           )
+
+FIN();

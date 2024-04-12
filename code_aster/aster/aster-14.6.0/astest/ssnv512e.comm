@@ -1,0 +1,364 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# double jonction en I, D_PLAN, QUAD4, gros maillage
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+MAILLAG=LIRE_MAILLAGE(FORMAT='MED',INFO=1,);
+
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG,
+                     AFFE=(_F(GROUP_MA=('SURF',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='D_PLAN',),),);
+
+LN1 = FORMULE(VALE='Y-2',
+              NOM_PARA=['X', 'Y'],)
+
+FISS1=DEFI_FISS_XFEM(MAILLAGE=MAILLAG,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    DEFI_FISS=_F(FONC_LN=LN1,),
+                    INFO=1,);
+
+LN2 = FORMULE(VALE='Y+2',
+              NOM_PARA=['X', 'Y'],)
+
+FISS2=DEFI_FISS_XFEM(MAILLAGE=MAILLAG,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    JONCTION=_F(FISSURE=(FISS1),POINT=(0,0)),
+                    DEFI_FISS=_F(FONC_LN=LN2,),
+                    INFO=1,);
+
+LN3 = FORMULE(VALE='X',
+              NOM_PARA=['X', 'Y'],)
+FISS3=DEFI_FISS_XFEM(MAILLAGE=MAILLAG,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    DEFI_FISS=_F(FONC_LN=LN3,),
+                    JONCTION=_F(FISSURE=(FISS1,FISS2),POINT=(0,0)),
+                    INFO=1,);
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=(FISS1,FISS2,FISS3,),
+                         INFO=1,);
+
+
+E=100.0E6
+nu=0.3
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,
+                            NU=nu,
+                            RHO=7800.0,),);
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MAILLAG,
+                       MODELE=MODELEK,
+                       AFFE=_F(TOUT=('OUI',),
+                                MATER=ACIER,
+                                ),);
+
+
+
+def depx(x,y) :
+   if y < 2 and y > -2 and x < 0: return -0.25
+   if y > 2:                      return -0.5
+   if y < 2 and y > -2 and x > 0: return 0.75
+   if y < -2:                     return 1
+   return 0.
+
+def depy(x) :
+   return 0.
+
+DEPL_X = FORMULE(VALE='depx(X,Y)',
+                 depx=depx,
+                 NOM_PARA=['X', 'Y'],)
+DEPL_Y = FORMULE(VALE='depy(X)',
+                 depy=depy,
+                 NOM_PARA='X',)
+
+CH1=AFFE_CHAR_MECA_F(MODELE=MODELEK,
+                   DDL_IMPO=(_F(GROUP_MA=('LD','LG'),DX= DEPL_X,DY= DEPL_Y),),
+                   INFO=1,);
+
+
+UTOT1=MECA_STATIQUE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMAT,
+                   EXCIT=(
+                          _F(CHARGE=CH1),
+                          ),
+                   INFO=1,
+                   ); 
+#-----------------------------------------------------------
+#             POST-TRAITEMENT POUR LA VISUALISATION
+#-----------------------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(MODELE=MODELEK);
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                     PHENOMENE='MECANIQUE',
+                     MODELISATION='D_PLAN',),)
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,)
+
+#----------------------------------------------
+#                   POST RELEVE
+#----------------------------------------------
+
+DEP=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                 GROUP_NO=('NFISSU',),
+                                 RESULTAT=RES_XFEM,
+                                 NOM_CHAM='DEPL',
+                                 TOUT_CMP='OUI',NUME_ORDRE = 1,
+                                 OPERATION='EXTRACTION',),);
+DEP = CALC_TABLE(TABLE = DEP,
+                 reuse = DEP,
+                 ACTION =_F(OPERATION = 'EXTR',
+                            NOM_PARA=('NOEUD','COOR_X','COOR_Y','DX','DY'),),);
+
+DEPP = CALC_TABLE(TABLE = DEP,
+                     ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'NOEUD',
+                                 CRIT_COMP = 'REGEXP',
+                                 VALE_K    = 'NP',),),);
+DEPPGX = CALC_TABLE(TABLE = DEPP,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  0.2,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  -1.98,),),);
+DEPPLX = CALC_TABLE(TABLE = DEPP,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  -0.2,),
+                              _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  -1.98,),),);
+DEPPGY = CALC_TABLE(TABLE = DEPP,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  1.98,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'NE',
+                                 CRITERE='ABSOLU',
+                                 VALE      =  0,),),);
+DEPPLY = CALC_TABLE(TABLE = DEPP,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  1.98,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  -1.98,),),);
+
+DEPM = CALC_TABLE(TABLE = DEP,
+                     ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'NOEUD',
+                                 CRIT_COMP = 'REGEXP',
+                                 VALE_K    = 'NM',),),);
+
+DEPMGX = CALC_TABLE(TABLE = DEPM,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  0.02,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  1.98,),),);
+DEPMLX = CALC_TABLE(TABLE = DEPM,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  -0.02,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  1.98,),),);
+
+DEPMGY = CALC_TABLE(TABLE = DEPM,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  1.98,),
+                              _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'GT',
+                                 VALE      =  -1.98,),),);
+
+DEPMLY = CALC_TABLE(TABLE = DEPM,
+                      ACTION =(_F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_Y',
+                                 CRIT_COMP = 'LT',
+                                 VALE      =  -1.98,),
+                               _F(OPERATION = 'FILTRE',
+                                 NOM_PARA  = 'COOR_X',
+                                 CRIT_COMP = 'NE',
+                                 CRITERE='ABSOLU',
+                                 VALE      =  0,),),);
+
+# Definition des zones
+
+DEPZON=[None]*5
+DEPZON[1] = CALC_TABLE(TABLE = DEPMLX,
+                    ACTION =(_F(OPERATION = 'COMB',
+                               TABLE=DEPPLX,),
+                             _F(OPERATION = 'COMB',
+                               TABLE=DEPMGY,),),);
+DEPZON[2] = DEPPGY
+DEPZON[3] = CALC_TABLE(TABLE = DEPMGX,
+                    ACTION =(_F(OPERATION = 'COMB',
+                               TABLE=DEPPGX,),
+                            _F(OPERATION = 'COMB',
+                               TABLE=DEPPLY,),),);
+DEPZON[4] = DEPMLY
+
+#------------------------------------------------------------------------
+# POST-TRAITEMENT : CALCUL D'ERREURS EN TERME DE NORME EN ENERGIE ET
+#                   DE NORME L2 DU DEPLACEMENT
+#------------------------------------------------------------------------
+
+# calcul de l'erreur en terme de norme en energie
+Scal=CREA_CHAMP(OPERATION='EXTR',
+                TYPE_CHAM='ELGA_SIEF_R',
+                RESULTAT=UTOT1,
+                NOM_CHAM='SIEF_ELGA',
+                NUME_ORDRE=1)
+
+tabNRJ=POST_ERREUR(OPTION='ENER_RELA',
+                   CHAM_GD=Scal,
+                   MODELE=MODELEK,
+                   DEFORMATION='PETIT',
+                   CHAM_MATER=CHAMPMAT,
+                   GROUP_MA='SURF',
+                  )
+
+IMPR_TABLE(TABLE=tabNRJ)
+
+# calcul de l'erreur en terme de norme L2 du deplacement
+Ucal=CREA_CHAMP(OPERATION='EXTR',
+                TYPE_CHAM='NOEU_DEPL_R',
+                RESULTAT=UTOT1,
+                NOM_CHAM='DEPL',
+                NUME_ORDRE=1)
+
+tabL2=POST_ERREUR(OPTION='DEPL_RELA',
+                  CHAM_GD=Ucal,
+                  MODELE=MODELEK,
+                  GROUP_MA='SURF',
+                  DX=DEPL_X,
+                 )
+
+IMPR_TABLE(TABLE=tabL2)
+
+#----------------------------------------------
+#                   TEST TABLE
+#----------------------------------------------
+
+vale = [0,-0.25,-0.5,0.75,1]
+preci = 10e-14
+
+VALE_CALC=[
+ -0.25000000000000,
+ -0.25000000000000,
+ -1.7138841264099E-17,
+ 5.0451841711634E-15,
+ -0.50000000000000,
+ -0.50000000000000,
+ -1.6422410306638E-15,
+ 3.3816920647041E-16,
+ 0.75000000000000,
+ 0.75000000000000,
+ -1.2991554105527E-17,
+ 3.0867546587497E-15,
+ 1.0,
+ 1.0,
+ -2.0026334347408E-15,
+ -5.2266991652629E-17,
+]
+
+for i in [1,2,3,4]: #Boucle sur les zones
+
+  IMPR_TABLE(TABLE=DEPZON[i],);
+
+  TEST_TABLE(TABLE=DEPZON[i],
+             NOM_PARA='DX',
+             TYPE_TEST='MIN',
+             VALE_CALC=VALE_CALC[(i-1)*4+0], VALE_REFE=vale[i],
+             CRITERE='RELATIF',
+             PRECISION=preci, 
+             REFERENCE='ANALYTIQUE',);
+  TEST_TABLE(TABLE=DEPZON[i],
+             NOM_PARA='DX',
+             TYPE_TEST='MAX',
+             VALE_CALC=VALE_CALC[(i-1)*4+1], VALE_REFE=vale[i],
+             CRITERE='RELATIF',
+             PRECISION=preci, 
+             REFERENCE='ANALYTIQUE',);
+  TEST_TABLE(TABLE=DEPZON[i],
+             NOM_PARA='DY',
+             TYPE_TEST='MIN',
+             VALE_CALC=VALE_CALC[(i-1)*4+2], VALE_REFE=0,
+             CRITERE='ABSOLU',
+             PRECISION=preci, 
+             REFERENCE='ANALYTIQUE',);
+  TEST_TABLE(TABLE=DEPZON[i],
+             NOM_PARA='DY',
+             TYPE_TEST='MAX',
+             VALE_CALC=VALE_CALC[(i-1)*4+3], VALE_REFE=0,
+             CRITERE='ABSOLU',
+             PRECISION=preci, 
+             REFERENCE='ANALYTIQUE',);
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.,
+           VALE_REFE=0.,
+           NOM_PARA='REFERENCE',
+           FILTRE=_F(NOM_PARA='GROUP_MA',
+                     VALE_K='TOTAL'),
+           TABLE=tabNRJ,
+           );
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=7.07106781187,
+           VALE_REFE=7.071067812,
+           NOM_PARA='REFERENCE',
+           FILTRE=_F(NOM_PARA='GROUP_MA',
+                     VALE_K='TOTAL'),
+           TABLE=tabL2,
+           );
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=1.22382617184E-15,
+           NOM_PARA='ERREUR RELATIVE',
+           FILTRE=_F(NOM_PARA='GROUP_MA',
+                     VALE_K='TOTAL'),
+           TABLE=tabL2,
+           );
+
+FIN();

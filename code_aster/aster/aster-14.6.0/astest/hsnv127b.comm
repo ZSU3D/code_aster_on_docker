@@ -1,0 +1,289 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# UTILISATION DE LA LOI VISCOPLASTIQUE VISC_CIN1_CHAB
+# ELEMENT VOLUMIQUE
+#.....................................................................
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAYA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MODEL=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = '3D')
+                         )
+
+ACIER=DEFI_MATERIAU(        ELAS=_F(  E = 195000.,
+                                      NU = 0.3),
+                           CIN1_CHAB=_F( R_0 = 30.,
+                                      R_I = 300.,
+                                      B   = 100.,
+                                      C_I = 0.,
+                                      K   = 0.,
+                                      W   = 0.,
+                                      G_0 = 0.,
+                                      A_I = 0.),
+                           LEMAITRE=_F( N = 3.5,
+                                       UN_SUR_K = 0.0016666667)
+                       )
+
+MATER=AFFE_MATERIAU(   MAILLAGE=MAYA,
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        MATER = ACIER)
+                         )
+
+
+SIGMA_F=DEFI_FONCTION(
+
+                 NOM_PARA='INST',
+               PROL_DROITE='EXCLU',
+              PROL_GAUCHE='EXCLU',
+
+                VALE=(
+                0.0,    0.0,
+                10.,    242.0,
+                60.,    242.0,
+                )
+              )
+
+TAU_F=DEFI_FONCTION(
+
+                 NOM_PARA='INST',
+               PROL_DROITE='EXCLU',
+              PROL_GAUCHE='EXCLU',
+
+                VALE=(
+                0.0,    0.0,
+                10.,    146.0,
+                60.,    146.0,
+                )
+              )
+
+TRACTION=AFFE_CHAR_MECA(
+
+                      MODELE=MODEL,
+
+                FORCE_FACE=_F(
+                MAILLE = 'GAUCHE',
+                FX = -1.)
+              )
+
+CISAIL=AFFE_CHAR_MECA(
+
+                      MODELE=MODEL,FORCE_FACE=(
+
+                _F( MAILLE = 'GAUCHE',          FY = -1.),
+                _F( MAILLE = 'DROITE',          FY = 1.),
+                _F( MAILLE = 'HAUT',    FX = 1.),
+                _F( MAILLE = 'BAS',     FX = -1.))
+              )
+
+LIAISON=AFFE_CHAR_MECA(
+
+               MODELE=MODEL,DDL_IMPO=(
+
+                _F( NOEUD = 'NO4',     DX = 0.,  DY = 0.),
+                _F( NOEUD = 'NO8',     DX = 0.,  DY = 0.,  DZ = 0.),
+                _F( NOEUD = 'NO2',     DX = 0.),
+                _F( NOEUD = 'NO6',     DX = 0.))
+              )
+
+CAT=DEFI_LIST_REEL(    DEBUT=0.0,INTERVALLE=(
+                          _F(  JUSQU_A = 10.,    NOMBRE = 20),
+                          _F(  JUSQU_A = 60.,    NOMBRE = 25))
+                      )
+
+DEFLISTM=DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST=       CAT))
+
+CALCNL=STAT_NON_LINE(
+                            MODELE=MODEL,
+                        CHAM_MATER=MATER,
+                         COMPORTEMENT=_F(
+                RELATION = 'VISC_CIN1_CHAB',
+                ITER_INTE_MAXI = 1000,
+                DEFORMATION = 'PETIT'),
+                         INCREMENT=_F(
+                LIST_INST = DEFLISTM,
+                NUME_INST_FIN = 45),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 50),EXCIT=(
+                             _F(
+                CHARGE = LIAISON), _F(
+                CHARGE = TRACTION,
+                FONC_MULT = SIGMA_F), _F(
+                CHARGE = CISAIL,
+                FONC_MULT = TAU_F)),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 3)
+
+              )
+
+CALCNL=CALC_CHAMP(reuse=CALCNL,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=CALCNL)
+
+
+CALCNL=CALC_CHAMP(reuse=CALCNL,RESULTAT=CALCNL,DEFORMATION=('EPSI_ELNO','EPVC_ELNO','EPME_ELNO','EPSP_ELNO'))
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSI_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.010650349,
+                   VALE_REFE=0.010684000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPME_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.010650358,
+                   VALE_REFE=0.010683827,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.00940933274213,
+                   VALE_REFE=0.00944280104223,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPVC_ELNO',
+                   NOM_CMP='EPTHER_L',
+                   VALE_CALC=0.0,
+                   VALE_REFE=0.0,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',
+                   CRITERE='ABSOLU',
+                   ORDRE_GRANDEUR = 1.E-6),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSI_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC= 9.48838199E-03,
+                   VALE_REFE=9.5186799999999998E-3,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPME_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.00948839064946,
+                   VALE_REFE=0.00951867807806,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.00851505731623,
+                   VALE_REFE=0.00854534474483,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSI_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.027626207,
+                   VALE_REFE=0.027678500000000002,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPME_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.0276261944777,
+                   VALE_REFE=0.0276785088359,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.0263851692124,
+                   VALE_REFE=0.0264374831949,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSI_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.024850833,
+                   VALE_REFE=0.024898199999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPME_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.0248508208343,
+                   VALE_REFE=0.0248981631667,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                _F(NUME_ORDRE=45,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.023877487841,
+                   VALE_REFE=0.0239248298334,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='CUBE',),
+                ),
+          )
+
+FIN()

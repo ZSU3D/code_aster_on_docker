@@ -1,0 +1,324 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# MODELISATION DKT
+# MAILLAGE : 25 mailles dans le sens circonferentiel
+#            500 mailles suivant la longueur
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+
+rayon_ext   = 0.16
+epaisseur   = 0.01
+rayon_moyen = rayon_ext-epaisseur/2.
+
+MA=LIRE_MAILLAGE(FORMAT='MED');
+
+
+MAIL=CREA_MAILLAGE(MAILLAGE=MA,
+                      CREA_POI1=(_F(GROUP_NO='Point_A', NOM_GROUP_MA='POI_A'))
+                      )
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=( _F(GROUP_MA='Encas',),
+                               ));
+
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=(_F(TOUT='OUI',PHENOMENE='MECANIQUE',MODELISATION='DKT',),
+                         _F(GROUP_MA = 'POI_A',PHENOMENE='MECANIQUE',MODELISATION='DIS_TR'),));
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=200000E6,
+                            NU=0.29,
+                            RHO=7830.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=ACIER,),);
+
+CARAC=AFFE_CARA_ELEM(MODELE=MODELE,
+                     COQUE  =_F(GROUP_MA=('Tuyau','Encas', 'Libre'),EPAIS=epaisseur,),
+                     DISCRET=(_F(GROUP_MA = 'POI_A',CARA = 'K_TR_D_N',VALE = ( 0.,0.,0.,0.,0.,0. ),),
+                              _F(GROUP_MA = 'POI_A',CARA = 'M_TR_D_N',VALE = ( 0.,0.,0.,0.,0.,0.,0.,0.,0.,0. ),),
+                              ));
+                              
+CARAC1=AFFE_CARA_ELEM(MODELE=MODELE,
+                     COQUE  =_F(GROUP_MA=('Tuyau','Encas', 'Libre'),EPAIS=epaisseur,COEF_RIGI_DRZ=-1.E-12),
+                     DISCRET=(_F(GROUP_MA = 'POI_A',CARA = 'K_TR_D_N',VALE = ( 0.,0.,0.,0.,0.,0. ),),
+                              _F(GROUP_MA = 'POI_A',CARA = 'M_TR_D_N',VALE = ( 0.,0.,0.,0.,0.,0.,0.,0.,0.,0. ),),
+                              ));
+
+# ENCASTREMENT SUR UNE EXTREMITE
+
+CL=AFFE_CHAR_MECA(MODELE=MODELE,
+                  DDL_IMPO=_F(GROUP_NO='Point_A',
+                              DX=0.0,
+                              DY=0.0,
+                              DZ=0.0,
+                              DRX=0.0,
+                              DRY=0.0,
+                              DRZ=0.0,),
+                  LIAISON_ELEM=(_F(OPTION='COQ_POU',
+                                   GROUP_MA_1='Encas',
+                                   GROUP_NO_2='Point_A',
+                                   CARA_ELEM=CARAC,
+                                   AXE_POUTRE=(1.0,0.0,0.0,),),
+             ));
+CL1=AFFE_CHAR_MECA(MODELE=MODELE,
+                  DDL_IMPO=_F(GROUP_NO='Point_A',
+                              DX=0.0,
+                              DY=0.0,
+                              DZ=0.0,
+                              DRX=0.0,
+                              DRY=0.0,
+                              DRZ=0.0,),
+                  LIAISON_ELEM=(_F(OPTION='COQ_POU',
+                                   GROUP_MA_1='Encas',
+                                   GROUP_NO_2='Point_A',
+                                   CARA_ELEM=CARAC1,
+                                   AXE_POUTRE=(1.0,0.0,0.0,),),
+             ));
+
+
+
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARAC,
+                CHARGE=CL,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('MASSE'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('RIGID'),
+                              OPTION='RIGI_MECA',),),);
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARAC1,
+                CHARGE=CL1,
+                NUME_DDL=CO('NUMEDDL1'),
+                MATR_ASSE=(_F(MATRICE=CO('MASSE1'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('RIGID1'),
+                              OPTION='RIGI_MECA',),),);
+
+
+# RECHERCHE DES MODES PROPRES 
+#----------------------------
+
+NBMODE_A = INFO_MODE(MATR_RIGI=RIGID,
+                     MATR_MASS=MASSE,FREQ=(100.,12000.),
+                     COMPTAGE=_F(METHODE='STURM'),)
+
+IMPR_TABLE(TABLE=NBMODE_A)
+
+NBMODE_B = INFO_MODE(MATR_RIGI=RIGID1,
+                     MATR_MASS=MASSE1,FREQ=(100.,12000.),
+                     COMPTAGE=_F(METHODE='STURM'),)
+
+IMPR_TABLE(TABLE=NBMODE_B)
+
+# RECHERCHE DES MODES PROPRES DE TRACTION/COMPRESSION
+# ON SAUTE SCIEMMENT QUELQUES MODES (D'OU STURM='NON')
+MODE_DX=CALC_MODES(MATR_RIGI=RIGID,VERI_MODE=_F(STURM='NON'),
+                   OPTION='PROCHE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                   CALC_FREQ=_F(FREQ=(1263.497,3790.49,6317.484,8844.4477,11371.473,),
+                                ),
+                   MATR_MASS=MASSE,
+                   )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DX,
+                  VALE_CALC=1260.22475077,
+                  VALE_REFE= 1263.497,
+                  CRITERE='RELATIF',
+                  PRECISION=0.003))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DX,
+                  VALE_CALC=3813.15705773,
+                  VALE_REFE= 3790.49,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0065))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DX,
+                  VALE_CALC=6322.77656332,
+                  VALE_REFE= 6317.484,
+                  CRITERE='RELATIF',))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DX,
+                  VALE_CALC=8867.02162101,
+                  VALE_REFE= 8844.4477,
+                  CRITERE='RELATIF',
+                  PRECISION=0.003))
+
+# RECHERCHE DES MODES PROPRES DE FLEXION
+# ON SAUTE SCIEMMENT QUELQUES MODES (D'OU STURM='NON')
+MODE_FZ=CALC_MODES(MATR_RIGI=RIGID,VERI_MODE=_F(STURM='NON'),
+                   OPTION='PROCHE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                   CALC_FREQ=_F(FREQ=(310.133,1943.568,5442.048,10664.242,17628.755,),
+                                ),
+                   MATR_MASS=MASSE,
+                   )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_FZ,
+                  VALE_CALC=283.068976943,
+                  VALE_REFE= 310.133,
+                  CRITERE='RELATIF',
+                  PRECISION=0.095))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_FZ,
+                  VALE_CALC=1952.76109501,
+                  VALE_REFE= 1943.568,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0055))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_FZ,
+                  VALE_CALC=5454.29804679,
+                  VALE_REFE= 5442.048,
+                  CRITERE='RELATIF',
+                  PRECISION=0.003))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_FZ,
+                  VALE_CALC=10684.8851196,
+                  VALE_REFE= 10664.242,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=5,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_FZ,
+                  VALE_CALC=17656.1323774,
+                  VALE_REFE= 17628.755,
+                  CRITERE='RELATIF',
+                  PRECISION=0.002))
+
+# RECHERCHE DES MODES PROPRES DE TORSION
+# ON SAUTE SCIEMMENT QUELQUES MODES (D'OU STURM='NON')
+MODE_DRX=CALC_MODES(MATR_RIGI=RIGID,VERI_MODE=_F(STURM='NON'),
+                    OPTION='PROCHE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                    CALC_FREQ=_F(FREQ=(786.619,2359.856,3933.094,5506.33,),
+                                 ),
+                    MATR_MASS=MASSE,
+                    )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DRX,
+                  VALE_CALC=785.06755681,
+                  VALE_REFE= 786.619,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DRX,
+                  VALE_CALC=2355.20667866,
+                  VALE_REFE= 2359.856,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DRX,
+                  VALE_CALC=3925.35773135,
+                  VALE_REFE= 3933.094,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODE_DRX,
+                  VALE_CALC=5495.52828019,
+                  VALE_REFE= 5506.33,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+# ON SAUTE SCIEMMENT QUELQUES MODES (D'OU STURM='NON')                    
+MOD_DRX1=CALC_MODES(MATR_RIGI=RIGID1,VERI_MODE=_F(STURM='NON'),
+                    OPTION='PROCHE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                    CALC_FREQ=_F(FREQ=(786.619,2359.856,3933.094,5506.33,),
+                                 ),
+                    MATR_MASS=MASSE1,
+                    )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MOD_DRX1,
+                  VALE_CALC=786.609104259,
+                  VALE_REFE= 786.619,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MOD_DRX1,
+                  VALE_CALC=2360.41449345,
+                  VALE_REFE= 2359.856,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MOD_DRX1,
+                  VALE_CALC=3931.63002596,
+                  VALE_REFE= 3933.094,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MOD_DRX1,
+                  VALE_CALC=5505.40797115,
+                  VALE_REFE= 5506.33,
+                  CRITERE='RELATIF',
+                  PRECISION=0.0025))   
+       
+FIN()

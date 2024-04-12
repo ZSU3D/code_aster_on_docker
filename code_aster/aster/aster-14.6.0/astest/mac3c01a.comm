@@ -1,0 +1,112 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# COMMENTAIRE SUR LES ASPECTS SOLVEURS LINEAIRES DE CE CAS-TEST
+# (APPELES VIA STAT_NON_LINE)
+# CE CAS TEST ILLUSTRE L'INTERET DE LA VALEUR 'NON' DE l'OPTION 
+# SOLVEUR/ELIM_LAGR. DANS LES CAS DE FIGURES (COMME ICI) COMPORTANT
+# BEAUCOUP DE LAGRANGES (> 25% DDLS TOTAL). ON A SOUVENT INTERET A 
+# PASSER CETTE OPTION DE 'OUI' A 'NON'. A GAGNE EN CPU (ICI 35%).
+# ATTENTION, CELA PEUT OBLIGER PARFOIS A AUGMENTER LE PARAMETRE
+# SOLVEUR/PCENT_PIVOT.
+# person_in_charge: pierre.badel at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTRANET'),IMPR_MACRO='OUI',PAR_LOT='NON')
+
+tabn = LIRE_TABLE(UNITE      = 38,
+                  FORMAT     = 'LIBRE',
+                  SEPARATEUR = '\t')
+
+MA1=LIRE_MAILLAGE(FORMAT='MED',UNITE=20);
+
+RESU_C1 = CALC_MAC3COEUR(TYPE_COEUR  = 'TEST',
+                      TABLE_N     =  tabn,
+                      MAILLAGE_N  =  MA1,
+                      DEFORMATION = _F(UNITE_THYC   = 32,
+                                       NIVE_FLUENCE = 33))
+
+post_i = RESU_C1.LIST_PARA()['INST'][-1]
+
+TAB = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1,NOM_CHAM='DEPL',INST=post_i,NOM_CMP=('DX','DY'),
+                         GROUP_MA=('CR_B_B', 'TG_B_B')))
+
+#IMPR_TABLE(TABLE=TAB)
+TEST_TABLE(
+           VALE_CALC=0.00533976715201,
+           NOM_PARA='DX',
+           TABLE=TAB,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N430',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00299373821569,
+           NOM_PARA='DY',
+           TABLE=TAB,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N465',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00563624520485,
+           NOM_PARA='DX',
+           TYPE_TEST='MAX',
+           TABLE=TAB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00301730096117,
+           NOM_PARA='DY',
+           TYPE_TEST='MAX',
+           TABLE=TAB,
+           )
+TAB2 = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1,NOM_CHAM='DEPL',INST=0.004,NOM_CMP=('DX','DY','DZ'),
+                         GROUP_NO=('P_CUV','FIX'),))
+
+#IMPR_TABLE(TABLE=TAB2)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=-0.0234370335149,
+           VALE_REFE=-0.023437034,
+           NOM_PARA='DX',
+           TABLE=TAB2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N509',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.00105128499147,
+           VALE_REFE=1.05129E-03,
+           NOM_PARA='DY',
+           TABLE=TAB2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N509',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=-0.0233894032075,
+           VALE_REFE=-0.0233894,
+           NOM_PARA='DX',
+           TABLE=TAB2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N568',),
+           )
+
+FIN()

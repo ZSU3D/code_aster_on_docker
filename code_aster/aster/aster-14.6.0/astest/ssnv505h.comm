@@ -1,0 +1,363 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+#       ELEMENTS DE POUTRE, METHODE ET CONTINUE
+# CAS TEST  SSNV505H
+# MODELE
+# MAILLAGE : ELEMENT DE POUTRES SEG2 EN MODELISATION 3D
+# UNITES   : NEWTON , MILLIMETRE , SECONDE (N,MM,S)
+#
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'));
+
+# ---------------------  MAILLAGE ----------------
+
+#Acquisition du maillage des poutres encastrees
+
+MAILL1=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAILL1=MODI_MAILLAGE(reuse=MAILL1,
+                     MAILLAGE=MAILL1,
+                     ORIE_LIGNE=(_F(GROUP_MA='POU1',
+                                    VECT_TANG=( 1,0,0),
+                                    GROUP_NO='A',),
+                                 _F(GROUP_MA='POU2',
+                                    VECT_TANG=(-1,0,0),
+                                    GROUP_NO='B',),
+                                 ),);
+
+MAILL1=DEFI_GROUP(reuse =MAILL1,
+                  MAILLAGE=MAILL1,
+                  CREA_GROUP_NO=(_F(GROUP_MA=('POU1',),
+                                   NOM='GROUP1',),
+                                 _F(GROUP_MA=('POU2',),
+                                   NOM='GROUP2',),
+                                 ));
+
+#Acquisition du maillage de la section en fibres
+
+MA_SECT=LIRE_MAILLAGE(FORMAT='MED',UNITE=21);
+
+
+# ---- MODELE : POUTRE DROITE D'EULER ----
+
+MODE=AFFE_MODELE(MAILLAGE=MAILL1,
+                 
+                 AFFE=(_F(GROUP_MA='POU1',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='POU_D_TGM',),
+                       _F(GROUP_MA='POU2',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='POU_D_TGM',),
+                       ),);
+
+# ------------- DEFINITON DU MATERIAU -----------
+
+MPOUTRE=DEFI_MATERIAU(ELAS=_F(E=6.8948E3,NU=0.33333,RHO=7800.,),);
+
+GF=DEFI_GEOM_FIBRE(
+   SECTION =_F(GROUP_FIBRE='SECF',
+             GROUP_MA_SECT='SECTION',
+             MAILLAGE_SECT=MA_SECT,
+            COOR_AXE_POUTRE=(0.,0.,),),)
+
+COMPF=DEFI_COMPOR(GEOM_FIBRE=GF,MATER_SECT=MPOUTRE,
+                  MULTIFIBRE=_F(GROUP_FIBRE='SECF',MATER=MPOUTRE, RELATION='ELAS',),
+                     )
+
+
+CM=AFFE_MATERIAU(MAILLAGE=MAILL1,
+                  AFFE=_F(GROUP_MA=('POU1','POU2'),MATER=MPOUTRE),
+                  AFFE_COMPOR=_F(GROUP_MA=('POU1','POU2'),COMPOR=COMPF),
+                 );
+
+CHAMPCAR=AFFE_CARA_ELEM(MODELE=MODE,INFO=1,
+                      POUTRE=_F(GROUP_MA=('POU1','POU2'),
+                                SECTION='GENERALE',
+                                CARA=('A','IY','IZ','AY','AZ','JX','JG','IYR2','IZR2',),
+                                VALE=(645.16,5.54975E3,2.167872E5,1.2,1.2,
+                                      5.08,0.0,0.0,0.),),
+                      GEOM_FIBRE=GF,
+                      MULTIFIBRE=_F(GROUP_MA=('POU1','POU2'),
+                                   GROUP_FIBRE='SECF',),);
+
+# ---------- CONDITIONS AUX LIMITES --------------
+
+COND_LIM=AFFE_CHAR_MECA(MODELE=MODE,
+                        DDL_IMPO=(_F(GROUP_NO=('A','B',),
+                                     DX=0.0,DY=0.0,DZ=0.0,
+                                     DRX=0.0,DRY=0.0,DRZ=0.0),
+                                  _F(GROUP_NO=('GROUP1','GROUP2'),
+                                     DZ=0.0,DRX=0.0,DRY=0.0,),
+                                  ),);
+
+CH1=AFFE_CHAR_MECA(MODELE=MODE,
+                   DDL_IMPO=(_F(GROUP_NO=('C'),
+                                DY=-790.,),
+                             ),);
+
+# ---- METHODE LAGRANGIENNE ----
+F_DIST_M=DEFI_CONSTANTE(VALE=31.75);
+F_DIST_E=DEFI_CONSTANTE(VALE=31.75);
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,0.0,1.0,1.0),
+                    PROL_DROITE='LINEAIRE',
+                    PROL_GAUCHE='LINEAIRE',);
+
+
+L_ARCH=DEFI_LIST_REEL(DEBUT=0.0,
+                                     INTERVALLE=(_F(JUSQU_A=.1,
+                                     NOMBRE=25,),),);
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=(_F(JUSQU_A=1.,
+                                     NOMBRE=50,),),);
+
+L_INST=DEFI_LIST_INST(METHODE='MANUEL',
+                      DEFI_LIST=_F(LIST_INST=LINST,),
+                      ECHEC=_F(EVENEMENT='ERREUR',
+                              ACTION='DECOUPE',
+                              SUBD_METHODE = 'MANUEL',
+                              SUBD_PAS=5,
+                              SUBD_NIVEAU=5,),);
+
+#
+# ---- METHODE CONTINUE ----
+#      ________________
+
+CHCON= DEFI_CONTACT(MODELE         = MODE,
+                    FORMULATION    = 'CONTINUE',
+                    ALGO_RESO_CONT = 'POINT_FIXE',
+                    ALGO_RESO_GEOM = 'POINT_FIXE',
+                    ITER_CONT_MAXI = 10,
+                    RESI_GEOM      = 0.01,
+                    INFO = 2,
+                    ZONE =(
+                           _F(
+                              GROUP_MA_MAIT  = 'POU1',
+                              GROUP_MA_ESCL  = 'POU2',
+                              VECT_MAIT      = 'VECT_Y',
+                              MAIT_VECT_Y    = (0.,0.,-1.,),
+                              DIST_MAIT      = F_DIST_M,
+                              DIST_ESCL      = F_DIST_E,
+                             ),
+                          ),
+                   );
+
+
+
+
+UCON=STAT_NON_LINE(MODELE=MODE,
+                CHAM_MATER=CM,
+                CARA_ELEM=CHAMPCAR,
+                EXCIT=(_F(CHARGE=COND_LIM,),
+                       _F(CHARGE=CH1,
+                          FONC_MULT=RAMPE,),
+                      ),
+                CONTACT  = CHCON,
+                COMPORTEMENT=_F(RELATION='MULTIFIBRE',DEFORMATION='GROT_GDEP',),
+                INCREMENT=_F(LIST_INST=L_INST,
+                             ),
+                NEWTON=_F(REAC_ITER=1,),
+                # on diminue la valeur de RESI_GLOB_RELA pour eviter les "TOLE MACHINE" (issue24538) :
+                CONVERGENCE=_F(ITER_GLOB_MAXI=20,RESI_GLOB_RELA=1.e-7,),
+                SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MDA'),
+                INFO=1,);
+
+UCON=CALC_CHAMP(reuse =UCON,
+          RESULTAT=UCON,
+
+          FORCE='FORC_NODA',
+
+
+         );
+
+# ---- TABLEAUX ----
+
+T_REA_CO=POST_RELEVE_T(ACTION=_F(INTITULE='REAC',
+                                 GROUP_NO=('A','B'),
+                                 RESULTAT=UCON,
+                                 NOM_CHAM='FORC_NODA',
+                                 RESULTANTE='DY',
+                                 OPERATION='EXTRACTION',),);
+
+T_DEP_CO=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL',
+                                 GROUP_NO=('C','A1','B1'),
+                                 RESULTAT=UCON,
+                                 NOM_CHAM='DEPL',
+                                 TOUT_CMP='OUI',
+                                 OPERATION='EXTRACTION',),);
+
+#IMPR_TABLE(TABLE=T_REA_CO,);
+#IMPR_TABLE(TABLE=T_DEP_CO,);
+
+TEST_TABLE(
+           VALE_CALC=311.885469166,
+           NOM_PARA='DY',
+           TABLE=T_REA_CO,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1210.5916565,
+           NOM_PARA='DY',
+           TABLE=T_REA_CO,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2431.63114625,
+           NOM_PARA='DY',
+           TABLE=T_REA_CO,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2085.16553235,
+           NOM_PARA='DY',
+           TABLE=T_REA_CO,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.8,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2341.90643596,
+           NOM_PARA='DY',
+           TABLE=T_REA_CO,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+#
+# ---- METHODE CONTINUE AVEC NORMALE ESCLAVE ----
+#      __________________
+
+CHESCL= DEFI_CONTACT(MODELE         = MODE,
+                    FORMULATION     = 'CONTINUE',
+                    ITER_CONT_TYPE  = 'MULT',
+                    ITER_CONT_MULT  = 4,
+                    ALGO_RESO_GEOM = 'POINT_FIXE',
+                    ALGO_RESO_CONT = 'POINT_FIXE',
+                    ZONE =(
+                           _F(
+                              GROUP_MA_MAIT  = 'POU1',
+                              GROUP_MA_ESCL  = 'POU2',
+                              DIST_MAIT      = F_DIST_M,
+                              DIST_ESCL      = F_DIST_E,
+                              NORMALE        = 'ESCL',
+                              VECT_ESCL      = 'VECT_Y',
+                              ESCL_VECT_Y    = (0.,0.,-1.,),
+                             ),
+                          ),
+                   );
+
+UESCL=STAT_NON_LINE(MODELE=MODE,
+                CHAM_MATER=CM,
+                CARA_ELEM=CHAMPCAR,
+                EXCIT=(_F(CHARGE=COND_LIM,),
+                       _F(CHARGE=CH1,
+                          FONC_MULT=RAMPE,),
+                      ),
+                CONTACT  = CHESCL,
+                COMPORTEMENT=_F(RELATION='MULTIFIBRE',DEFORMATION='GROT_GDEP',),
+                INCREMENT=_F(LIST_INST=L_INST,
+                             INST_FIN=0.94,
+                             ),
+                NEWTON=_F(REAC_ITER=1,),
+                # on diminue la valeur de RESI_GLOB_RELA pour eviter les "TOLE MACHINE" (issue24538) :
+                CONVERGENCE=_F(ITER_GLOB_MAXI=50,RESI_GLOB_RELA=1.e-7,),
+                SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MD'),
+                INFO=1,);
+
+UESCL=CALC_CHAMP(reuse =UESCL,
+          RESULTAT=UESCL,
+
+          FORCE='FORC_NODA',
+
+
+         );
+
+# ---- TABLEAUX ----
+
+T_REA_ES=POST_RELEVE_T(ACTION=_F(INTITULE='REAC',
+                                 GROUP_NO=('A','B'),
+                                 RESULTAT=UESCL,
+                                 NOM_CHAM='FORC_NODA',
+                                 RESULTANTE='DY',
+                                 OPERATION='EXTRACTION',),);
+
+T_DEP_ES=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL',
+                                 GROUP_NO=('C','A1','B1'),
+                                 RESULTAT=UESCL,
+                                 NOM_CHAM='DEPL',
+                                 TOUT_CMP='OUI',
+                                 OPERATION='EXTRACTION',),);
+
+#IMPR_TABLE(TABLE=T_REA_ES,);
+#IMPR_TABLE(TABLE=T_DEP_ES,);
+
+IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=UESCL))
+
+TEST_TABLE(
+           VALE_CALC=311.885469166,
+           NOM_PARA='DY',
+           TABLE=T_REA_ES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1273.76815097,
+           NOM_PARA='DY',
+           TABLE=T_REA_ES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=3036.88461704,
+           NOM_PARA='DY',
+           TABLE=T_REA_ES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=4817.15351881,
+           NOM_PARA='DY',
+           TABLE=T_REA_ES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.8,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=6256.07158004,
+           NOM_PARA='DY',
+           TABLE=T_REA_ES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.94,),
+           )
+
+FIN();

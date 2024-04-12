@@ -1,0 +1,89 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'), PAR_LOT='NON',
+      # SUPERVIS_1 : a cause de PAR_LOT='NON' necessaire pour recuperer la valeur de reference.
+      IGNORE_ALARM=('SUPERVIS_1'))
+
+MATER=DEFI_MATERIAU(ELAS=_F(E=200000.0,
+                            NU=0.0,),);
+
+PRE_GIBI();
+
+MA_2D=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+CHMAT_2D=AFFE_MATERIAU(MAILLAGE=MA_2D,
+                       AFFE=_F(TOUT='OUI',
+                               MATER=MATER,),);
+
+#  MODELE  2D :
+#  ------------
+
+MOD1=AFFE_MODELE(MAILLAGE=MA_2D,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='D_PLAN',),
+                 DISTRIBUTION=_F(METHODE='CENTRALISE'),);
+
+CH1=AFFE_CHAR_MECA(MODELE=MOD1,
+                   DDL_IMPO=_F(GROUP_NO='A',
+                               DX=0,
+                               DY=0,),
+                   FACE_IMPO=_F(GROUP_MA='BORD3B',
+                                DX=2.0,
+                                DY=3.0,),
+                   LIAISON_SOLIDE=_F(GROUP_MA='CARRE2',),
+                   INFO=1,);
+# CALCUL DE REFERENCE (MUMPS + CHARGEMENT DUALISE)
+
+REREF1=MECA_STATIQUE( MODELE=MOD1, CHAM_MATER=CHMAT_2D, SOLVEUR=_F(METHODE='MUMPS',),
+                      EXCIT=(_F(CHARGE = CH1),   ))
+
+TN1=POST_RELEVE_T(  ACTION=_F(  INTITULE = 'XX1', GROUP_NO = 'B', OPERATION = 'EXTRACTION',
+                                RESULTAT = REREF1, NUME_ORDRE=1, NOM_CHAM='DEPL', TOUT_CMP = 'OUI' ))
+
+DXREF=TN1['DX',1]
+DYREF=TN1['DY',1]
+
+# CALCUL AVEC ELIMINATION DES LAGRANGES 
+
+MES1=MECA_STATIQUE(MODELE=MOD1,
+                   CHAM_MATER=CHMAT_2D,
+                   EXCIT=_F(CHARGE=CH1,),
+                   SOLVEUR=_F(ELIM_LAGR='OUI',),);
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MES1,
+#                  NOM_CHAM='DEPL',
+#                  GROUP_NO=('B',),),);
+
+# TESTS 
+                  
+TEST_RESU(RESU=_F(NUME_ORDRE=1, GROUP_NO='B', RESULTAT=MES1,  NOM_CHAM='DEPL', NOM_CMP='DX',
+                                  REFERENCE='AUTRE_ASTER', VALE_REFE=DXREF, VALE_CALC= -8.53964377759386E-01,)) 
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1, GROUP_NO='B', RESULTAT=MES1,  NOM_CHAM='DEPL', NOM_CMP='DY',
+                                  REFERENCE='AUTRE_ASTER', VALE_REFE=DYREF , VALE_CALC = 2.16974908826082E+00,))
+
+#
+#---------------------------------------------------------------------
+
+FIN();
+
+#
+#CHECKSUM:7048e3b585852ba7264d1f034c3a9212  -:FIN CHECKSUM

@@ -1,0 +1,243 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine vtcmbl(nbcmb, typcst, const, typech, nomch,&
+                  typres, chpres)
+!     ------------------------------------------------------------------
+!     COMBINAISON LINEAIRE DE CHAM_NO OU DE CHAM_ELEM
+!     *  LES CHAM_NOS OU CHAM_ELEMS SONT REELS OU COMPLEXES
+!     *  LES SCALAIRES SONT REELS OU COMPLEXES
+!     -----------------------------------------------------------------
+! IN  : NBCOMB : IS  : NOMBRE DE CHAM_GDS A COMBINER
+! IN  : TYPCST : K1  : TYPE DES CONSTANTES (R OU C, OU I )
+! IN  : CONST  : R8  : TABLEAU DES COEFFICIENTS
+! IN  : TYPECH : K1  : TYPE DES CHAM_GDS   (R OU C)
+! IN  : NOMCH  : K19 : NOMS DES CHAM_GDS
+! IN  : TYPRES : K1  : TYPE DU CHAMP RESULTAT (R OU C)
+! IN  : CHPRES : K19 : NOM DU CHAMP RESULTAT
+!----------------------------------------------------------------------
+! CORPS DU PROGRAMME
+    implicit none
+!
+! DECLARATION PARAMETRES D'APPELS
+#include "jeveux.h"
+#include "asterfort/assert.h"
+#include "asterfort/gcncon.h"
+#include "asterfort/infniv.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jedetr.h"
+#include "asterfort/jeecra.h"
+#include "asterfort/jeexin.h"
+#include "asterfort/jelibe.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/sdchgd.h"
+#include "asterfort/utmess.h"
+#include "asterfort/wkvect.h"
+    integer, intent(in) :: nbcmb
+    real(kind=8), intent(in) :: const(*)
+    character(len=*), intent(in) :: typcst(*), typech(*), nomch(*), typres, chpres
+!
+!
+! DECLARATION VARIABLES LOCALES
+    integer :: ibid, i, ifm, niv
+    integer :: icmb, iret, ival, lvale, iconst
+    integer :: jdesc, jrefe, jvale
+    integer :: kdesc, krefe, kvale
+    integer :: nbdesc, nbrefe, nbvale
+    integer :: nbdes1, nbref1, nbval1
+    real(kind=8) :: dimag
+    complex(kind=8) :: c8cst
+    character(len=4) :: docu, type
+    character(len=5) :: refe, desc, vale
+    character(len=19) :: ch19, ch19r
+    character(len=24) :: k24b
+!     ------------------------------------------------------------------
+!
+    call jemarq()
+! RECUPERATION ET MAJ DU NIVEAU D'IMPRESSION
+    call infniv(ifm, niv)
+!
+!-----------------------------------------------------------------------
+! --- PHASE D'INITIALISATION
+!-----------------------------------------------------------------------
+    type=typres
+    ch19=nomch(1)
+!
+! CHAM_NO OU CHAM_ELEM ?
+    k24b=ch19//'.DESC'
+    call jeexin(k24b, ibid)
+    if (ibid .gt. 0) then
+        k24b=ch19//'.DESC'
+        call jelira(k24b, 'DOCU', cval=docu)
+    else
+        k24b=ch19//'.CELD'
+        call jelira(k24b, 'DOCU', cval=docu)
+    endif
+!
+!
+! INIT. DE BASE
+    if (docu .eq. 'CHNO') then
+        refe='.REFE'
+        desc='.DESC'
+        vale='.VALE'
+    else if (docu.eq.'CHML') then
+        refe='.CELK'
+        desc='.CELD'
+        vale='.CELV'
+    else
+        call utmess('F', 'UTILITAI_21')
+    endif
+!
+!
+!
+!   PREMIER CHAM_NO A CONCATENER
+    ch19=nomch(1)
+!
+!   OBTENTION DES ADRESSES ET DES TAILLES DES .DESC, .REFE ET .VALE
+!   DU PREMIER CHAM_NO A CONCATENER. ON SUPPOSE QUE
+!   TOUS LES CHAM_NOS DE LA LISTE NOMCH SONT HOMOGENES SUR CE POINT.
+    call jelira(ch19//desc, 'LONMAX', nbdesc)
+    call jelira(ch19//vale, 'LONMAX', nbvale)
+    call jelira(ch19//refe, 'LONMAX', nbrefe)
+    call jeveuo(ch19//desc, 'L', jdesc)
+    call jeveuo(ch19//refe, 'L', jrefe)
+!
+!   CONSTRUCTION D'UN CHAM_GD RESULTAT SUR LE MODELE DE NOMCH(1)
+    ch19r=chpres
+    call jeexin(ch19r//vale, iret)
+    if (iret .eq. 0) then
+        call wkvect(ch19r//desc, 'V V I', nbdesc, kdesc)
+        call wkvect(ch19r//vale, 'V V '//type, nbvale, kvale)
+        call wkvect(ch19r//refe, 'V V K24', nbrefe, krefe)
+    else
+        call jeveuo(ch19r//desc, 'E', kdesc)
+        call jelira(ch19r//desc, 'LONMAX', nbdes1)
+        call jeveuo(ch19r//refe, 'E', krefe)
+        call jelira(ch19r//refe, 'LONMAX', nbref1)
+        call jelira(ch19r//vale, 'LONMAX', nbval1)
+!       VERIFICATION DE LA COHERENCE DES DIMENSIONS
+        ASSERT(nbdes1.eq.nbdesc)
+        ASSERT(nbref1.eq.nbrefe)
+        ASSERT(nbval1.eq.nbvale)
+    endif
+!
+    call jeecra(ch19r//desc, 'DOCU', cval=docu)
+!   RECOPIE DU .DESC ET DU .REFE DU PREMIER CHAM_NO DE LA LISTE
+!   DANS CEUX DU CHAM_NO SOLUTION
+    do i = 0, nbdesc-1
+        zi(kdesc+i)=zi(jdesc+i)
+    end do
+    do i = 0, nbrefe-1
+        zk24(krefe+i)=zk24(jrefe+i)
+    end do
+!
+!   CHANGER LA GRANDEUR
+    call sdchgd(ch19r, typres)
+!
+!   VECTEUR RECEPTACLE TEMPORAIRE DE LA COMBINAISON LINEAIRE
+    call wkvect('&&VTCMBL.VALE', 'V V '//type, nbvale, lvale)
+!
+!
+!-----------------------------------------------------------------------
+! --- BOUCLE SUR LES CHAM_GDS A COMBINER
+!-----------------------------------------------------------------------
+    iconst=1
+    do icmb = 1, nbcmb
+!
+!       CHAM_NO A CONCATENER
+        ch19=nomch(icmb)
+!
+        call jeveuo(ch19//vale, 'L', jvale)
+        if (typres(1:1) .eq. 'R') then
+            if (typech(icmb)(1:1) .eq. 'R') then
+                do ival = 0, nbvale-1
+                    zr(lvale+ival)=zr(lvale+ival)+ const(&
+                            iconst)*zr(jvale+ival)
+                end do
+            else
+                if (typcst(icmb)(1:1) .eq. 'R') then
+                    do ival = 0, nbvale-1
+                        zr(lvale+ival)=zr(lvale+ival)+&
+                                const(iconst)*dble(zc(jvale+ival))
+                    end do
+                else if (typcst(icmb)(1:1).eq.'I') then
+                    do ival = 0, nbvale-1
+                        zr(lvale+ival)=zr(lvale+ival)+&
+                                const(iconst)*dimag(zc(jvale+ival))
+                    end do
+                else
+                    type=typcst(icmb)(1:1)
+                    call utmess('F', 'PREPOST3_6', sk=type)
+                endif
+            endif
+        else
+            if (typech(icmb)(1:1) .eq. 'R') then
+                if (typcst(icmb)(1:1) .eq. 'R') then
+                    do ival = 0, nbvale-1
+                        zc(lvale+ival)=zc(lvale+ival)+&
+                                const(iconst)*zr(jvale+ival)
+                    end do
+                else if (typcst(icmb)(1:1).eq.'C') then
+                    c8cst=dcmplx(const(iconst),const(iconst+1)&
+                            )
+                    do ival = 0, nbvale-1
+                        zc(lvale+ival)=zc(lvale+ival)+c8cst*&
+                                zr(jvale+ival)
+                    end do
+                endif
+            else
+                if (typcst(icmb)(1:1) .eq. 'R') then
+                    do ival = 0, nbvale-1
+                        zc(lvale+ival)=zc(lvale+ival)+&
+                                const(iconst)*zc(jvale+ival)
+                    end do
+                else if (typcst(icmb)(:1).eq.'C') then
+                    c8cst=dcmplx(const(iconst),const(iconst+1)&
+                            )
+                    do ival = 0, nbvale-1
+                        zc(lvale+ival)=zc(lvale+ival)+c8cst*&
+                                zc(jvale+ival)
+                    end do
+                endif
+            endif
+        endif
+        call jelibe(ch19//vale)
+        iconst=iconst+1
+        if (typcst(icmb)(1:1) .eq. 'C') iconst=iconst+1
+    end do
+!
+!
+!   IL EST NECESSAIRE D'ACTUALISER KVALE SI LE RESULTAT EST DANS NOMCH()
+    call jeveuo(ch19r//vale, 'E', kvale)
+    if (type(1:1) .eq. 'R') then
+        do ival = 0, nbvale-1
+            zr(kvale+ival)=zr(lvale+ival)
+        end do
+    else if (type(1:1).eq.'C') then
+        do ival = 0, nbvale-1
+            zc(kvale+ival)=zc(lvale+ival)
+        end do
+    endif
+!
+    call jedetr('&&VTCMBL.VALE')
+    call jelibe(ch19r//vale)
+!
+    call jedema()
+end subroutine

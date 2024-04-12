@@ -1,0 +1,692 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS_TEST__: SDLD102C
+#
+# CE FICHIER DE COMMANDES CONTIENT LES INSTRUCTIONS POUR CALCULER LA
+# REPONSE TRANSITOIRE PAR SOUS-STRUCTURATION D'UN SYSTEME COMPOSE DE
+# 3 MASSES ET 4 RESSORTS SOUMIS A UNE FORCE CONSTANTE ET AMORTI.
+#
+# L'AMORTISSEMENT CONSIDERE EST UN AMORTISSEMENT REDUIT ASSOCIE AUX
+# MODES DYNAMIQUES DES BASES DE PROJECTION DES SOUS-STRUCTURES.
+#
+# LA BASE DE PROJECTION DES SOUS-STRUCTURES EST DE TYPE 'CRAIGB'.
+#
+# 6 SCHEMAS D'INTEGRATION DE DYNA_VIBRA ('DIFF_CENTRE', 'NEWMARK'
+# 'ADAPT_ORDRE_2', 'RUNGE_KUTTA_32', 'RUNGE_KUTTA_54', ET 'DEVOGE') 
+# SONT TESTES.
+#
+# A PARTIR DU NUME_DDL_GENE, ON DUPLIQUE LE CALCUL CALC_MODES(L'UN BASE SUR LES
+# MODES CALCULES PAR METHODE DE SOUS-ESPACE ET L'AUTRE BASE SUR LA METHODE DES
+# PUISSANCES INVERSES) POUR TESTER L'ISOFONCTIONNALITE DES 2 OPERATEURS EN CAS DE
+# NUME_DDL_GENE. D'AUTRE PART ON CHOISIT (A TORT) L'USAGE DU SOLVEUR
+# LINEAIRE MULT_FRONT POUR FORCER LE CHANGEMENT EN INTERNE OPERATEUR
+# POUR MUMPS.
+# ON TESTE AUSSI DS CETTE CONFIGURATION L'OPERATEUR INFO_MODE
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+MAILLA0=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+MAILLA=CREA_MAILLAGE(MAILLAGE=MAILLA0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='MASSE',   GROUP_NO='MASSE', ),
+    ),
+)
+
+MODELE=AFFE_MODELE(  MAILLAGE=MAILLA,AFFE=(
+                            _F( GROUP_MA = 'RESSORT',
+                                  PHENOMENE = 'MECANIQUE',
+                                  MODELISATION = 'DIS_TR'),
+                            _F( GROUP_MA = 'MASSE',
+                                  PHENOMENE = 'MECANIQUE',
+                                  MODELISATION = 'DIS_T')))
+
+#
+PARAM=AFFE_CARA_ELEM(    MODELE=MODELE,DISCRET=(
+                            _F( GROUP_MA = 'RESSORT',
+                                     CARA = 'K_TR_D_L',
+                                     VALE = (1., 0., 0., 0., 0., 0., )),
+                               _F(CARA='M_TR_L',
+                                  GROUP_MA='RESSORT',
+                                  VALE=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                        0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                        0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                        0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,),),
+                            _F( GROUP_MA = 'MASSE',
+                                     CARA = 'M_T_D_N',
+                                     VALE = (1., ))))
+
+#  DEFINITION DU CHARGEMENT
+#------------------------------------------------------------------
+
+CHARGE=AFFE_CHAR_MECA(  MODELE=MODELE,DDL_IMPO=(
+         _F( TOUT = 'OUI', DY = 0.0,  DZ = 0.0, DRX = 0., DRY = 0., DRZ = 0.),
+         _F( NOEUD = 'NO1',  DX = 0.0),
+         _F( NOEUD = 'NO3',  DX = 0.0)))
+
+#
+CHARTRAN=AFFE_CHAR_MECA(        MODELE=MODELE,
+                           FORCE_NODALE=_F( NOEUD = 'NO2',  FX = 1.))
+
+#  MATRICES ET VECTEURS ELEMENTS FINIS
+#------------------------------------------------------------------
+
+K_ELEM=CALC_MATR_ELEM(      MODELE=MODELE,
+                                CHARGE=CHARGE,
+                             CARA_ELEM=PARAM,
+                               OPTION='RIGI_MECA')
+
+#
+M_ELEM=CALC_MATR_ELEM(      MODELE=MODELE,
+                                CHARGE=CHARGE,
+                             CARA_ELEM=PARAM,
+                               OPTION='MASS_MECA')
+
+#
+V_ELEM=CALC_VECT_ELEM( OPTION='CHAR_MECA',
+                            CHARGE=CHARTRAN)
+
+#  NUMEROTATION DU PROBLEME ELEMENTS FINIS
+#------------------------------------------------------------------
+
+NUMDDL=NUME_DDL(  MATR_RIGI=K_ELEM)
+
+#  ASSEMBLAGE DES MATRICES ET VECTEURS
+#------------------------------------------------------------------
+
+K_ASSE=ASSE_MATRICE(  MATR_ELEM=K_ELEM,
+                           NUME_DDL=NUMDDL)
+
+#
+M_ASSE=ASSE_MATRICE(  MATR_ELEM=M_ELEM,
+                           NUME_DDL=NUMDDL)
+
+#
+V_ASSE=ASSE_VECTEUR(  VECT_ELEM=V_ELEM,
+                           NUME_DDL=NUMDDL)
+
+#  CALCUL DES MODES PROPRES DES SOUS-STRUCTURES
+#------------------------------------------------------------------
+
+MODES=CALC_MODES(INFO=2,
+                 MATR_RIGI=K_ASSE,
+                 CALC_FREQ=_F(NMAX_FREQ=1,
+                              ),
+                 SOLVEUR=_F(METHODE='MUMPS',
+                            ),
+                 MATR_MASS=M_ASSE,
+                 )
+
+#  DEFINITION DES INTERFACES
+#------------------------------------------------------------------
+
+LINT1=DEFI_INTERF_DYNA(   NUME_DDL=NUMDDL,
+                             INTERFACE=_F( NOM = 'DROITE',
+                                        TYPE = 'CRAIGB',
+                                        NOEUD = 'NO3',
+                         MASQUE = ('DY', 'DZ', 'DRX', 'DRY', 'DRZ',)))
+
+#
+LINT2=DEFI_INTERF_DYNA(   NUME_DDL=NUMDDL,
+                             INTERFACE=_F( NOM = 'GAUCHE',
+                                        TYPE = 'CRAIGB',
+                                        NOEUD = 'NO1',
+                         MASQUE = ('DY', 'DZ', 'DRX', 'DRY', 'DRZ',)))
+
+#  CALCUL DE LA BASE MODALE DES SOUS-STRUCTURES
+#------------------------------------------------------------------
+
+BAMO1=DEFI_BASE_MODALE( CLASSIQUE=_F( INTERF_DYNA = LINT1,
+                                        MODE_MECA = MODES,
+                                        NMAX_MODE = 1))
+
+#
+BAMO2=DEFI_BASE_MODALE( CLASSIQUE=_F( INTERF_DYNA = LINT2,
+                                        MODE_MECA = MODES,
+                                        NMAX_MODE = 1))
+
+#  CALCUL DU MACRO-ELEMENT
+#------------------------------------------------------------------
+
+MACEL1=MACR_ELEM_DYNA(  BASE_MODALE=BAMO1,
+                       AMOR_REDUIT=(0.01,))
+
+MACEL2=MACR_ELEM_DYNA(  BASE_MODALE=BAMO2,
+                        AMOR_REDUIT=(0.01,))
+
+#  DEFINITION DU MODELE GENERALISE
+#------------------------------------------------------------------
+
+MODEGE=DEFI_MODELE_GENE(SOUS_STRUC=(_F(NOM='COTE1',
+                                       MACR_ELEM_DYNA=MACEL1,
+                                       ANGL_NAUT = (0., 0., 0.,),
+                                       TRANS=(0.,0.,0.),),
+                                    _F(NOM='COTE2',
+                                       MACR_ELEM_DYNA=MACEL2,
+                                       ANGL_NAUT = (0., 0., 0.,),
+                                       TRANS=(0.2,0.,0.),),),
+                             LIAISON=_F( SOUS_STRUC_1 = 'COTE1',
+                                      SOUS_STRUC_2 = 'COTE2',
+                                      INTERFACE_1 = 'DROITE',
+                                      INTERFACE_2 = 'GAUCHE'),
+                               VERIF=_F( STOP_ERREUR = 'OUI',
+                                      PRECISION = 1.E-6,
+                                      CRITERE = 'RELATIF'))
+
+#  NUMEROTATION DU PROBLEME GENERALISE
+#------------------------------------------------------------------
+
+NUMEGE=NUME_DDL_GENE(  MODELE_GENE=MODEGE)
+
+#  ASSEMBLAGE DES MATRICES ET VECTEURS
+#------------------------------------------------------------------
+
+MASGEN=ASSE_MATR_GENE(  NUME_DDL_GENE=NUMEGE,
+                                  OPTION='MASS_GENE')
+
+#
+RIGGEN=ASSE_MATR_GENE(  NUME_DDL_GENE=NUMEGE,
+                                  OPTION='RIGI_GENE')
+
+#
+AMOGEN=ASSE_MATR_GENE(  NUME_DDL_GENE=NUMEGE,
+                                  OPTION='AMOR_GENE')
+
+#
+FGEN=ASSE_VECT_GENE(    NUME_DDL_GENE=NUMEGE,
+                         CHAR_SOUS_STRUC=_F( SOUS_STRUC = 'COTE1',
+                                          VECT_ASSE = V_ASSE))
+
+#  CALCUL DES MODES PROPRES DE LA STRUCTURE GLOBALE (SUIVANT  2 SOLVEURS
+#  MODAUX DISTINCTS)
+#------------------------------------------------------------------
+# ON CHOISIT (A TORT) L'USAGE DU SOLVEUR LINEAIRE MULT_FRONT POUR FORCER
+# LE CHANGEMENT EN INTERNE OPERATEUR POUR MUMPS
+NB_MODES=INFO_MODE(MATR_RIGI=RIGGEN,MATR_MASS=MASGEN,FREQ=(0.,3.E-1),
+           SOLVEUR=_F(METHODE='MULT_FRONT'))
+
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=3,
+           VALE_REFE_I=3,
+           NOM_PARA='NB_MODE',
+           TABLE=NB_MODES,)
+
+# CAS 1
+RESGEN=CALC_MODES(INFO=2,
+                  MATR_RIGI=RIGGEN,
+                  CALC_FREQ=_F(NMAX_FREQ=3,
+                               ),
+                  OPTION='PLUS_PETITE',
+                  SOLVEUR=_F(METHODE='MULT_FRONT',
+                             ),
+                  MATR_MASS=MASGEN,
+                  )
+
+
+MODGLO=REST_SOUS_STRUC(   RESU_GENE=RESGEN,
+                           SOUS_STRUC='COTE1',
+                           TOUT_ORDRE='OUI')
+# CAS 2
+RESGEN2=CALC_MODES(MATR_RIGI=RIGGEN,
+                   CALC_FREQ=_F(FREQ=( 1.21E-1,2.25E-1,2.94E-1,),
+                                ),
+                   OPTION='PROCHE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                   MATR_MASS=MASGEN,
+                   )
+
+MODGLO2=REST_SOUS_STRUC(   RESU_GENE=RESGEN2,
+                           SOUS_STRUC='COTE1',
+                           TOUT_ORDRE='OUI')
+
+#  NUMEROTATION DU PROBLEME GENERALISE
+#------------------------------------------------------------------
+
+NUMEMODE=NUME_DDL_GENE(BASE=RESGEN,STOCKAGE='PLEIN')
+NUMEMOD2=NUME_DDL_GENE(BASE=RESGEN2,STOCKAGE='PLEIN')
+
+#  MATRICES ET VECTEURS GENERALISES
+#------------------------------------------------------------------
+
+MASPRO=PROJ_MATR_BASE( BASE=RESGEN,NUME_DDL_GENE=NUMEMODE,
+                       MATR_ASSE_GENE=MASGEN)
+RIGPRO=PROJ_MATR_BASE( BASE=RESGEN,NUME_DDL_GENE=NUMEMODE,
+                       MATR_ASSE_GENE=RIGGEN)
+AMOPRO=PROJ_MATR_BASE( BASE=RESGEN,NUME_DDL_GENE=NUMEMODE,
+                       MATR_ASSE_GENE=AMOGEN)
+VECPRO=PROJ_VECT_BASE( BASE=RESGEN,NUME_DDL_GENE=NUMEMODE,
+                       VECT_ASSE_GENE=FGEN,
+                       TYPE_VECT='FORC')
+
+MASPRO2=PROJ_MATR_BASE( BASE=RESGEN2,NUME_DDL_GENE=NUMEMOD2,
+                       MATR_ASSE_GENE=MASGEN)
+RIGPRO2=PROJ_MATR_BASE( BASE=RESGEN2,NUME_DDL_GENE=NUMEMOD2,
+                       MATR_ASSE_GENE=RIGGEN)
+AMOPRO2=PROJ_MATR_BASE( BASE=RESGEN2,NUME_DDL_GENE=NUMEMOD2,
+                       MATR_ASSE_GENE=AMOGEN)
+VECPRO2=PROJ_VECT_BASE( BASE=RESGEN2,NUME_DDL_GENE=NUMEMOD2,
+                       VECT_ASSE_GENE=FGEN,
+                       TYPE_VECT='FORC')
+
+LIST_R=DEFI_LIST_REEL(       DEBUT=0.,
+                           INTERVALLE=_F( JUSQU_A = 80.,
+                                       NOMBRE = 10))
+
+#  CALCULS TRANSITOIRES
+#-----------------------------------------------------------------
+
+# CAS 1
+TRANG11=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.001),
+                            ARCHIVAGE=_F( PAS_ARCH = 10)
+                            )
+TRANG12=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',
+                                            BETA=0.27,GAMMA=0.52),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01),
+                            ARCHIVAGE=_F( PAS_ARCH = 10)
+                            )
+TRANG13=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+# POUR AMELIORER LE TEMPS CPU ON A IMPOSE UN PAS_MAXI PLUS GRAND QUE PAS
+                                       PAS_MAXI = 0.1,
+                                       NB_POIN_PERIODE = 300,
+                                       VITE_MIN = 'MAXI'),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+TRANG14=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_32',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-7),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+TRANG15=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_54',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-7),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+TRANG16=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DEVOGE',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-8),
+                             MATR_MASS=MASPRO,
+                             MATR_RIGI=RIGPRO,
+                             MATR_AMOR=AMOPRO,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+
+# CAS 2
+TRANG21=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01),
+                            ARCHIVAGE=_F( PAS_ARCH = 10)
+                            )
+TRANG22=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01),
+                            ARCHIVAGE=_F( PAS_ARCH = 10)
+                            )
+TRANG23=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+                                       PAS_MAXI = 0.1,
+                                       NB_POIN_PERIODE = 300,
+                                       VITE_MIN = 'MAXI'),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,),
+                            ARCHIVAGE=_F( PAS_ARCH = 10)
+                            )
+
+TRANG24=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_32',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-7),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+TRANG25=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_54',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-7),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+TRANG26=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DEVOGE',
+                                       PAS_MAXI = 0.1,
+                                       TOLERANCE=1.E-8),
+                             MATR_MASS=MASPRO2,
+                             MATR_RIGI=RIGPRO2,
+                             MATR_AMOR=AMOPRO2,
+                                EXCIT=_F( VECT_ASSE_GENE = VECPRO2,
+                                       COEF_MULT = 1.),
+                            INCREMENT=_F( INST_INIT = 0.,
+                                       INST_FIN = 82.,
+                                       PAS = 0.01,
+                                       ),
+                            ARCHIVAGE=_F( PAS_ARCH = 1)
+                            )
+
+
+#  RESTITUTIONS
+#------------------------------------------------------------------
+
+# CAS 1
+TRAN11=REST_GENE_PHYS(   RESU_GENE=TRANG11,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+TRAN12=REST_GENE_PHYS(   RESU_GENE=TRANG12,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+TRAN13=REST_GENE_PHYS(   RESU_GENE=TRANG13,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+TRAN14=REST_GENE_PHYS(   RESU_GENE=TRANG14,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+TRAN15=REST_GENE_PHYS(   RESU_GENE=TRANG15,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+TRAN16=REST_GENE_PHYS(   RESU_GENE=TRANG16,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN11,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498448216502,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN12,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.499329924534,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN13,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.477970613665,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN14,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498672315067,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN15,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498698351091,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN16,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498671813861,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+# CAS 2
+TRAN21=REST_GENE_PHYS(   RESU_GENE=TRANG21,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+TRAN22=REST_GENE_PHYS(   RESU_GENE=TRANG22,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+TRAN23=REST_GENE_PHYS(   RESU_GENE=TRANG23,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+TRAN24=REST_GENE_PHYS(   RESU_GENE=TRANG24,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+TRAN25=REST_GENE_PHYS(   RESU_GENE=TRANG25,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+TRAN26=REST_GENE_PHYS(   RESU_GENE=TRANG26,
+                        TOUT_CHAM='OUI',
+                        LIST_INST=LIST_R,
+                        INTERPOL='LIN',
+                        MODE_MECA=MODGLO2 )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN21,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.496371220241,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN22,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498828771871,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN23,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.477985744328,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN24,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498672315068,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN25,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498698351091,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(INST=80.0,
+                  RESULTAT=TRAN26,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO3',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.498671814192,
+                  VALE_REFE=0.49867,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+#
+FIN()
+#

@@ -1,0 +1,34 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: j-pierre.lefebvre at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(ENVIMA='TEST', SDVERI='OUI'))
+
+'''
+Ce fichier de commande permet d'imprimer les valeurs associees aux constantes numeriques 
+dependant de la plate-forme (32 ou 64 bits). Notamment les longueurs et les valeurs extremales
+des nombres entiers et des nombres flottants, quelques constantes mathematiques particulieres, 
+et certains parametres lies a l'utilisation de la memoire et des fichiers.
+Les valeurs sont accessibles a l'aide des fonctions ENVIMA decrites dans le document d6.01.01.
+'''
+FIN()
+#
+#
+#

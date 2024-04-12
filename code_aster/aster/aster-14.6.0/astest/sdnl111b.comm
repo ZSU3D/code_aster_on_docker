@@ -1,0 +1,212 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS_TEST__: SDNL111B
+
+DEBUT(  CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+
+POUTRE=LIRE_MAILLAGE(FORMAT='MED', )
+
+POUTRE=DEFI_GROUP( reuse=POUTRE,   MAILLAGE=POUTRE,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+#
+
+MODELE=AFFE_MODELE(   MAILLAGE=POUTRE,
+                         AFFE=_F( TOUT = 'OUI', PHENOMENE = 'MECANIQUE',
+                        MODELISATION = 'POU_D_T'))
+
+#
+MATER1=DEFI_MATERIAU(  ELAS=_F( E = 2.E11,  NU = 0.,  RHO = 7800.0))
+
+#
+CHAMPMAT=AFFE_MATERIAU(  MAILLAGE=POUTRE,
+                      AFFE=_F( TOUT = 'OUI',MATER = MATER1))
+
+#
+CHAMPCAR=AFFE_CARA_ELEM(  MODELE=MODELE,  POUTRE=_F(
+       GROUP_MA = 'TOUT',
+
+                        SECTION = 'RECTANGLE', CARA = ('H',),
+                        VALE = (0.02, )))
+
+#
+CHARGE=AFFE_CHAR_MECA(  MODELE=MODELE,DDL_IMPO=(
+                     _F( TOUT = 'OUI', DY = 0., DZ = 0.,
+                                          DRX = 0., DRY = 0., DRZ = 0.),
+                     _F( NOEUD = 'NO4', DX = 0.))
+                       )
+
+#
+RIGIELEM=CALC_MATR_ELEM(  MODELE=MODELE,CHARGE=CHARGE,
+                         CHAM_MATER=CHAMPMAT,
+                         CARA_ELEM=CHAMPCAR,
+                         OPTION='RIGI_MECA')
+
+#
+MASSELEM=CALC_MATR_ELEM(  MODELE=MODELE,CHARGE=CHARGE,
+                         CHAM_MATER=CHAMPMAT,
+                         CARA_ELEM=CHAMPCAR,
+                         OPTION='MASS_MECA')
+
+#
+NUMEROTA=NUME_DDL(   MATR_RIGI=RIGIELEM )
+
+#
+MATRRIGI=ASSE_MATRICE(   MATR_ELEM=RIGIELEM,  NUME_DDL=NUMEROTA )
+
+#
+MATRMASS=ASSE_MATRICE(   MATR_ELEM=MASSELEM,  NUME_DDL=NUMEROTA )
+
+#
+MODES=CALC_MODES(MATR_RIGI=MATRRIGI,
+                 VERI_MODE=_F(STOP_ERREUR='OUI',
+                              ),
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=40,
+                              FREQ=20000.,
+                              ),
+                 MATR_MASS=MATRMASS,
+                 )
+
+
+#
+VITIPHYS=CREA_CHAMP( OPERATION='AFFE', PROL_ZERO='OUI', TYPE_CHAM='NOEU_DEPL_R',
+                            MAILLAGE=POUTRE,AFFE=(
+                            _F( GROUP_NO = 'POUTRE1',
+                                  NOM_CMP = 'DX', VALE = -1.0),
+                            _F( GROUP_NO = 'POUTRE2',
+                                  NOM_CMP = 'DX', VALE = 0.0)),
+                            NUME_DDL=NUMEROTA
+                        )
+
+#
+##
+PROJ_BASE(  BASE=MODES,
+            STOCKAGE='DIAG',
+            MATR_ASSE_GENE=(
+             _F(
+                             MATRICE = CO("MASSEPRO"),
+                             MATR_ASSE = MATRMASS),
+             _F(
+                             MATRICE = CO("RIGIPROJ"),
+                             MATR_ASSE = MATRRIGI)),
+             VECT_ASSE_GENE=_F(
+                             VECTEUR = CO("VITINI"),
+                             VECT_ASSE = VITIPHYS,
+                             TYPE_VECT = 'VITE')
+)
+
+#
+BICERCI=DEFI_OBSTACLE(  TYPE='BI_CERC_INT' )
+
+#
+
+#
+DYNAMOD4=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                       SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                       MATR_MASS=MASSEPRO,
+                       MATR_RIGI=RIGIPROJ,
+                       AMOR_MODAL=_F(AMOR_REDUIT=(  0.001,  ),),
+                       ETAT_INIT=_F( VITE = VITINI),
+                       INCREMENT=_F(  INST_INIT = 0.,
+                                   INST_FIN = 0.0020,
+                                   PAS = 1.E-6,
+                                   VERI_PAS = 'NON'),
+                       COMPORTEMENT=_F(RELATION='DIS_CHOC',
+                               NOEUD_1 = 'NO1',
+                               NOEUD_2 = 'NO3',
+                               INTITULE = 'LIAISON',
+                               OBSTACLE = BICERCI,
+                               NORM_OBST = (0., 1., 0., ),
+                               DIST_1 = 1.E-6,
+                               DIST_2 = 2.E-6,
+                               RIGI_NOR = 5.E9,
+                               AMOR_NOR = 2.E4,
+                               RIGI_TAN = 0.,
+                               AMOR_TAN = 0.,
+                               FROTTEMENT='COULOMB',
+                               COULOMB = 0.),
+                      VERI_CHOC=_F(STOP_CRITERE='OUI'),
+                      INFO = 2,
+                       )
+
+DEPLX4=RECU_FONCTION(   NOEUD='NO1', NOM_CMP='DX',
+                    INTERPOL='LIN',
+                    RESU_GENE=DYNAMOD4,
+                     NOM_CHAM='DEPL' )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=-1.0077966381e-04,
+                         VALE_REFE=-1.E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=2.0E-4,
+                         PRECISION=1.E-2,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=-1.9373665820e-04,
+                         VALE_REFE=-2.0E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=4.0E-4,
+                         PRECISION=0.035,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=-9.5581639828e-05,
+                         VALE_REFE=-1.E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=6.E-4,
+                         PRECISION=0.05,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=6.5652733295e-06,
+                         VALE_REFE=-1.0E-09,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.0E-05,
+                         CRITERE='ABSOLU',
+                         VALE_PARA=8.0E-4,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=1.0688493105e-04,
+                         VALE_REFE=1.E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=1.E-3,
+                         PRECISION=0.07,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=1.9144550420e-04,
+                         VALE_REFE=2.0E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=1.2E-3,
+                         PRECISION=0.05,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=9.3354764360e-05,
+                         VALE_REFE=1.E-4,
+                         REFERENCE='ANALYTIQUE',
+                         VALE_PARA=1.4E-3,
+                         PRECISION=0.07,
+                         FONCTION=DEPLX4,),
+                      _F(VALE_CALC=-8.9481056606e-06,
+                         VALE_REFE=-1.0E-09,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.0E-05,
+                         CRITERE='ABSOLU',
+                         VALE_PARA=1.6E-3,
+                         FONCTION=DEPLX4,),
+                      ),
+              )
+
+#
+FIN()
+#

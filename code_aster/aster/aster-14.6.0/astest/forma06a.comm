@@ -1,0 +1,223 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# MODELIDATION A : X-FEM 2D
+
+# CE FICHIER EST LA VERSION CORRIGEE DU 3EME EXERCICE DES TPS
+# POUR LA PREPARATION DES TPS, FOURNIR EGALEMENT UNE VERSION A TROUS DE CE FICHIER :
+# - SUPPRIMER LA DEFINITION DES FISSURES FISS1 ET FISS2
+# - FAIRE LE MODI_MODELE_XFEM UNIQUEMENT SUR LA FISSURE FISS
+# - REMPLACER LA VALEUR DE N PAR UNE VALEUR BIDON (XXX)
+# - FAIRE LES CALC_G POUR LA FISSURE FISS
+# - SUPPRIMER LES TEST_TABLE
+
+#----------------------------------------------
+#                MAILLAGE, MODELE INITIAL
+#----------------------------------------------
+
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_2D=_F(GROUP_MA=('M_haut','M_bas')))
+
+MODEF=AFFE_MODELE(MAILLAGE=MA,
+                  AFFE= _F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='D_PLAN'))
+
+#----------------------------------------------
+#               FISSURES ET ELEMENTS X-FEM
+#----------------------------------------------
+
+# ecart entre les fissures : b
+b = 0.4
+bs2 = b/2.
+b_m = -1.*b
+b_ms2 = b_m/2.
+# longueurs des fissures : 2a
+a = 0.15
+a_m = -1.*a
+
+FISS1=DEFI_FISS_XFEM(MAILLAGE=MA,
+                     DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                  PFON_ORIG  = (a_m,b_ms2,0.),
+                                  PFON_EXTR  = (  a,b_ms2,0.),),
+                     )
+
+FISS2=DEFI_FISS_XFEM(MAILLAGE=MA,
+                     DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                  PFON_ORIG  = (a_m,bs2,0.),
+                                  PFON_EXTR  = (  a,bs2,0.),),
+                     )
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA,
+                     DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                  PFON_ORIG  = (a_m,0.,0.),
+                                  PFON_EXTR  = (  a,0.,0.),),
+                     )
+
+MODXFEM=MODI_MODELE_XFEM(MODELE_IN=MODEF,FISSURE=(FISS1,FISS2))
+#MODXFEM=MODI_MODELE_XFEM(MODELE_IN=MODEF,FISSURE=FISS)
+
+#----------------------------------------------
+#               MATERIAU
+#----------------------------------------------
+
+E   = 210E9
+nu  = 0.3
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    MODELE=MODXFEM,
+                    AFFE=_F(TOUT = 'OUI',
+                            MATER=ACIER,))
+
+#----------------------------------------------
+#               CHARGEMENTS
+#----------------------------------------------
+
+
+# on encastre le point en bas a gauche et on bloque en Y le point en bas a droite
+CHBLOC=AFFE_CHAR_MECA(MODELE=MODXFEM,
+                      DDL_IMPO=(_F(GROUP_NO='N_A',DX=0.,DY=0.),
+                                _F(GROUP_NO='N_B',DY=0.)))
+
+# on applique un effort de traction reparti sur les faces haut et bas.
+CHPRES=AFFE_CHAR_MECA(MODELE=MODXFEM,
+                      PRES_REP=_F(GROUP_MA=('M_haut','M_bas',),PRES=-1.E6))
+
+#----------------------------------------------
+#               RESOLUTION
+#----------------------------------------------
+
+RESU=MECA_STATIQUE(MODELE=MODXFEM,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(
+                          _F(CHARGE=CHBLOC),
+                          _F(CHARGE=CHPRES),),
+                   INST=1.,
+                   )
+#------------------------------------------------------------------------
+# POST-TRAITEMENT : MAILLAGE FISSURE et DEPLACEMENTS POUR LE MAILLAGE FISSURE
+#------------------------------------------------------------------------
+
+MA_VISU=POST_MAIL_XFEM(MODELE= MODXFEM)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_VISU,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='D_PLAN',),)
+
+RES_VISU=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = RESU)
+
+RES_VISU=CALC_CHAMP(reuse=RES_VISU,RESULTAT=RES_VISU,CRITERES=('SIEQ_ELGA'))
+
+
+IMPR_RESU(FORMAT='MED',UNITE=80,RESU=_F(RESULTAT=RES_VISU))
+
+#------------------------------------------------------------------------
+# POST-TRAITEMENT de G et K
+#------------------------------------------------------------------------
+
+# cote plaque
+L = 2.
+# nombre d'elements
+N = 100.
+# taille des elements
+h = L/N
+
+rinf = 2*h
+rsup = 5*h
+
+SIF1=CALC_G(RESULTAT=RESU,
+            INST=1.,
+            OPTION='CALC_K_G',
+            THETA=_F(FISSURE=FISS1,
+                     NUME_FOND=1,
+                     R_INF=rinf,
+                     R_SUP=rsup,))
+
+SIF2=CALC_G(RESULTAT=RESU,
+            INST=1.,
+            OPTION='CALC_K_G',
+            THETA=_F(FISSURE=FISS1,
+                     NUME_FOND=2,
+                     R_INF=rinf,
+                     R_SUP=rsup,))
+
+IMPR_TABLE(TABLE=SIF1)
+IMPR_TABLE(TABLE=SIF2)
+
+# calcul sans R_INF et R_SUP
+SIF3=CALC_G(RESULTAT=RESU,
+            INST=1.,
+            OPTION='CALC_K_G',
+            THETA=_F(FISSURE=FISS1,
+                     NUME_FOND=1,))
+
+SIF4=CALC_G(RESULTAT=RESU,
+            INST=1.,
+            OPTION='CALC_K_G',
+            THETA=_F(FISSURE=FISS1,
+                     NUME_FOND=2,))
+
+IMPR_TABLE(TABLE=SIF3)
+IMPR_TABLE(TABLE=SIF4)
+
+# test
+# pour b = 0.4 et  2a = 0.3 et e = 0
+# l'abaque donne F(0.75,0) = 0.88 et sig.sqrt(pi.a) = 0.6865e6 d'ou K1_ref = 6.04e5
+K1ref = 6.04e5
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.059999999999999998,
+           VALE_CALC=637861.932694,
+           VALE_REFE=6.04000E5,
+           NOM_PARA='K1',
+           TABLE=SIF1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.059999999999999998,
+           VALE_CALC=637973.992407,
+           VALE_REFE=6.04000E5,
+           NOM_PARA='K1',
+           TABLE=SIF2,)
+
+# calcul sans R_INF et R_SUP
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.059999999999999998,
+           VALE_CALC=637569.520747,
+           VALE_REFE=6.04000E5,
+           NOM_PARA='K1',
+           TABLE=SIF3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.059999999999999998,
+           VALE_CALC=637681.189818,
+           VALE_REFE=6.04000E5,
+           NOM_PARA='K1',
+           TABLE=SIF4,)
+
+FIN()

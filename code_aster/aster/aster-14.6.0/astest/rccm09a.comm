@@ -1,0 +1,196 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAT=DEFI_MATERIAU(  RCCM=_F(  A_AMORC = 7091. ,
+                              B_AMORC =   -0.1823 ,
+                              D_AMORC =    1. ,
+                              R_AMORC =    1.63 ,)
+                               )
+
+
+T_RESU1 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=1,)
+
+T_RESU2 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=2,)
+
+T_RESU3 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=3,)
+
+T_RESU4 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=4,)
+
+T_RESU5 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=5,)
+
+#--------------------------------------------------------------------------------
+#   option = 'AMORCAGE'
+#   chargement mecanique
+#--------------------------------------------------------------------------------
+
+AMOR_1=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                          INFO=2,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU1 - RESU2',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU1,
+                                     NB_OCCUR = 1 ),
+                                _F(  TABL_SIGM_THETA = T_RESU2,
+                                     NB_OCCUR = 1 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_1 )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.74824406E-10,
+           VALE_REFE=1.7482441E-10,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_1,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+AMOR_1b=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                          INFO=2,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU1 SEUL',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU1,
+                                     NB_OCCUR = 1 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_1b )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.047118910E-11,
+           VALE_REFE= 7.04711891E-11,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_1b,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+AMOR_1c=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                          INFO=2,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU3 (RESU1 NEGATIF)',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU3,
+                                     NB_OCCUR = 1 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_1c )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.047118910E-11,
+           VALE_REFE= 7.04711891E-11,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_1c,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+AMOR_1d=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                          INFO=2,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU4 (RESU3, OFFSET 100, NOCC=10)',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU4,
+                                     NB_OCCUR = 10 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_1d )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.047118910E-10,
+           VALE_REFE= 7.04711891E-10,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_1d,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+AMOR_1e=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                          INFO=2,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU5 (RESU1, OFFSET 100)',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU5,
+                                     NB_OCCUR = 1 ),)
+              )
+IMPR_TABLE ( TABLE = AMOR_1e )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 5.25773990E-10,
+           VALE_REFE= 5.2577399E-10,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_1e,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+AMOR_2=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                         MATER=MAT,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU1 - RESU2',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU1,
+                                     NB_OCCUR = 2 ),
+                                _F(  TABL_SIGM_THETA = T_RESU2,
+                                     NB_OCCUR = 1 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_2 )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 2.45295595E-10,
+           VALE_REFE=2.4529560000000001E-10,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_2,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+
+AMOR_3=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                        OPTION='AMORCAGE',
+                     TYPE_RESU='VALE_MAX',
+                     INFO=2,
+                         MATER=MAT,
+                         TITRE='FACTEUR AMORCAGE, RESULTAT: RESU1 - RESU2',
+                   TRANSITOIRE=(_F(  TABL_SIGM_THETA = T_RESU1,
+                                     NB_OCCUR = 1 ),
+                                _F(  TABL_SIGM_THETA = T_RESU2,
+                                     NB_OCCUR = 3 ),)
+              )
+
+IMPR_TABLE ( TABLE = AMOR_3 )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 2.45295595E-10,
+           VALE_REFE=2.4529560000000001E-10,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=AMOR_2,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=10.0,),
+           )
+
+
+FIN( )

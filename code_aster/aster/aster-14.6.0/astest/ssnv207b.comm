@@ -1,0 +1,186 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# PRESSION DE CONSOLIDATION P0 = 50KPA
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+GammaRef=2.e-4
+n=0.78
+P0 = - 5.E4
+N=0.4
+PREF=-1.E6
+
+# modules mecaniques [kPa]
+K=516.2E6*(P0/PREF)**N
+G=238.2E6*(P0/PREF)**N
+YOUNG = 9.*K*G /(3.*K+G)
+POISSON = (3.*K-2.*G) /(6.*K+2.*G)
+
+MATE=DEFI_MATERIAU(ELAS=_F(E=YOUNG, 
+                              NU=POISSON,),
+                   Iwan=_F(YoungModulus = YOUNG ,
+                               PoissonRatio = POISSON ,
+                               GammaRef = GammaRef,
+                               n = n,),)
+
+TEMPS1=DEFI_LIST_REEL(DEBUT=0,
+                      INTERVALLE=(_F(JUSQU_A=40, NOMBRE=160),),);
+
+
+################################################################
+#     ESSAI DE CISAILLEMENT CYCLIQUE AVEC MICRO-DECHARGES      #
+################################################################
+
+COEF1=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0 ,0,
+                          10,-1.E4,
+                          15,-6.E3,
+                          20,-6.3E3,
+                          25,1.E4,
+                          30,-5.E3,
+                          35,-4.7E3,
+                          40,-1.E4,),
+                    PROL_DROITE='CONSTANT',);
+
+COEF2=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0 ,0,
+                          10,-1.E4,
+                          15,-6.E3,
+                          25,1.E4,
+                          30,-5.E3,
+                          40,-1.E4,),
+                    PROL_DROITE='CONSTANT',);
+
+
+
+DEFLIST1 =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = TEMPS1),
+                        ECHEC=_F(ACTION        = 'DECOUPE',
+                                 SUBD_METHODE  = 'MANUEL',
+                                 SUBD_PAS      = 2,
+                                 SUBD_NIVEAU   = 10),)
+
+#Valeur de P0 non prise en compte dans le modèle
+P0=-50e3
+
+U1=SIMU_POINT_MAT(COMPORTEMENT=_F(RELATION='Iwan',
+                               RESI_INTE_RELA=1E-12,
+                               #ITER_INTE_MAXI=200,
+                               #ITER_INTE_PAS=12,
+                                ),
+                  MATER=MATE,
+                  SUPPORT='ELEMENT',
+                  INCREMENT=_F(LIST_INST=DEFLIST1,
+                               NUME_INST_INIT=0,
+                               INST_FIN=40,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 20),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS1,),
+                  SIGM_IMPOSE=_F(SIXY=COEF1,),
+                  SIGM_INIT=_F(SIXX=P0,
+                               SIYY=P0,
+                               SIZZ=P0,),
+                  EPSI_INIT=_F(EPXX=P0/(3*K),
+                               EPYY=P0/(3*K),
+                               EPZZ=P0/(3*K),
+                               EPXY=0,
+                               EPXZ=0,
+                               EPYZ=0,),);
+
+IMPR_TABLE(TABLE=U1);
+
+U2=SIMU_POINT_MAT(COMPORTEMENT=_F(RELATION='Iwan',
+                               RESI_INTE_RELA=1E-12,
+                               #ITER_INTE_MAXI=200,
+                               #ITER_INTE_PAS=12,
+                                ),
+                  MATER=MATE,
+                  SUPPORT='ELEMENT',
+                  INCREMENT=_F(LIST_INST=DEFLIST1,
+                               NUME_INST_INIT=0,
+                               INST_FIN=40,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 20),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS1,),
+                  SIGM_IMPOSE=_F(SIXY=COEF2,),
+                  SIGM_INIT=_F(SIXX=P0,
+                               SIYY=P0,
+                               SIZZ=P0,),
+                  EPSI_INIT=_F(EPXX=P0/(3*K),
+                               EPYY=P0/(3*K),
+                               EPZZ=P0/(3*K),
+                               EPXY=0,
+                               EPXZ=0,
+                               EPYZ=0,),);
+
+IMPR_TABLE(TABLE=U2);
+
+
+################################################################
+#                TESTS DE VALEURS CARACTERISTIQUES             #
+################################################################
+
+# TEST DE DE LA COMPOSANTE XY DE CONTRAINTES PAR RAPPORT
+# AUX REFERENCES CODE_ASTER SANS MICRO-DECHARGES
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=2.E-2,
+           VALE_CALC=-0.000172463684776,
+           VALE_REFE=-0.000172919365258,
+           NOM_PARA='EPXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=1.0E-08,
+                     NOM_PARA='INST',
+                     VALE=10.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=2.E-2,
+           VALE_CALC= 0.000172463684767,
+           VALE_REFE= 0.000172500264801,
+           NOM_PARA='EPXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=1.0E-08,
+                     NOM_PARA='INST',
+                     VALE=25.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=2.E-2,
+           VALE_CALC=-0.000172463684779,
+           VALE_REFE=-0.000173452541482,
+           NOM_PARA='EPXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=1.0E-08,
+                     NOM_PARA='INST',
+                     VALE=40.0,),
+           )
+FIN();

@@ -1,0 +1,154 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+
+L_INST=DEFI_LIST_REEL(         DEBUT=0.0,INTERVALLE=(
+                              _F(  JUSQU_A = 1.0,  NOMBRE = 1),
+                                         _F(  JUSQU_A = 2.0,  NOMBRE = 500))
+                          )
+
+# PARTIE MECANIQUE
+# ON DEGENERE LA LOI POUR AVOIR UNE LOI DE VISCOSITE
+# DE TYPE NORTON D OU F1_M=0.D0
+# CETTE LOI ANISOTROPE AVEC UNE SEULE PHASE ET UNE LOI DE NORTON
+# EST IDENTIQUE A UNE LOI CONTENUE DANS ZMAT
+
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E = 80000., NU = 0.35,),
+                    LEMAITRE=_F(N = 4.10,
+                                UN_SUR_K = 0.00400,
+                                UN_SUR_M = 0.
+                                       ),);
+
+CM2=AFFE_MATERIAU(MAILLAGE=MA,
+                  AFFE=_F( TOUT = 'OUI', MATER = ACIER ),
+                                    );
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE ='MECANIQUE',
+                       MODELISATION ='AXIS'))
+
+
+F_CHAR=DEFI_FONCTION(      NOM_PARA='INST',
+                             PROL_DROITE='CONSTANT',
+                                   VALE=(  0.,      0.,
+                                           1.,      0.,
+                                           2.,    3500.,   )
+                         )
+
+
+
+CHR_LIAI=AFFE_CHAR_MECA(      MODELE=MO,DDL_IMPO=(
+                              _F(  NOEUD = 'NO1',  DY = 0.),
+                                       _F(  NOEUD = 'NO2',  DY = 0.))
+                          )
+
+CHR_TRAC=AFFE_CHAR_MECA(       MODELE=MO,
+                              FACE_IMPO=_F(  MAILLE = 'MA2',  DY = 1.)
+                          )
+
+VL=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CM2,EXCIT=(
+                             _F(
+                CHARGE = CHR_LIAI), _F(
+                CHARGE = CHR_TRAC,
+                FONC_MULT = F_CHAR,
+                TYPE_CHARGE = 'DIDI')),
+                         COMPORTEMENT=_F(
+                RELATION = 'LEMAITRE',
+                DEFORMATION = 'PETIT_REAC',
+                ITER_INTE_MAXI = 100,
+                RESI_INTE_RELA = 1.E-12),
+                         INCREMENT=_F(
+                LIST_INST = L_INST,
+                NUME_INST_FIN = 1),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_MAXI = 1.E-1,
+                ITER_GLOB_MAXI = 50),
+              )
+
+VL=STAT_NON_LINE( reuse=VL,
+                            MODELE=MO,
+                        CHAM_MATER=CM2,
+                         ETAT_INIT=_F(
+                EVOL_NOLI = VL,
+                NUME_ORDRE = 1),EXCIT=(
+                             _F(
+                CHARGE = CHR_LIAI), _F(
+                CHARGE = CHR_TRAC,
+                FONC_MULT = F_CHAR,
+                TYPE_CHARGE = 'DIDI')),
+                         COMPORTEMENT=_F(
+                RELATION = 'LEMAITRE',
+                DEFORMATION = 'PETIT_REAC',
+                ITER_INTE_MAXI = 100,
+                RESI_INTE_RELA = 1.E-12),
+                         INCREMENT=_F(
+                LIST_INST = L_INST),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 50),
+              )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=501,
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=VL,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO3',
+                   NOM_CMP='DX',
+                   VALE_CALC=-527.42724700637,
+                   VALE_REFE=-527.42590554164,
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=501,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=VL,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=235.17731592299,
+                   VALE_REFE=236.68597139133,
+                   PRECISION=1.E-2,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=501,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=VL,
+                   NOM_CHAM='VARI_ELGA',
+                   NOM_CMP='V1',
+                   VALE_CALC=1.4984193398407,
+                   VALE_REFE=1.4984004816205,
+                   PRECISION=0.015,
+                   MAILLE='MA1',),
+                ),
+          )
+
+FIN(  )
+#

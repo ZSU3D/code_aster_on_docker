@@ -1,0 +1,430 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+from Utilitai.Utmess import MessageLog
+
+DEBUT(CODE=_F( NIV_PUB_WEB='INTERNET', ),
+      ERREUR=_F(ERREUR_F='EXCEPTION',), DEBUG=_F(SDVERI='OUI'),
+      IGNORE_ALARM='SUPERVIS_1',
+      PAR_LOT='NON')
+# ALARME 'SUPERVIS_1' : PAR_LOT='NON' necessaire pour verifier l'emission
+# d'une alarme
+
+M=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MO=AFFE_MODELE(MAILLAGE=M,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+E=DEFI_CONSTANTE(VALE=3.E10,);
+
+NU=DEFI_CONSTANTE(VALE=0.2,);
+
+alpha=1.e-5
+ALPHA=DEFI_CONSTANTE(VALE= alpha)
+
+kdessic=1.66e-5
+BETON=DEFI_MATERIAU(ELAS_FO=_F(E=E,
+                               NU=NU,
+                               K_DESSIC=kdessic,
+                               B_ENDOGE = 1.5E-5,
+                               ALPHA = ALPHA,
+                               TEMP_DEF_ALPHA =20),);
+
+
+SECHI=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                 OPERATION='AFFE',
+                 MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI',
+                         NOM_CMP='TEMP',
+                         VALE=100.,),);
+
+SECHF=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                 OPERATION='AFFE',
+                 MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI',
+                         NOM_CMP='TEMP',
+                         VALE=80.0,),);
+
+SECH1=CREA_RESU(OPERATION='AFFE',
+                TYPE_RESU='EVOL_THER',
+                NOM_CHAM='TEMP',
+                AFFE=(
+                _F(CHAM_GD=SECHI,
+                   INST=0.0,),
+                _F(CHAM_GD=SECHF,
+                   INST=3600.0,),),);
+
+TEMPI=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                OPERATION='AFFE',
+                MAILLAGE=M,
+                AFFE=_F(TOUT='OUI',
+                        NOM_CMP='TEMP',
+                        VALE=20.0,),);
+TEMPF=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                OPERATION='AFFE',
+                MAILLAGE=M,
+                AFFE=_F(TOUT='OUI',
+                        NOM_CMP='TEMP',
+                        VALE=120.0,),);
+
+TEMP1=CREA_RESU(OPERATION='AFFE',
+                TYPE_RESU='EVOL_THER',
+                NOM_CHAM='TEMP',
+                AFFE=(
+                _F(CHAM_GD=TEMPI,
+                   INST=0.0,),
+                _F(CHAM_GD=TEMPF,
+                   INST=3600.0,),   ),);
+
+HYDRI=CREA_CHAMP(TYPE_CHAM='NOEU_HYDR_R',
+                OPERATION='AFFE',
+                MODELE = MO,
+                AFFE=_F(TOUT='OUI',
+                        NOM_CMP='HYDR',
+                        VALE=0.0,),);
+
+HYDRF=CREA_CHAMP(TYPE_CHAM='NOEU_HYDR_R',
+                OPERATION='AFFE',
+                MODELE = MO,
+                AFFE=_F(TOUT='OUI',
+                        NOM_CMP='HYDR',
+                        VALE=1.0,),);
+
+HYDR1=CREA_RESU(OPERATION='AFFE',
+                TYPE_RESU='EVOL_THER',
+                NOM_CHAM='HYDR_NOEU',
+                AFFE=(
+                _F(CHAM_GD=HYDRI,
+                   INST=0.0,),
+                _F(CHAM_GD=HYDRF,
+                   INST=3600.0,  ),),);
+
+CM=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI',
+                         MATER=BETON,),
+                 AFFE_VARC=(_F(TOUT='OUI',EVOL=HYDR1,NOM_VARC='HYDR',NOM_CHAM='HYDR_NOEU'),
+                            _F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                            _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),),);
+
+CH1=AFFE_CHAR_MECA(MODELE=MO,
+                   FACE_IMPO=(_F(GROUP_MA='FACEXY',
+                                DZ=0.0,),
+                             _F(GROUP_MA='FACEYZ',
+                                DX=0.0,),
+                             _F(GROUP_MA='FACEXZ',
+                                DY=0.0,),),);
+
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=3600.0,
+                                     NOMBRE=2,  ),);
+
+U=STAT_NON_LINE(MODELE=MO,
+                CHAM_MATER=CM,
+                EXCIT=_F(CHARGE=CH1,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_INST,),
+                NEWTON=_F(MATRICE='TANGENTE',
+                          REAC_ITER=1,),
+                CONVERGENCE=_F(RESI_GLOB_MAXI=1e-06,
+                               ITER_GLOB_MAXI=25,),);
+
+U=CALC_CHAMP(reuse=U,RESULTAT=U,CONTRAINTE=('SIGM_ELNO'),DEFORMATION=('EPSI_ELNO','EPSP_ELNO'))
+
+
+U=CALC_CHAMP(reuse =U,
+          RESULTAT=U,
+          DEFORMATION=('EPSI_NOEU','EPSP_NOEU'),CONTRAINTE='SIGM_NOEU');
+
+TEST_RESU(RESU=(_F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIXX',
+                   VALE_CALC= 1.52060502E-08,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.22297087E-08,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSP_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC= 9.92113845E-21,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSP_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.58025909E-19,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                ),
+          )
+
+#
+# RESULTAT AVEC COMPORTEMENT
+U3=STAT_NON_LINE(MODELE=MO,
+                CHAM_MATER=CM,
+                EXCIT=_F(CHARGE=CH1,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_INST,),
+                NEWTON=_F(MATRICE='TANGENTE',
+                          REAC_ITER=1,),
+                CONVERGENCE=_F(RESI_GLOB_MAXI=1e-06,
+                               ITER_GLOB_MAXI=25,),);
+
+U3=CALC_CHAMP(reuse=U3,RESULTAT=U3,CONTRAINTE=('SIGM_ELNO'),DEFORMATION=('EPSI_ELNO','EPSP_ELNO'))
+
+
+U3=CALC_CHAMP(reuse =U3,
+          RESULTAT=U3,
+          DEFORMATION=('EPSI_NOEU','EPSP_NOEU'),CONTRAINTE='SIGM_NOEU');
+
+TEST_RESU(RESU=(_F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIXX',
+                   VALE_CALC= 1.42463706E-08,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 5.12274050E-09,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSP_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=-1.45255548E-20,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSP_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPYY',
+                   VALE_CALC=-1.98422769E-20,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                ),
+          )
+
+# CALCUL AVEC MECA_STATIQUE
+
+U2=MECA_STATIQUE(MODELE=MO,
+                 CHAM_MATER=CM,
+                 EXCIT=_F(CHARGE=CH1,),
+                 INST=3600.0,);
+
+U2=CALC_CHAMP(reuse=U2,RESULTAT=U2,CONTRAINTE=('SIGM_ELNO'),DEFORMATION=('EPSI_ELNO'))
+
+U2=CALC_CHAMP(reuse =U2,
+             RESULTAT = U2,
+             DEFORMATION='EPSI_NOEU',CONTRAINTE='SIGM_NOEU')
+
+TEST_RESU(RESU=(_F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 6.53000000E-04,
+                   VALE_REFE=6.5300000000000004E-4,
+                   PRECISION=5.0000000000000001E-3,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIXX',
+                   VALE_CALC= 3.43920693E-08,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                _F(INST=3600.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.42193858E-08,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   PRECISION=9.9999999999999995E-07,),
+                ),
+          )
+          
+#------------------------------------------------------------------------------
+# 2. Validation de l'emission de l'alarme MECANONLINE2_97 (voir issue24621):
+#-------------------------------------------------------------------------------
+infos = MessageLog.get_info_alarm()
+emit = [alr[0] for alr in infos if alr[0] == 'MECANONLINE2_97']
+n1=len(emit)
+
+# 2.1 : on verifie que l'alarme est emise si T != Tref :
+#-------------------------------------------------------
+CM2_1=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON,),
+                 AFFE_VARC=(_F(TOUT='OUI',EVOL=HYDR1,NOM_VARC='HYDR',NOM_CHAM='HYDR_NOEU'),
+                            _F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                            _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=21),),);
+
+W2_1=STAT_NON_LINE(MODELE=MO, CHAM_MATER=CM2_1,
+                EXCIT=_F(CHARGE=CH1,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_INST,),
+                NEWTON=_F(MATRICE='TANGENTE',  REAC_ITER=1,),
+                CONVERGENCE=_F(RESI_GLOB_MAXI=1e-06, ITER_GLOB_MAXI=25,),);
+
+# on souhaite verifier que l'alarme MECANONLINE2_97 a ete emise
+infos = MessageLog.get_info_alarm()
+emit = [alr[0] for alr in infos if alr[0] == 'MECANONLINE2_97']
+n2=len(emit)
+is_ok = n1==0 and n2==1
+
+# TEST_RESU
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  '),
+                       _F(PARA='BOOLEEN',LISTE_I=int(is_ok))))
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+# 2.2 : on verifie que l'alarme n'est pas emise si la somme de la deformation thermique
+#       et de la deformation de sechage est nulle :
+#------------------------------------------------------
+CM2_2=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON,),
+                 AFFE_VARC=(_F(TOUT='OUI',EVOL=HYDR1,NOM_VARC='HYDR',NOM_CHAM='HYDR_NOEU'),
+                            _F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',
+                               VALE_REF=100. - (1.e4/kdessic)),
+                            _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',
+                               VALE_REF=20. + (1.e4/alpha)),));
+
+W2_2=STAT_NON_LINE(MODELE=MO, CHAM_MATER=CM2_2,
+                EXCIT=_F(CHARGE=CH1,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_INST,),
+                NEWTON=_F(MATRICE='TANGENTE',  REAC_ITER=1,),
+                CONVERGENCE=_F(RESI_GLOB_MAXI=1e-06, ITER_GLOB_MAXI=25,),);
+                
+# on souhaite verifier que l'alarme MECANONLINE2_97 N'a PAS ete emise
+infos = MessageLog.get_info_alarm()
+emit = [alr[0] for alr in infos if alr[0] == 'MECANONLINE2_97']
+n3=len(emit)
+is_ok = n3==n2
+
+# TEST_RESU
+TAB2=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  '),
+                       _F(PARA='BOOLEEN',LISTE_I=int(is_ok))))
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB2,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+FIN();

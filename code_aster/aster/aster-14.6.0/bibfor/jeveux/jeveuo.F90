@@ -1,0 +1,264 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine jeveuo(nomlu, cel, jadr, vl, vi,&
+                  vi4, vr, vc, vk8, vk16,&
+                  vk24, vk32, vk80)
+! person_in_charge: j-pierre.lefebvre at edf.fr
+! aslint: disable=W0405,C1002,W1304
+    use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
+    implicit none
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "jeveux_private.h"
+#include "asterfort/jjagod.h"
+#include "asterfort/jjallc.h"
+#include "asterfort/jjalty.h"
+#include "asterfort/jjcroc.h"
+#include "asterfort/jjvern.h"
+#include "asterfort/jxlocs.h"
+#include "asterfort/utmess.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jgetlmx.h"
+#include "asterfort/assert.h"
+#include "asterfort/jgetptc.h"
+!
+    character(len=*), intent(in) :: nomlu
+    character(len=*), intent(in) :: cel
+    integer, optional :: jadr
+!
+    aster_logical, pointer, optional :: vl(:)
+    integer, pointer, optional :: vi(:)
+    integer(kind=4), pointer, optional :: vi4(:)
+    real(kind=8), pointer, optional :: vr(:)
+    complex(kind=8), pointer, optional :: vc(:)
+    character(len=8), pointer, optional :: vk8(:)
+    character(len=16), pointer, optional :: vk16(:)
+    character(len=24), pointer, optional :: vk24(:)
+    character(len=32), pointer, optional :: vk32(:)
+    character(len=80), pointer, optional :: vk80(:)
+!
+!
+!   ==================================================================
+    integer :: lk1zon, jk1zon, liszon, jiszon
+    common /izonje/  lk1zon , jk1zon , liszon , jiszon
+!-----------------------------------------------------------------------
+    integer :: ibacol, iblono, inat, inatb, ixdeso, ixiadd, ixlono
+    integer :: jcara, jdate, jdocu, jgenr, jhcod, jiadd, jiadm
+    integer :: jlong, jlono, jltyp, jluti, jmarq, jorig, jrnom
+    integer :: jtype, lonoi, ltypi, n
+!-----------------------------------------------------------------------
+    parameter  ( n = 5 )
+    common /jiatje/  jltyp(n), jlong(n), jdate(n), jiadd(n), jiadm(n),&
+     &                 jlono(n), jhcod(n), jcara(n), jluti(n), jmarq(n)
+!
+    common /jkatje/  jgenr(n), jtype(n), jdocu(n), jorig(n), jrnom(n)
+    integer :: nblmax, nbluti, longbl, kitlec, kitecr, kiadm, iitlec, iitecr
+    integer :: nitecr, kmarq
+    common /ificje/  nblmax(n) , nbluti(n) , longbl(n) ,&
+     &                 kitlec(n) , kitecr(n) ,             kiadm(n) ,&
+     &                 iitlec(n) , iitecr(n) , nitecr(n) , kmarq(n)
+    integer :: numatr
+    common /idatje/  numatr
+!     ------------------------------------------------------------------
+    integer :: iclas, iclaos, iclaco, idatos, idatco, idatoc
+    common /iatcje/  iclas ,iclaos , iclaco , idatos , idatco , idatoc
+    integer :: izr, izc, izl, izk8, izk16, izk24, izk32, izk80
+    equivalence    (izr,zr),(izc,zc),(izl,zl),(izk8,zk8),(izk16,zk16),&
+     &               (izk24,zk24),(izk32,zk32),(izk80,zk80)
+! ----------------------------------------------------------------------
+    character(len=1) :: genri, typei, kcel
+    character(len=8) :: noml8
+    character(len=32) :: noml32
+    integer :: icre, iret
+    integer :: iddeso, idiadd, idlono
+    parameter    (  iddeso = 1 , idiadd = 2  , idlono = 8   )
+!
+    integer :: jad, n1, jctab, ic
+    character(len=8) :: ktyp
+    type(c_ptr) :: pc
+!
+!   ==================================================================
+
+    noml32 = nomlu
+    noml8 = noml32(25:32)
+    kcel = cel
+    if (kcel .ne. 'L' .and. kcel .ne. 'E') then
+        call utmess('F', 'JEVEUX1_27', sk=kcel)
+    endif
+!
+    icre = 0
+    call jjvern(noml32, icre, iret)
+    inat = iret
+    inatb = iret
+    select case (iret)
+! ----   IRET = 0
+    case (0)
+        call utmess('F', 'JEVEUX_26', sk=noml32(1:24))
+!
+! ----   IRET = 1
+    case (1)
+        genri = genr( jgenr(iclaos) + idatos )
+        typei = type( jtype(iclaos) + idatos )
+        ltypi = ltyp( jltyp(iclaos) + idatos )
+        if (genri .eq. 'N') then
+            call utmess('F', 'JEVEUX1_20', sk=noml32)
+        endif
+        ic = iclaos
+! ----   IRET = 2
+    case (2)
+        call jjallc(iclaco, idatco, cel, ibacol)
+        ixiadd = iszon ( jiszon + ibacol + idiadd )
+        ixdeso = iszon ( jiszon + ibacol + iddeso )
+!
+! ----   on traite l'accès au pointeur de longueur         
+!
+        if (noml8 .eq. '$$XATR  ') then
+            ixlono = numatr
+            iblono = iadm ( jiadm(iclaco) + 2*ixlono-1 )
+            genri = genr ( jgenr(iclaco) + ixlono )
+            ltypi = ltyp ( jltyp(iclaco) + ixlono )
+            lonoi = lono ( jlono(iclaco) + ixlono ) * ltypi
+            call jxlocs(zi, genri, ltypi, lonoi, iblono,&
+                        .false._1, jctab)
+            n1 = long ( jlong(iclaco) + ixlono )
+            ktyp='I'     
+            if (present(jadr)) then
+                goto 100
+            else 
+                jad=jctab              
+                goto 102
+            endif 
+        else
+            if (noml8 .ne. ' ') then
+                inat = 3
+                call jjcroc(noml8, icre)
+!            ------ CAS D'UN OBJET DE COLLECTION  ------
+                if (ixiadd .ne. 0) inatb = 3
+            else
+                if (ixiadd .ne. 0) then
+!            ----------- COLLECTION DISPERSEE
+                    call utmess('F', 'JEVEUX1_21', sk=noml32)
+                endif
+            endif
+            genri = genr( jgenr(iclaco) + ixdeso )
+            typei = type( jtype(iclaco) + ixdeso )
+            ltypi = ltyp( jltyp(iclaco) + ixdeso )
+        endif
+        ic = iclaco
+!
+    end select
+!
+!   ON PREND LA PRECAUTION DE REDIMENSIONNER LE NOMBRE D'ENREGISTREMENTS SI
+!   BESOIN DU FICHIER ASSOCIÉ A LA BASE
+!
+    if ((100*nbluti(ic)) .gt. (50*nblmax(ic))) then 
+       call jjagod (ic, 2*nblmax(ic) )
+    endif  
+!
+    call jjalty(typei, ltypi, cel, inatb, jctab)
+    if (inat .eq. 3 .and. ixiadd .eq. 0) then
+        ixlono = iszon ( jiszon + ibacol + idlono )
+        if (ixlono .gt. 0) then
+            iblono = iadm ( jiadm(iclaco) + 2*ixlono-1 )
+            lonoi = iszon(jiszon+iblono-1+idatoc+1) - iszon(jiszon+ iblono-1+idatoc )
+            if (lonoi .gt. 0) then
+                jctab = jctab + (iszon(jiszon+iblono-1+idatoc) - 1)
+            else
+                call utmess('F', 'JEVEUX1_22', sk=noml32)
+            endif
+        else
+            jctab = jctab + long(jlong(iclaco)+ixdeso) * (idatoc-1)
+        endif
+    endif
+100 continue
+!
+!
+!     -- cas : on demande l'adresse :
+!     --------------------------------
+    jad=jctab
+    if (present(jadr)) then
+        jadr=jad
+        goto 999
+    endif
+!
+!
+!     -- cas : on demande un pointeur sur un vecteur :
+!     ------------------------------------------------
+    call jgetlmx(noml32, n1)
+    call jelira(noml32, 'TYPELONG', cval=ktyp)
+!
+102 continue
+!
+    if (present(vl)) then
+        ASSERT(ktyp.eq.'L')
+        call jgetptc(jad, pc, vl=zl(1))
+        call c_f_pointer(pc, vl, [n1])
+!
+    else if (present(vi)) then
+        ASSERT(ktyp.eq.'I')
+        call jgetptc(jad, pc, vi=zi(1))
+        call c_f_pointer(pc, vi, [n1])
+!
+    else if (present(vi4)) then
+        ASSERT(ktyp.eq.'S')
+        call jgetptc(jad, pc, vi4=zi4(1))
+        call c_f_pointer(pc, vi4, [n1])
+!
+    else if (present(vr)) then
+        ASSERT(ktyp.eq.'R')
+        call jgetptc(jad, pc, vr=zr(1))
+        call c_f_pointer(pc, vr, [n1])
+!
+    else if (present(vc)) then
+        ASSERT(ktyp.eq.'C')
+        call jgetptc(jad, pc, vc=zc(1))
+        call c_f_pointer(pc, vc, [n1])
+!
+    else if (present(vk8)) then
+        ASSERT(ktyp.eq.'K8')
+        call jgetptc(jad, pc, vk8=zk8(1))
+        call c_f_pointer(pc, vk8, [n1])
+!
+    else if (present(vk16)) then
+        ASSERT(ktyp.eq.'K16')
+        call jgetptc(jad, pc, vk16=zk16(1))
+        call c_f_pointer(pc, vk16, [n1])
+!
+    else if (present(vk24)) then
+        ASSERT(ktyp.eq.'K24')
+        call jgetptc(jad, pc, vk24=zk24(1))
+        call c_f_pointer(pc, vk24, [n1])
+!
+    else if (present(vk32)) then
+        ASSERT(ktyp.eq.'K32')
+        call jgetptc(jad, pc, vk32=zk32(1))
+        call c_f_pointer(pc, vk32, [n1])
+!
+    else if (present(vk80)) then
+        ASSERT(ktyp.eq.'K80')
+        call jgetptc(jad, pc, vk80=zk80(1))
+        call c_f_pointer(pc, vk80, [n1])
+!
+    else
+        ASSERT(.false.)
+    endif
+!
+999 continue
+!
+end subroutine

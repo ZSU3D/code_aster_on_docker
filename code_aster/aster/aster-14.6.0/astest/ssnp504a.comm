@@ -1,0 +1,197 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# CONTACT-FROTTANT EN GRANDS GLISSEMENTS
+# POUR DES FISSURES OBLIQUES
+#
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+MAILLAG2=LIRE_MAILLAGE(INFO=1,FORMAT='MED',);
+
+MAILLAG2=DEFI_GROUP(reuse =MAILLAG2,
+                    MAILLAGE=MAILLAG2,
+                    CREA_GROUP_NO =(_F(NOM = 'L13N',
+                                       GROUP_MA = 'L13',
+                                       ),
+                                    _F(NOM = 'L21N',
+                                       GROUP_MA='L21',
+                                       ),
+                                    ),
+                    );
+
+MODELE=AFFE_MODELE(MAILLAGE=MAILLAG2,
+                     AFFE=(_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='D_PLAN',),),);
+
+CONT = DEFI_CONTACT(MODELE         = MODELE,
+                    FORMULATION    = 'CONTINUE',
+                    FROTTEMENT     = 'COULOMB',
+                    ALGO_RESO_CONT = 'NEWTON',
+                    ALGO_RESO_GEOM = 'NEWTON',
+                    ALGO_RESO_FROT = 'NEWTON',
+                    #ADAPT_COEF     = 'OUI',
+                    ZONE =(
+                           _F(
+                             GROUP_MA_MAIT = 'L21',
+                             GROUP_MA_ESCL = 'L13',
+                             COULOMB       = 0.5,
+                             TOLE_PROJ_EXT = 0.0,
+                             CONTACT_INIT  = 'INTERPENETRE',
+                             ),
+                           _F(
+                             GROUP_MA_MAIT = 'L23',
+                             GROUP_MA_ESCL = 'L31',
+                             COULOMB       = 0.5,
+                             TOLE_PROJ_EXT = 0.0,
+                             CONTACT_INIT  = 'INTERPENETRE',
+                             ),
+                          ),
+                   );
+
+
+E=100.0E6
+nu=0.3
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,
+                            NU=nu,
+                            RHO=7800),);
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MAILLAG2,
+                       MODELE=MODELE,
+                       AFFE=_F(TOUT='OUI',
+                       MATER=ACIER,
+                      ),);
+
+DEPX=2.0
+DEPY=1.E-2
+ZERO=0.0
+
+
+CH1=AFFE_CHAR_MECA(MODELE=MODELE,
+                   DDL_IMPO=(
+                            _F(GROUP_MA='L11',DY=DEPY,),
+                            _F(GROUP_MA='L33',DY=-DEPY,),
+                            _F(GROUP_NO=('P1','P2','P11','P12',),
+                               DX=0.0,),),
+                    INFO=1,);
+
+CH2=AFFE_CHAR_MECA(MODELE=MODELE,
+                   DDL_IMPO=(_F(GROUP_MA='L24',
+                                DX=DEPX,),),
+                   INFO=1,);
+
+VAR1=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.,0.,1.,1.),
+                   PROL_DROITE='CONSTANT',
+                   PROL_GAUCHE='CONSTANT',);
+
+VAR2=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.,0.,1.,1.),
+                    PROL_DROITE='CONSTANT',
+                    PROL_GAUCHE='CONSTANT',);
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                    NOMBRE=4,),);
+
+UTOT1=STAT_NON_LINE(MODELE=MODELE,
+                    CHAM_MATER=CHAMPMAT,
+                    EXCIT=(_F(CHARGE=CH1,FONC_MULT=VAR1),
+                           _F(CHARGE=CH2,FONC_MULT=VAR2),
+                           ),
+                    CONTACT  = CONT,
+                    COMPORTEMENT=_F(RELATION='ELAS',),
+                    INCREMENT=_F(LIST_INST=L_INST,),
+                    NEWTON=_F(REAC_ITER=1,),
+                    CONVERGENCE=(_F(ITER_GLOB_MAXI=9,
+                                    RESI_GLOB_RELA=1E-06)),
+                    SOLVEUR=_F(METHODE='MUMPS',
+                               ),
+                    INFO=1,);
+
+LAG=[None]*5
+inst=[0.0,0.25,0.5,0.75,1.0]
+vale = [[0.0,-6.3355791974025E+04,-6.0652835573768E+04,-5.0757742731615E+04,0.0],
+        [0.0,-1.8115145339365E+05,-1.2479790608989E+05,-1.0307176006105E+05,0.0],
+        [0.0,0.0,-2.0163277761773E+05,-1.5784446601920E+05,0.0],
+        [0.0,0.0,-3.7985867300987E+05,-2.2011906876467E+05,0.0]]
+
+VALE_CALC=[
+ [0.0,
+ -63355.859811974,
+ -60652.897226059,
+ -50757.789817004,
+ 0.0,],
+ [0.0,
+ -1.8113412695769E+05,
+ -1.2484579493149E+05,
+ -1.0310922568345E+05,
+ 0.0,],
+ [0.0,
+ 0.0,
+ -2.0178246972408E+05,
+ -1.5795451930304E+05,
+ 0.0,],
+ [0.0,
+ 0.0,
+ -3.8025255345516E+05,
+ -2.2034562733908E+05,
+ 0.0,],
+]
+
+for i in [1,2,3,4]: #Boucle sur les increments
+   LAG[i]=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                         GROUP_NO=('L13N'),
+                                         RESULTAT=UTOT1,
+                                         NOM_CHAM='DEPL',
+                                         INST=inst[i],
+                                         NOM_CMP=('LAGS_C','LAGS_F1',),
+                                         OPERATION='EXTRACTION',),);
+   IMPR_TABLE(TABLE=LAG[i],
+              FORMAT='AGRAF',
+              FORMAT_R='1PE12.7',
+              NOM_PARA=('NOEUD','INST','COOR_X','LAGS_C','LAGS_F1',),
+              IMPR_FONCTION='NON',
+              TRI=_F(NOM_PARA=('COOR_X',),
+                     ORDRE='CROISSANT',),);
+
+   for j in [0,1,2,3,4]: #Boucle sur les positions testees
+      if (vale[i-1] [j] == 0.0):
+        precision = 1.0E-12
+        critere = 'ABSOLU'
+      else:
+        precision = 5.E-2
+        critere = 'RELATIF'
+      TEST_TABLE(TABLE=LAG[i],
+                 NOM_PARA='LAGS_C',
+                 VALE_CALC=VALE_CALC[i-1][j], VALE_REFE=vale[i-1][j],
+                 CRITERE=critere,
+                 PRECISION=precision,
+                 REFERENCE='AUTRE_ASTER',
+                 FILTRE=_F(NOM_PARA='COOR_X',
+                           CRIT_COMP='EQ',
+                           VALE=j,
+                           PRECISION=0.03,
+                           CRITERE='ABSOLU',),);
+
+FIN();

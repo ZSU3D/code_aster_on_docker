@@ -1,0 +1,63 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET'),);
+
+# =====================================================================
+#                 VALEUR CIBLE
+# =====================================================================
+# Contrainte moyenne dans le du goujon = 30 MPa
+# DEPL_R__ : deplacement relatif suivant z entre N_SCEG et N_SCGE
+# ATTENTION : 1/2 section de modelisee
+SIG_PRET = 30.0
+R_GOUJON =  6.0
+F_RESULT = -SIG_PRET*3.14*R_GOUJON*R_GOUJON/2.0
+#
+CIBLE=DEFI_FONCTION(
+   NOM_PARA='INST',
+   NOM_RESU='DZ',
+   VALE=( 0.0 , 0.0 ,
+          1.0 , F_RESULT ,),
+)
+
+# =====================================================================
+#                 RECALAGE
+# =====================================================================
+RECAL=MACR_RECAL(
+   UNITE_ESCL=3,
+   PARA_OPTI=_F(NOM_PARA='DEPL_R__',
+                VALE_INI=0.004, VALE_MIN=0.004, VALE_MAX=0.012,),
+   COURBE=_F(FONC_EXP=CIBLE, NOM_FONC_CALC='REACF',
+             PARA_X='INST', PARA_Y='DZ'),
+)
+
+# =====================================================================
+#                 TEST_RESU
+# =====================================================================
+PARA=DEFI_LIST_REEL(VALE=1.0)
+OPTIM=DEFI_FONCTION(NOM_PARA='INST', VALE_PARA=PARA, VALE_FONC=RECAL)
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=7.959522E-3,
+                        VALE_PARA=1.0,
+                        FONCTION=OPTIM,
+                        ),
+              )
+
+FIN()

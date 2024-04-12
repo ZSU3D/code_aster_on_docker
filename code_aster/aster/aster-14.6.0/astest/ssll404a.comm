@@ -1,0 +1,325 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ELEMENTS  : MEPOUDE
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+ACIER=DEFI_MATERIAU(
+                         ELAS=_F(  NU = 0.3,
+                           E = 7.E10,            ))
+
+MAYA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MATER=AFFE_MATERIAU(    MAILLAGE=MAYA,
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        MATER = ACIER,   ))
+
+STRUCTUR=AFFE_MODELE(    MAILLAGE=MAYA,
+                               AFFE=_F(  TOUT = 'OUI',
+                                      MODELISATION = 'POU_D_E',
+                                      PHENOMENE = 'MECANIQUE',     ))
+
+CARA=AFFE_CARA_ELEM(     MODELE=STRUCTUR,
+                               POUTRE=_F(
+                            GROUP_MA = 'TOUT',
+                            SECTION = 'RECTANGLE',
+                            CARA = ( 'HY',  'HZ', ),
+                            VALE = ( 0.015,  0.002, ),     )
+                          )
+
+# CONDITIONS AUX LIMITES
+
+FIXA=AFFE_CHAR_MECA(      MODELE=STRUCTUR,DDL_IMPO=(
+                              _F(  GROUP_NO = 'POINT_A',
+                                               DX = 0.,
+                                               DY = 0.,
+                                               DZ = 0.,
+                                               DRY = 0.,  ),
+                                       _F(  GROUP_NO = 'POINT_B',
+                                               DY = 0.,
+                                               DZ = 0.,
+                                               DRX = 0.,  ))
+                          )
+
+CHARGE=AFFE_CHAR_MECA(      MODELE=STRUCTUR,FORCE_NODALE=(
+                          _F(  GROUP_NO = 'POINT_A',
+                                               MZ = 1.,    ),
+                                       _F(  GROUP_NO = 'POINT_B',
+                                               MZ = -1.,   ))
+                          )
+
+# CALCUL STATIQUE
+
+STATIQ=MECA_STATIQUE(         MODELE=STRUCTUR,
+                                 CARA_ELEM=CARA,
+                                 SOLVEUR=_F(METHODE='MULT_FRONT'),
+                                CHAM_MATER=MATER,EXCIT=(
+                                     _F(  CHARGE = FIXA,     ),
+                                           _F(  CHARGE = CHARGE,   ))
+                            )
+
+# RECUPERATION DU CHAMP DE DEPLACEMENT
+
+DEPLA=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+NOM_CHAM='DEPL', RESULTAT=STATIQ,
+                              NUME_ORDRE=1
+                               )
+
+# CALCUL DES CONTRAINTES ELEMENTAIRES A PARTIR DES DEPLACEMENTS
+
+
+SIGMA=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STATIQ, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' ),
+
+
+# CALCUL DES MATRICES ELEMENTAIRES ET ASSEMBLAGE
+
+
+K_ELEM=CALC_MATR_ELEM(        MODELE=STRUCTUR,
+                                 CARA_ELEM=CARA,
+                                CHAM_MATER=MATER,
+                                    CHARGE=FIXA,
+                                   OPTION='RIGI_MECA' )
+
+KS_ELEM=CALC_MATR_ELEM(        MODELE=STRUCTUR,
+                                 OPTION='RIGI_GEOM',
+                               CARA_ELEM=CARA,
+                               SIEF_ELGA=SIGMA )
+
+NUMERO=NUME_DDL(    MATR_RIGI=K_ELEM )
+
+K_ASSE=ASSE_MATRICE(    MATR_ELEM=K_ELEM,
+                             NUME_DDL=NUMERO  )
+
+KS_ASSE=ASSE_MATRICE(    MATR_ELEM=KS_ELEM,
+                             NUME_DDL=NUMERO  )
+
+# CALCUL DES MODES PAR SORENSEN
+MODE1=CALC_MODES(MATR_RIGI=K_ASSE,
+                 OPTION='PLUS_PETITE',
+                 MATR_RIGI_GEOM=KS_ASSE,
+                 CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=5,
+                                   ),
+                 TYPE_RESU='MODE_FLAMB',
+                 )
+
+
+TEST_RESU(RESU=(_F(PARA='CHAR_CRIT',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE1,
+                   VALE_CALC=13.932163995,
+                   VALE_REFE=14.4147,
+                   CRITERE='RELATIF',
+                   PRECISION=0.035000000000000003,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE1,
+                   VALE_CALC=8.306132479,
+                   VALE_REFE=8.6320700000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE1,
+                   VALE_CALC=2.751372218,
+                   VALE_REFE=2.8607399999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=0.039,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE1,
+                   VALE_CALC=-8.395545951,
+                   VALE_REFE=-8.7838200000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=0.044999999999999998,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE1,
+                   VALE_CALC=-14.011043612,
+                   VALE_REFE=-14.555099999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                ),
+          )
+
+MODE2=CALC_MODES( MATR_RIGI=K_ASSE,
+                  MATR_RIGI_GEOM=KS_ASSE,
+                  TYPE_RESU='MODE_FLAMB', VERI_MODE=_F(STURM='OUI'),
+                  OPTION='PROCHE', SOLVEUR=_F(METHODE='MUMPS'),
+                  CALC_CHAR_CRIT=_F(CHAR_CRIT = (-14.1, -8.35, 2.88, 8.35, 14.1) 
+                  ),
+                  SOLVEUR_MODAL=_F( OPTION_INV = 'RAYLEIGH',),
+                 )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=5,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE2,
+                   VALE_CALC=13.932163821,
+                   VALE_REFE=14.4147,
+                   CRITERE='RELATIF',
+                   PRECISION=0.034000000000000002,),
+                _F(NUME_ORDRE=4,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE2,
+                   VALE_CALC=8.306132481,
+                   VALE_REFE=8.6320700000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                _F(NUME_ORDRE=3,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE2,
+                   VALE_CALC=2.751372938,
+                   VALE_REFE=2.8607399999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=0.039,),
+                _F(NUME_ORDRE=2,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE2,
+                   VALE_CALC=-8.395545951,
+                   VALE_REFE=-8.7838200000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=0.044999999999999998,),
+                _F(NUME_ORDRE=1,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE2,
+                   VALE_CALC=-14.011043612,
+                   VALE_REFE=-14.555099999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                ),
+          )
+
+MODE3=CALC_MODES( MATR_RIGI=K_ASSE,
+                  MATR_RIGI_GEOM=KS_ASSE,
+                  TYPE_RESU='MODE_FLAMB',VERI_MODE=_F(STURM='OUI'),
+                  OPTION='SEPARE', SOLVEUR=_F(METHODE='MUMPS'),
+                  CALC_CHAR_CRIT=_F( CHAR_CRIT = (-15., -10., -2., 5., 10.,16.) ),
+                  SOLVEUR_MODAL=_F( OPTION_INV = 'RAYLEIGH' ),
+                 )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=5,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE3,
+                   VALE_CALC=13.932163821,
+                   VALE_REFE=14.4147,
+                   CRITERE='RELATIF',
+                   PRECISION=0.034000000000000002,),
+                _F(NUME_ORDRE=4,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE3,
+                   VALE_CALC=8.306132481,
+                   VALE_REFE=8.6320700000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                _F(NUME_ORDRE=3,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE3,
+                   VALE_CALC=2.751372938,
+                   VALE_REFE=2.8607399999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=0.039,),
+                _F(NUME_ORDRE=2,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE3,
+                   VALE_CALC=-8.395545951,
+                   VALE_REFE=-8.7838200000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=0.044999999999999998,),
+                _F(NUME_ORDRE=1,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE3,
+                   VALE_CALC=-14.011043612,
+                   VALE_REFE=-14.555099999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                ),
+          )
+
+MODE4=CALC_MODES( MATR_RIGI=K_ASSE,
+                  MATR_RIGI_GEOM=KS_ASSE,
+                  TYPE_RESU='MODE_FLAMB',VERI_MODE=_F(STURM='OUI'),
+                  OPTION='AJUSTE', SOLVEUR=_F(METHODE='MUMPS'),
+                  CALC_CHAR_CRIT=_F( CHAR_CRIT = (-15., -10., -2., 5., 10.,16.) ),
+                  SOLVEUR_MODAL=_F( OPTION_INV = 'RAYLEIGH' ),
+                 )
+                         
+TEST_RESU(RESU=(_F(NUME_ORDRE=5,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE4,
+                   VALE_CALC=13.932163821,
+                   VALE_REFE=14.4147,
+                   CRITERE='RELATIF',
+                   PRECISION=0.034000000000000002,),
+                _F(NUME_ORDRE=4,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE4,
+                   VALE_CALC=8.306132481,
+                   VALE_REFE=8.6320700000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                _F(NUME_ORDRE=3,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE4,
+                   VALE_CALC=2.751372938,
+                   VALE_REFE=2.8607399999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=0.039,),
+                _F(NUME_ORDRE=2,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE4,
+                   VALE_CALC=-8.395545951,
+                   VALE_REFE=-8.7838200000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=0.044999999999999998,),
+                _F(NUME_ORDRE=1,
+                   PARA='CHAR_CRIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE4,
+                   VALE_CALC=-14.011043612,
+                   VALE_REFE=-14.555099999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.037999999999999999,),
+                ),
+          )
+          
+FIN()
+#

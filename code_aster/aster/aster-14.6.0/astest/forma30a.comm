@@ -1,0 +1,159 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+#......................................................................
+#
+# MODELISATION 2D_AXIS:
+#......................................................................
+#
+#        INTERNE       HAUT            EXTERNE
+#               D -----+----- Cs
+# !               !    J    !
+#                 !         !
+# !               !         !
+#                 !         !        10 MM
+# !               !         !
+#                 !         !
+# !               !    F    !
+#     19.5 MM   P1 -----+-----  P2
+# !-------------->   1.0 MM
+#                 <--------->
+#======================================================================
+#
+#
+#
+#
+#
+#
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+DEFI_GROUP(reuse =MA, MAILLAGE=MA,
+                CREA_GROUP_NO=_F(OPTION='NOEUD_ORDO',
+                                 GROUP_MA='BAS', NOM='BAS', NOEUD_ORIG='N3',),);
+DEFI_GROUP(reuse =MA, MAILLAGE=MA,
+              CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI',),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS',),);
+
+MATHER=DEFI_MATERIAU(THER=_F(LAMBDA=1.0,
+                             RHO_CP=1000.0,),);
+
+CHMATHE=AFFE_MATERIAU(MAILLAGE=MA,
+                      AFFE=_F(TOUT='OUI',
+                              MATER=MATHER,),);
+#  ECHANGE EN PAROI INTERNE CHOC THERMIQUE FROID
+#
+#
+#
+
+
+HPAROI=DEFI_CONSTANTE(VALE=100.0,);
+
+T_EXT=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,100.0,0.01,0.0,10.0,0.0,100.0,0.0,),
+                    PROL_DROITE='CONSTANT',
+                    PROL_GAUCHE='CONSTANT',);
+
+LISTTH=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=(_F(JUSQU_A=1.E-2,
+                                     NOMBRE=10,),
+                                  _F(JUSQU_A=0.10000000000000001,
+                                     NOMBRE=9,),
+                                  _F(JUSQU_A=1.0,
+                                     NOMBRE=9,),
+                                  _F(JUSQU_A=2.0,
+                                     NOMBRE=5,),
+                                  _F(JUSQU_A=10.0,
+                                     NOMBRE=8,),
+                                  _F(JUSQU_A=100.0,
+                                     NOMBRE=5,),),);
+# ------------------------------------------------------------------
+# PREMIER CALCUL SANS DIAG
+# ON NE VERIFE PAS LE PRINCIPE DU MAXIMUM
+#
+#
+#
+
+
+MOTHER=AFFE_MODELE(MAILLAGE=MA,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='THERMIQUE',
+                           MODELISATION='AXIS',),);
+
+CHAR_TH=AFFE_CHAR_THER_F(MODELE=MOTHER,
+                         ECHANGE=_F(GROUP_MA='ECHANGE',
+                                    COEF_H=HPAROI,
+                                    TEMP_EXT=T_EXT,),);
+
+TEMPE=THER_LINEAIRE(MODELE=MOTHER,
+                    CHAM_MATER=CHMATHE,
+                    EXCIT=_F(CHARGE=CHAR_TH,),
+                    INCREMENT=_F(LIST_INST=LISTTH,),
+                    ETAT_INIT=_F(VALE=100.0,),);
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=TEMPE,
+                  INST=(0.0,0.10000000000000001,4.0,10.0,100.0,),
+                  VALE_MAX='OUI',
+                  VALE_MIN='OUI',),);
+
+TN8R1=RECU_FONCTION(RESULTAT=TEMPE,
+                    NOM_CHAM='TEMP',
+                    NOM_CMP='TEMP',
+                    GROUP_NO='P2',
+                    TITRE='T=f(t) POINT P2 MILIEU BAS AXIS NON DIAG',);
+
+IMPR_FONCTION(UNITE=29,
+              FORMAT='XMGRACE',
+              COURBE=(_F(FONCTION=TN8R1,),),);
+
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(MAILLAGE=MA,
+                  RESULTAT=TEMPE,
+                  INST=(0.1, 4.0, 10.0,),),);
+
+T1LBAS=POST_RELEVE_T(ACTION=_F(INTITULE='TEMP',
+                               GROUP_NO='BAS',
+                               RESULTAT=TEMPE,
+                               NOM_CHAM='TEMP',
+                               INST=4.0,
+                               TOUT_CMP='OUI',
+                               OPERATION='EXTRACTION',),
+                     TITRE='TEMPERATURES EN BAS A 4 S NON DIAG',);
+
+
+IMPR_TABLE(FORMAT='AGRAF',
+           TABLE=T1LBAS,
+           NOM_PARA=('ABSC_CURV','TEMP',),)
+
+TEST_RESU(RESU=_F(INST=4.0,
+                  TYPE_TEST='MAX',
+                  RESULTAT=TEMPE,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=126.65138612249,
+                  ),
+          )
+
+FIN();

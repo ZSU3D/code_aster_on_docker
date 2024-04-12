@@ -1,0 +1,219 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# Fonction de calcul de l'erreur
+CoefRef = 1.0E-05
+
+MA = LIRE_MAILLAGE(FORMAT="ASTER",INFO=2);
+
+MATE = DEFI_MATERIAU(ELAS=_F(E=2.1E11,NU=0.3),
+                      CABLE=_F(EC_SUR_E = 0.E0),)
+
+CHMAT = AFFE_MATERIAU(MAILLAGE=MA,
+                      AFFE        = _F(TOUT='OUI',MATER=MATE,),)
+
+LIS_INST =DEFI_LIST_REEL(DEBUT=0.0,INTERVALLE=(_F(JUSQU_A=1.0,NOMBRE=1,),),)
+
+
+#-------------------------------------------------------------------------------------
+# --> CABLE
+# ----------
+
+MO_CAB = AFFE_MODELE(MAILLAGE=MA,
+                     AFFE=_F(TOUT='OUI',PHENOMENE='MECANIQUE',
+                             MODELISATION='CABLE'),)
+
+RAYON = 0.02
+
+CA_CAB = AFFE_CARA_ELEM(  CABLE=_F( GROUP_MA='TOUT',
+                                  SECTION=RAYON*RAYON*pi, N_INIT=5000.0),
+                                  MODELE=MO_CAB)
+
+CL_CAB = AFFE_CHAR_MECA(MODELE=MO_CAB,
+                   DDL_IMPO=_F(GROUP_NO='A',
+                    DX=0., DY=0., DZ=0.,))
+
+CH_CAB = AFFE_CHAR_MECA(MODELE=MO_CAB,
+                        FORCE_NODALE=_F(GROUP_NO='B',FX=1000.,),)
+
+RE_CAB=STAT_NON_LINE(MODELE     = MO_CAB,
+                     CHAM_MATER = CHMAT,
+                     CARA_ELEM  = CA_CAB,
+                     EXCIT      = (_F(CHARGE = CL_CAB),
+                                   _F(CHARGE = CH_CAB),),
+                     COMPORTEMENT=_F(DEFORMATION='GROT_GDEP',
+                  RELATION='CABLE',),
+                     INCREMENT = _F(LIST_INST = LIS_INST,),
+                     CONVERGENCE = _F(RESI_REFE_RELA=1.E-7,
+                                      EFFORT_REFE = CoefRef,
+                                      MOMENT_REFE = CoefRef,),
+   );
+
+TB_CAB = RECU_TABLE(CO=RE_CAB,NOM_PARA=('ITER_GLOB'),)
+
+IMPR_TABLE(TABLE=TB_CAB)
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC_I=3,
+           NOM_PARA='ITER_GLOB',
+           TABLE=TB_CAB,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_RESU(RESU=_F(GROUP_NO='B',
+                  INST=1.0,
+                  RESULTAT=RE_CAB,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=3.7893850685387E-06,
+                  ),
+          )
+
+# --- validation CREA_CHAMP/'NEUT' aux points de GAUSS  ---
+
+FFDEUX = FORMULE(VALE='2*X1',
+                 NOM_PARA='X1',)
+
+FELG01=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='ELGA_NEUT_F',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',   INFO=1,
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE_F = FFDEUX,),)
+
+NELG10=CREA_CHAMP(NUME_ORDRE = 1,
+   OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',RESULTAT=RE_CAB, NOM_CHAM='SIEF_ELGA')
+
+NELG11=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELGA_NEUT_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',
+   ASSE=_F( TOUT='OUI',   CHAM_GD = NELG10, NOM_CMP = ('N'), NOM_CMP_RESU = ('X1'),), )
+
+NELG12=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='ELGA_NEUT_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',   INFO=1,
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE =1000.0,),)
+
+NELG01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELGA_NEUT_R',   MODELE=MO_CAB,
+   ASSE=(_F( TOUT='OUI', CHAM_GD = NELG11, CUMUL='OUI',COEF_R= 1.0),
+         _F( TOUT='OUI', CHAM_GD = NELG12, CUMUL='OUI',COEF_R= -1.0),),)
+
+VELG01=CREA_CHAMP(
+   OPERATION='EVAL', TYPE_CHAM='ELGA_NEUT_R', INFO=1,
+   CHAM_F=FELG01,  CHAM_PARA=NELG01   )
+
+SELG01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELGA_SIEF_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',
+   ASSE=_F( TOUT='OUI',   CHAM_GD = VELG01, NOM_CMP = ('X1',  ), NOM_CMP_RESU = ('N'),), )
+
+TEST_RESU(CHAM_ELEM=_F(REFERENCE='ANALYTIQUE',
+                       POINT=1,
+                       NOM_CMP='N',
+                       MAILLE='M1',
+                       CHAM_GD=SELG01,
+                       VALE_CALC=-7.57874142E-03,
+                       VALE_REFE=-7.5787399999999996E-3,),
+          )
+
+# --- validation CREA_CHAMP/'NEUT' aux noeuds par element  ---
+FELN01=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='ELNO_NEUT_F',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE_F = FFDEUX,),)
+
+NELN10=CREA_CHAMP(MODELE=MO_CAB,
+   OPERATION='DISC', TYPE_CHAM='ELNO_SIEF_R',CHAM_GD=NELG10)
+
+NELN11=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELNO_NEUT_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',
+   ASSE=_F( TOUT='OUI',   CHAM_GD = NELN10, NOM_CMP = ('N'), NOM_CMP_RESU = ('X1'),), )
+
+NELN12=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='ELNO_NEUT_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',   INFO=1,
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE =(1000.0),),)
+
+NELN01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELNO_NEUT_R',   MODELE=MO_CAB,
+   ASSE=(_F( TOUT='OUI', CHAM_GD = NELN11, CUMUL='OUI',COEF_R= 1.0),
+         _F( TOUT='OUI', CHAM_GD = NELN12, CUMUL='OUI',COEF_R= -1.0),),)
+
+VELN01=CREA_CHAMP(
+   OPERATION='EVAL', TYPE_CHAM='ELNO_NEUT_R', INFO=1,
+   CHAM_F=FELN01,  CHAM_PARA=NELN01   )
+
+SELN01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='ELNO_SIEF_R',
+   MODELE=MO_CAB,  PROL_ZERO='OUI',
+   ASSE=_F( TOUT='OUI',   CHAM_GD = VELN01, NOM_CMP = ('X1'), NOM_CMP_RESU = ('N'),), )
+
+TEST_RESU(CHAM_ELEM=_F(NOEUD='N2',
+                       REFERENCE='ANALYTIQUE',
+                       NOM_CMP='N',
+                       MAILLE='M1',
+                       CHAM_GD=SELN01,
+                       VALE_CALC=-7.57874142E-03,
+                       VALE_REFE=-7.5787414000000001E-3,),
+          )
+
+# --- validation CREA_CHAMP/'NEUT' aux noeuds  ---
+FNOE01=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='NOEU_NEUT_F',
+   MODELE=MO_CAB,
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE_F = FFDEUX,),)
+
+NNOE10=CREA_CHAMP(MODELE=MO_CAB,
+   OPERATION='DISC', TYPE_CHAM='NOEU_SIEF_R',CHAM_GD=NELN10)
+
+NNOE11=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='NOEU_NEUT_R',
+   MODELE=MO_CAB,
+   ASSE=_F( TOUT='OUI',   CHAM_GD = NNOE10, NOM_CMP = ('N'), NOM_CMP_RESU = ('X1'),), )
+
+NNOE12=CREA_CHAMP(
+   OPERATION='AFFE', TYPE_CHAM='NOEU_NEUT_R',
+   MODELE=MO_CAB,     INFO=1,
+   AFFE=_F( TOUT='OUI', NOM_CMP = ('X1'), VALE =(1000.0),),)
+
+NNOE01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='NOEU_NEUT_R',   MODELE=MO_CAB,
+   ASSE=(_F( TOUT='OUI', CHAM_GD = NNOE11, CUMUL='OUI',COEF_R= 1.0),
+         _F( TOUT='OUI', CHAM_GD = NNOE12, CUMUL='OUI',COEF_R= -1.0),),)
+
+VNOE01=CREA_CHAMP(
+   OPERATION='EVAL', TYPE_CHAM='NOEU_NEUT_R', INFO=1,
+   CHAM_F=FNOE01,  CHAM_PARA=NNOE01   )
+
+SNOE01=CREA_CHAMP(
+   OPERATION='ASSE', TYPE_CHAM='NOEU_SIEF_R',
+   MODELE=MO_CAB,
+   ASSE=_F( TOUT='OUI',   CHAM_GD = VNOE01, NOM_CMP = ('X1',  ), NOM_CMP_RESU = ('N'),), )
+
+TEST_RESU(CHAM_NO=_F(NOEUD='N2',
+                     REFERENCE='ANALYTIQUE',
+                     NOM_CMP='N',
+                     CHAM_GD=SNOE01,
+                     VALE_CALC=-7.57874142E-03,
+                     VALE_REFE=-7.57874142E-3,),
+          )
+
+FIN()

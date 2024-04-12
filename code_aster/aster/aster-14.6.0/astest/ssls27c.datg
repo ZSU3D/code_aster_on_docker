@@ -1,0 +1,127 @@
+# -*- coding: utf-8 -*-
+
+###
+### This file is generated automatically by SALOME v6.3.1 with dump python functionality
+###
+
+import sys
+import salome
+salome.salome_init()
+theStudy = salome.myStudy
+import salome_notebook
+notebook = salome_notebook.notebook
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+
+###
+### GEOM component
+###
+
+import GEOM
+from salome.geom import geomBuilder
+geompy = geomBuilder.New(salome.myStudy)
+import math
+import SALOMEDS
+
+
+Vertex_1 = geompy.MakeVertex(0, 0, 0)
+Vertex_2 = geompy.MakeVertex(12, 0, 0)
+Edge_1 = geompy.MakeEdge(Vertex_1, Vertex_2)
+Edge_2 = geompy.MakeTranslation(Edge_1, 0, 1, 0)
+Vertex_3 = geompy.MakeVertex(0, 1, 0)
+Edge_3 = geompy.MakeEdge(Vertex_1, Vertex_3)
+Edge_4 = geompy.MakeTranslation(Edge_3, 12, 0, 0)
+Face_1 = geompy.MakeFaceWires([Edge_1, Edge_2, Edge_3, Edge_4], 1)
+[Edge_5,Edge_6,Edge_7,Edge_8] = geompy.ExtractShapes(Face_1, geompy.ShapeType["EDGE"], True)
+Vertex_4 = geompy.MakeVertex(12, 1, 0)
+geompy.addToStudy( Vertex_1, 'Vertex_1' )
+geompy.addToStudy( Vertex_2, 'Vertex_2' )
+geompy.addToStudy( Edge_1, 'Edge_1' )
+geompy.addToStudy( Edge_2, 'Edge_2' )
+geompy.addToStudy( Vertex_3, 'Vertex_3' )
+geompy.addToStudy( Edge_3, 'Edge_3' )
+geompy.addToStudy( Edge_4, 'Edge_4' )
+geompy.addToStudy( Face_1, 'Face_1' )
+geompy.addToStudyInFather( Face_1, Edge_5, 'Edge_5' )
+geompy.addToStudyInFather( Face_1, Edge_6, 'Edge_6' )
+geompy.addToStudyInFather( Face_1, Edge_7, 'Edge_7' )
+geompy.addToStudyInFather( Face_1, Edge_8, 'Edge_8' )
+geompy.addToStudy( Vertex_4, 'Vertex_4' )
+
+
+###
+### SMESH component
+###
+
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+from salome.StdMeshers import StdMeshersBuilder
+aMeasurements = smesh.CreateMeasurements()
+
+smeshObj_1 = smesh.CreateHypothesis('QuadrangleParams')
+smeshObj_1.SetQuadType( StdMeshersBuilder.QUAD_STANDARD )
+Mesh_1 = smesh.Mesh(Face_1)
+Regular_1D = Mesh_1.Segment()
+Nb_Segments_12 = Regular_1D.NumberOfSegments(12)
+Nb_Segments_12.SetDistrType( 0 )
+Quadrangle_2D = Mesh_1.Quadrangle()
+isDone = Mesh_1.Compute()
+smeshObj_2 = smesh.CreateHypothesis('Propagation')
+Regular_1D_1 = Mesh_1.Segment(geom=Edge_5)
+Nb_Segments_1 = Regular_1D_1.NumberOfSegments(4)
+Nb_Segments_1.SetDistrType( 0 )
+smeshObj_3 = Regular_1D_1.Propagation()
+isDone = Mesh_1.Compute()
+smesh.SetName(Mesh_1, 'Mesh_1')
+B = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'B' )
+nbAdd = B.Add( [ 4 ] )
+C = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'C' )
+nbAdd = C.Add( [ 1 ] )
+A = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'A' )
+nbAdd = A.Add( [ 3 ] )
+D = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'D' )
+nbAdd = D.Add( [ 2 ] )
+E = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'E' )
+nbAdd = E.Add( [ 20 ] )
+AD = Mesh_1.CreateEmptyGroup( SMESH.NODE, 'AD' )
+nbAdd = AD.Add( [ 2, 3, 16, 17, 18 ] )
+PLAQUE = Mesh_1.CreateEmptyGroup( SMESH.FACE, 'PLAQUE' )
+nbAdd = PLAQUE.Add( [ 21, 22, 23, 24, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80 ] )
+PLAQUE.SetColor( SALOMEDS.Color( 0, 0.666667, 1 ))
+smesh.SetName(Mesh_1, 'Mesh_1')
+
+SubMesh_1 = Regular_1D_1.GetSubMesh()
+
+
+## some objects were removed
+aStudyBuilder = theStudy.NewBuilder()
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_1))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_2))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+SO = theStudy.FindObjectIOR(theStudy.ConvertObjectToIOR(smeshObj_3))
+if SO is not None: aStudyBuilder.RemoveObjectWithChildren(SO)
+## set object names
+smesh.SetName(Mesh_1.GetMesh(), 'Mesh_1')
+smesh.SetName(Regular_1D.GetAlgorithm(), 'Regular_1D')
+smesh.SetName(Nb_Segments_12, 'Nb. Segments_12')
+smesh.SetName(Quadrangle_2D.GetAlgorithm(), 'Quadrangle_2D')
+smesh.SetName(Nb_Segments_1, 'Nb. Segments_1')
+smesh.SetName(B, 'B')
+smesh.SetName(C, 'C')
+smesh.SetName(AD, 'AD')
+smesh.SetName(D, 'D')
+smesh.SetName(A, 'A')
+smesh.SetName(E, 'E')
+smesh.SetName(PLAQUE, 'PLAQUE')
+smesh.SetName(SubMesh_1, 'SubMesh_1')
+
+########Export du maillage au format MMED########
+Mesh_1.ExportMED( r''+ExportPATH+'ssls27c.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+if salome.sg.hasDesktop():
+  salome.sg.updateObjBrowser(1)

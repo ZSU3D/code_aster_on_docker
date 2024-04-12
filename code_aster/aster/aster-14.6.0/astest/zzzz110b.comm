@@ -1,0 +1,139 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: ZZZZ110B
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'),)
+
+# 1ER CALCUL SUR LE MAILLAGE MA1 :
+# --------------------------------
+
+MA1 = LIRE_MAILLAGE(INFO=2,
+                    FORMAT='GIBI',
+                    UNITE=19,)
+
+MA1=DEFI_GROUP(reuse=MA1,MAILLAGE=MA1,CREA_GROUP_NO=(
+ _F( NOM = 'BAS',  OPTION = 'PLAN', POINT = (0., 0., 1.,),
+  ANGL_NAUT = (0., 90.,), PRECISION = 0.01),
+ _F( NOM = 'HAUT', OPTION = 'PLAN', POINT = (0., 0., 3.,),
+  ANGL_NAUT = (0., 90.,), PRECISION = 0.01)))
+
+MO1=AFFE_MODELE(    MAILLAGE=MA1, INFO=2,
+          AFFE=_F( GROUP_MA = 'CUBE5', PHENOMENE = 'MECANIQUE',
+          MODELISATION = '3D') )
+
+MAT=DEFI_MATERIAU(  ELAS=_F( E = 2., NU = 0.) )
+
+CM1=AFFE_MATERIAU(   MAILLAGE=MA1,
+          AFFE=_F( TOUT = 'OUI',MATER = MAT) )
+
+CHM1=AFFE_CHAR_MECA(   MODELE=MO1,DDL_IMPO=(
+           _F( GROUP_NO = 'BAS',    DX = 0., DY = 0., DZ = 0.),
+           _F( GROUP_NO = 'HAUT',   DZ = 2.))
+                          )
+
+###############################################################
+#
+
+IMPR_JEVEUX ( ENTITE='MEMOIRE' )
+
+IMPR_JEVEUX ( ENTITE='REPERTOIRE', CLASSE='G' )
+
+IMPR_JEVEUX ( ENTITE='ENREGISTREMENT' , CLASSE = 'G' , NUMERO=1 , INFO=1)
+
+IMPR_JEVEUX ( ENTITE='DISQUE' )
+
+IMPR_JEVEUX ( ENTITE='ATTRIBUT', NOMOBJ='MA1     .CONNEX')
+
+IMPR_JEVEUX ( ENTITE='SYSTEME', CLASSE='G', NOMATR='$$CARA')
+
+LR=DEFI_LIST_REEL(  VALE=3.2 )
+
+MEST1=MECA_STATIQUE(   MODELE=MO1,  CHAM_MATER=CM1,
+               LIST_INST=LR, EXCIT=_F( CHARGE = CHM1))
+
+# 2EME CALCUL SUR LE MAILLAGE MA2 :
+# --------------------------------
+
+
+MA2 = LIRE_MAILLAGE(FORMAT='GIBI',
+                    UNITE=21,
+                    )
+
+MO2=AFFE_MODELE(    MAILLAGE=MA2,
+          AFFE=_F( GROUP_MA = 'CUBE6', PHENOMENE = 'MECANIQUE',
+          MODELISATION = '3D') )
+
+CM2=AFFE_MATERIAU(   MAILLAGE=MA2,
+          AFFE=_F( TOUT = 'OUI',MATER = MAT) )
+
+MEST2=PROJ_CHAMP(RESULTAT=MEST1,     METHODE='COLLOCATION',
+                 NOM_CHAM=('DEPL'), MODELE_1=MO1,        MODELE_2=MO2, DISTANCE_ALARME=1.1e-1  )
+
+MEST22=CALC_CHAMP(MODELE=MO2,   CHAM_MATER=CM2,
+                      CONTRAINTE=('SIEF_ELGA'),
+                     RESULTAT=MEST2,   TOUT_ORDRE='OUI' )
+
+
+# LE CHAMP SIEF_ELGA DOIT ETRE HOMOGENE :
+# SIXX=SIXY=0.  SIYY=2.
+
+TEST_RESU(RESU=(_F(INST=3.2000000000000002,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=MEST1,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=-1.17480752E-12,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   MAILLE='M3',),
+                _F(INST=3.2000000000000002,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=MEST1,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   MAILLE='M3',),
+                _F(INST=3.2000000000000002,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=MEST22,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=-1.06753940E-12,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   MAILLE='M7',),
+                _F(INST=3.2000000000000002,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=MEST22,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   MAILLE='M7',),
+                ),
+          )
+
+FIN()
+#

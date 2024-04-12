@@ -1,0 +1,271 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',))
+
+
+# deplacement maximal cible
+etaMax = 1.5
+
+########### grandeurs physiques ####
+# Sy     contrainte critique
+# EE     module Young
+# NU     coef de Poisson
+# Gf     coef de Griffith (energie disspee par surface)
+# DD     demi-largeur de la bande d'endommagement (definit la process zone)
+########### parametres recalcules ####
+# CC     parametre non local
+# gamma  parametre numerique
+# kk     energie de dissipation local (terme omega=kk*a)
+# pena   coef de penalisation de Lagrange (terme pena/2(a-alpha)**2 ) 
+
+
+############## L'ECHELLE EST DECIMETRIQUE #############
+#EE=37272.e6 ; NU=0.2 ; Sy=3.9e6 ; Gf=0.11e3 ; DD=0.05 
+EE=3.e8 ; NU=0.2 ; Sy=3e4 ; Gf=10 ; DD=0.5 
+
+
+
+# LE MAILLAGE EST LU AU FORMAT MED GENERE PAR SALOME
+MA_QU=LIRE_MAILLAGE(FORMAT='MED');
+
+# AFFECTATION MODELE
+MO=AFFE_MODELE(MAILLAGE=MA_QU,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS_GRAD_VARI'));
+
+# DEFINITION DU BETON 
+BETON = DEFI_MATER_GC(
+  ENDO_FISS_EXP = _F(
+    E  = EE,
+    NU = NU,
+    FT = Sy,
+    GF = Gf,
+    FC = 10*Sy,
+    P  = 1.5,
+    LARG_BANDE = 2*DD,
+    ),
+  )
+
+
+# ATTRIBUTION DES PROPRIETES DU BETON AU MATERIAU
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA_QU,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=BETON));
+
+# ETABLISSEMENT DE CONDITIONS LIMITES:
+# AXE PEUX SE DEPLACER SELON -Y-
+CHARSY=AFFE_CHAR_MECA(MODELE=MO,
+                      DDL_IMPO=_F(GROUP_MA='AXE',
+                                  DX=0.));
+
+# ETABLISSEMENT DE CONDITION DU AU CHARGEMENT EN DEPLACEMENT
+# on s'approche de la limite d'endommagement
+EFFORT=AFFE_CHAR_MECA(MODELE=MO,
+                      FACE_IMPO=(_F(GROUP_MA='HAUT',
+                                    DY=5*Sy/EE),
+                                 _F(GROUP_MA='BAS',
+                                    DY=-5*Sy/EE)));
+                                    
+# DEFINITION DE LISTE DE PAS DE TEMPS 
+# SERIE LINEAIRE 0,1,2...INS_FIN
+# la valeur de pas de temps (dT) sert a definir l'increment d'endommagement en pilotage delta_d= dT/COEF_MULT
+
+INSTANTS=DEFI_LIST_REEL(DEBUT=0,
+                        INTERVALLE=_F(JUSQU_A=1000,
+                                      NOMBRE=1000));
+TEMPS   = DEFI_LIST_INST(DEFI_LIST = _F(LIST_INST = INSTANTS),
+                           ECHEC     = _F(ACTION='DECOUPE',
+                                          SUBD_METHODE='MANUEL',
+                                          SUBD_NIVEAU=10,
+                                          SUBD_PAS=4,
+                                          )                          
+                           ); 
+
+                           
+                           
+                           
+EVOL = STAT_NON_LINE(
+                   MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=CHARSY),
+                          _F(CHARGE=EFFORT,
+                             TYPE_CHARGE='FIXE_PILO')),
+                   COMPORTEMENT=_F(RELATION='ENDO_FISS_EXP',
+                                TOUT='OUI'),
+                   INCREMENT=_F(LIST_INST=TEMPS),
+                   NEWTON=_F(MATRICE='TANGENTE',MATR_RIGI_SYME='OUI',
+                             REAC_ITER=1,
+                             ),
+                   PILOTAGE=_F(TYPE='PRED_ELAS',
+                               COEF_MULT=10.,
+                               ETA_PILO_MAX=etaMax,
+                               ETA_PILO_R_MAX=2,
+                               ETA_PILO_R_MIN=0.,
+                               SELECTION='MIXTE',
+                               PROJ_BORNES = 'OUI',
+                               ),
+                   CONVERGENCE = _F(
+                                RESI_REFE_RELA = 1.e-3,
+                                SIGM_REFE      = Sy,
+                                LAGR_REFE      = Gf/DD,
+                                VARI_REFE      = 1,
+                                ITER_GLOB_MAXI = 15,
+                                ),                                  
+                   SOLVEUR=_F(METHODE='MUMPS',
+                              ),
+                   ARCHIVAGE=_F(PAS_ARCH=1000), 
+                   );
+
+
+################### POST_TRAITEMENT #############
+# CALCUL DE LA REPONSE FORCES DEPLACEMENT GLOBALE
+#################################################
+
+# ON CREE UN GROUPE DE NOEUDS A PARTIR D'UN GROUPE DE MAILLES
+MA_QU = DEFI_GROUP(reuse = MA_QU,
+       MAILLAGE = MA_QU,
+       CREA_GROUP_NO = (
+          _F(NOM = 'HAUT',    GROUP_MA = 'HAUT'),                       
+         )
+       )
+# FORCES NODALES
+EVOL = CALC_CHAMP(reuse = EVOL,
+  MODELE = MO,
+  CHAM_MATER = CHMAT,
+  RESULTAT = EVOL,
+  FORCE = 'FORC_NODA',
+  )
+
+# FORCE RESULTANTE DANS LA DIRECTION Y:
+FPILO = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'F_PILOTE',
+   OPERATION    = 'EXTRACTION',   
+   GROUP_NO     = 'HAUT',
+   NOM_CHAM     = 'FORC_NODA',
+   RESULTANTE   =  'DY',
+   RESULTAT     =  EVOL,
+   TOUT_ORDRE   = 'OUI',
+    )) 
+    
+    
+# DEPLACEMENT DU NOEUD P_HAUT
+U_HAUT = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'DEPL',
+   OPERATION    = 'EXTRACTION',   
+   GROUP_NO     = 'P_HAUT',
+   NOM_CHAM     = 'DEPL',
+   NOM_CMP      =  'DY',
+   RESULTAT     =  EVOL,
+   TOUT_ORDRE   = 'OUI',
+    )) 
+
+#IMPR_TABLE(TABLE=FPILO)
+#IMPR_TABLE(TABLE=U_HAUT)
+
+
+# CREATION DE LA COLONNE AVEC LES DEPLACEMENTS
+T_U=CALC_TABLE(TABLE=U_HAUT,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('NUME_ORDRE','DY'),
+                            ),
+                        ),
+                    );
+#CHANGEMENT DE NOM DE LA COLONNE POUR LE DEPLACEMENT        
+T_U=CALC_TABLE(TABLE=T_U,reuse=T_U,
+                    ACTION=_F(OPERATION='RENOMME',
+                            NOM_PARA=('DY','DEPL'),
+                           ),
+                );
+                           
+# CREATION DE LA COLONNE AVEC LES FORCES                           
+T_F=CALC_TABLE(TABLE=FPILO,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('NUME_ORDRE','DY'),
+                            ),
+                        ),
+                    );                 
+#CHANGEMENT DE NOM DE COLONNE POUR LES FORCES        
+T_F=CALC_TABLE(TABLE=T_F,reuse=T_F,
+                    ACTION=_F(OPERATION='RENOMME',
+                            NOM_PARA=('DY','FORCE'),
+                            ),
+               );
+
+# CREATION DE INST_FORCE_DEPL
+T_F=CALC_TABLE(reuse =T_F,
+          TABLE=T_F,
+          ACTION=_F(OPERATION='COMB',
+                    TABLE=T_U,
+                    NOM_PARA='NUME_ORDRE'));  
+
+# CREATION DU TABLEAU FORCES-DEPL AVEC LES DEPLACEMENTS
+T_FU=CALC_TABLE(TABLE=T_F,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('DEPL','FORCE'),
+                            ),
+                        ),
+                    );
+
+ 
+
+IMPR_TABLE(TABLE=T_FU,COMM_PARA='#')  
+
+#***********************************************************************
+#    TEST COMPARAISON AVEC ENDOMMAGEMENT EN NON_REGRESSION
+#*********************************************************************** 
+nm_ordre=1
+                                         
+# TEST DEPL          
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='P_HAUT',
+                  RESULTAT=EVOL,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=7.5000000000000002E-4,
+                  ),
+          )
+
+# TEST SIEF          
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  TYPE_TEST='SOMM_ABS',
+                  RESULTAT=EVOL,
+                  NOM_CHAM='SIEF_ELGA',
+                  VALE_CALC= 12080030.6223 ,
+                  ),
+          )
+          
+# TEST FORC_NODA          
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='P_HAUT',
+                  RESULTAT=EVOL,
+                  NOM_CHAM='FORC_NODA',
+                  NOM_CMP='DY',
+                  VALE_CALC= 3741.38934361,
+                  ),
+          )
+
+
+FIN();

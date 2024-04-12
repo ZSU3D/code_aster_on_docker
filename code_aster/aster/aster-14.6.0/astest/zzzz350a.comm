@@ -1,0 +1,164 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# person_in_charge: mickael.abbas at edf.fr
+#
+# Contribution from Peter Halverson
+#
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+E1 = 450000;
+
+Slave = 'BotF1';
+Master = 'TopF2';
+
+
+Mesh=LIRE_MAILLAGE(UNITE=20,
+                    FORMAT='MED',);
+
+Mesh=MODI_MAILLAGE(reuse =Mesh,
+                   MAILLAGE=Mesh,
+                   ORIE_PEAU_2D=_F(GROUP_MA='BotF1',),);
+
+Mesh=MODI_MAILLAGE(reuse =Mesh,
+                   MAILLAGE=Mesh,
+                   ORIE_PEAU_2D=_F(GROUP_MA='TopF2',),);
+
+Mat=DEFI_MATERIAU(ELAS=_F(E=E1,
+                          NU=.33,),ECRO_LINE=_F(D_SIGM_EPSI=1.0,SY=1E15),)
+
+EleMod=AFFE_MODELE(MAILLAGE=Mesh,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),);
+
+Matmod=AFFE_MATERIAU(MAILLAGE=Mesh,
+                     MODELE=EleMod,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=Mat,),);
+
+
+BC=AFFE_CHAR_CINE(MODELE=EleMod,
+                  MECA_IMPO=(_F(GROUP_MA=('TopF1','F2',),
+                               DX=0,
+                               DY=0,),
+                             ),);
+
+
+FONCC=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,0.01,
+                          0.5,0.05,
+                          1.0,-0.01),
+                    PROL_DROITE='LINEAIRE',
+                    PROL_GAUCHE='LINEAIRE',);
+
+FONCC2=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,-0.005,
+                          0.5,0.05,
+                          1.0,0.015),
+                    PROL_DROITE='LINEAIRE',
+                    PROL_GAUCHE='LINEAIRE',);
+                    
+
+ContactD=DEFI_CONTACT(MODELE=EleMod,
+                     FORMULATION='DISCRETE',
+                     LISSAGE='OUI',
+                     ZONE=_F(GROUP_MA_MAIT=Master,
+                             GROUP_MA_ESCL=Slave,
+                             DIST_MAIT=FONCC,
+                             DIST_ESCL=FONCC2,
+                             ALGO_CONT='CONTRAINTE'),);
+                             
+ContactC=DEFI_CONTACT(MODELE=EleMod,
+                     FORMULATION='CONTINUE',
+                     LISSAGE='OUI',
+                     ALGO_RESO_GEOM='NEWTON',
+                     ALGO_RESO_CONT='NEWTON',
+                     ZONE=_F(GROUP_MA_MAIT=Master,
+                             GROUP_MA_ESCL=Slave,
+                             DIST_MAIT=FONCC,
+                             DIST_ESCL=FONCC2,
+                             ),);
+
+Time=DEFI_LIST_REEL(DEBUT=0,
+                    INTERVALLE=_F(JUSQU_A=1.0,
+                                  NOMBRE=10,),);
+
+ResultsC=STAT_NON_LINE(MODELE=EleMod,
+                      CHAM_MATER=Matmod,
+                      EXCIT=_F(CHARGE=BC,),
+                      CONTACT=ContactC,
+                      COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                                   DEFORMATION='GROT_GDEP',),
+                      INCREMENT=_F(LIST_INST=Time,),
+                      NEWTON=_F(REAC_INCR=1,
+                                REAC_ITER=1,),);
+
+ResultsD=STAT_NON_LINE(MODELE=EleMod,
+                      CHAM_MATER=Matmod,
+                      EXCIT=_F(CHARGE=BC,),
+                      CONTACT=ContactD,
+                      COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                                   DEFORMATION='GROT_GDEP',),
+                      INCREMENT=_F(LIST_INST=Time,),
+                      NEWTON=_F(REAC_INCR=1,
+                                REAC_ITER=1,),);                                
+
+TEST_RESU(RESU=(_F(GROUP_NO='B',
+                   INST=.5,
+                   RESULTAT=ResultsC,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=.1,
+                   VALE_CALC=.1,
+                   ),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   RESULTAT=ResultsC,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=0.005,
+                   VALE_CALC=0.005,
+                   ),
+                _F(GROUP_NO='B',
+                   INST=.5,
+                   RESULTAT=ResultsD,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=.1,
+                   VALE_CALC=.1,
+                   ),
+                _F(GROUP_NO='B',
+                   INST=1.0,
+                   RESULTAT=ResultsD,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=0.005,
+                   VALE_CALC=0.005,
+                   ),
+                ),
+          )                                
+
+
+FIN();

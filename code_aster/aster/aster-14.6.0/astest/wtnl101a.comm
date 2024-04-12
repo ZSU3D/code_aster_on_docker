@@ -1,0 +1,407 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+INST1=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=(_F(JUSQU_A=5.E5,
+                                    NOMBRE=10,),),);
+
+EVOLFLU=DEFI_FONCTION(NOM_PARA='INST',
+                      VALE=(0.0,0.0,10000.0,1.0),
+                      PROL_DROITE='CONSTANT',
+                      PROL_GAUCHE='CONSTANT',);
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED', );
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=(_F(GROUP_MA='LDROIT',),
+                               _F(GROUP_MA='LGAUCHE',),
+                               _F(GROUP_MA='LBAS',),
+                               _F(GROUP_MA='LHAUT',),
+                               _F(GROUP_MA='BG',),),);
+
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_MA=(_F(NOM='BOX1',MAILLE=('M10','M11')),
+                               _F(NOM='TOUT',TOUT='OUI')),
+                               );
+
+MAIL = DEFI_GROUP( reuse = MAIL,
+                   MAILLAGE = MAIL, 
+                   CREA_GROUP_MA = (
+                                    _F( NOM    = 'BOX2', 
+                                        DIFFE  = ('TOUT','BOX1'),),),);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='D_PLAN_THMD',),);
+
+BIDON=DEFI_CONSTANTE(VALE=0.0,);
+
+UN=DEFI_CONSTANTE(VALE=1.0,);
+
+ZERO=DEFI_CONSTANTE(VALE=0.0,);
+
+VISCOLIQ=DEFI_CONSTANTE(VALE=1.E-3,);
+
+DVISCOL=DEFI_CONSTANTE(VALE=0.0,);
+
+LAMB=DEFI_CONSTANTE(VALE=1.8,);
+
+KINTBG=DEFI_CONSTANTE(VALE=9.9999999999999998E-20,);
+
+
+THMALP1 = DEFI_CONSTANTE(VALE=0.000100)
+
+MATERBF=DEFI_MATERIAU(ELAS=_F(E=2.166000000E9,
+                              NU=0.29999999999999999,
+                              RHO=2410.0,),)
+
+
+# Caractéristiques matériaux fonction bidon de NEUT1 pour tester AFFE_VARC en THM (fiche 26752)
+EL = DEFI_FONCTION  ( NOM_PARA   = 'NEUT1' ,
+             VALE = ( 0.    ,  2.166000000E9,
+                      1.    ,  2.166000000E9,  ),
+                        PROL_DROITE  ='CONSTANT' ,
+                        PROL_GAUCHE  ='CONSTANT' , );
+
+NU=DEFI_CONSTANTE(VALE=0.30,);
+
+RHO=DEFI_CONSTANTE(VALE=2410.0,);
+
+ALPHA = DEFI_CONSTANTE(VALE=1.E-05,);
+
+CHNEUT=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                  MAILLAGE=MAIL,
+                  OPERATION='AFFE',
+                  AFFE=_F(TOUT='OUI',
+                          NOM_CMP='X1',
+                          VALE=1.0),)
+
+MATERBG=DEFI_MATERIAU(
+                     ELAS_FO=_F(E=EL,
+                              NU=NU,
+                              RHO=RHO,
+                              ALPHA=ALPHA,
+                              TEMP_DEF_ALPHA = 0.,
+                              ),
+                      COMP_THM = 'LIQU_SATU',
+                      THM_LIQU=_F(RHO=1000.0,
+                                  UN_SUR_K=5.0000000000000003E-10,
+                                  ALPHA=THMALP1,
+                                  CP=4180.0,
+                                  VISC=VISCOLIQ,
+                                  D_VISC_TEMP=DVISCOL,),
+                      THM_GAZ=_F(MASS_MOL=0.02896,
+                                 CP=1000.0,
+                                 VISC=BIDON,
+                                 D_VISC_TEMP=BIDON,),
+                      THM_VAPE_GAZ=_F(MASS_MOL=0.017999999999999999,
+                                      CP=1870.0,
+                                      VISC=BIDON,
+                                      D_VISC_TEMP=BIDON,),
+                      THM_INIT=_F(TEMP=293.0,
+                                  PRE1=0.0,
+                                  PRE2=1.E5,
+                                  PORO=0.14000000000000001,
+                                  PRES_VAPE=2320.0,
+                                  DEGR_SATU=1.0,),
+                      THM_DIFFU=_F(R_GAZ=8.3149999999999995,
+                                   RHO=2410.0,
+                                   CP=565.0,
+                                   BIOT_COEF=1.0,
+                                   SATU_PRES=UN,
+                                   D_SATU_PRES=ZERO,
+                                   PESA_X=0.0,
+                                   PESA_Y=0.0,
+                                   PESA_Z=0.0,
+                                   PERM_IN=KINTBG,
+                                   PERM_LIQU=UN,
+                                   D_PERM_LIQU_SATU=ZERO,
+                                   PERM_GAZ=BIDON,
+                                   D_PERM_SATU_GAZ=BIDON,
+                                   D_PERM_PRES_GAZ=BIDON,
+                                   LAMB_T=LAMB,
+                                   ),);
+
+CHMAT0=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=_F(GROUP_MA='BG',
+                             MATER=MATERBG,),
+                     AFFE_VARC=_F(TOUT='OUI',
+                                    CHAM_GD=CHNEUT,
+                                    NOM_VARC='NEUT1'));
+
+CALBORD=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=(_F(GROUP_NO='LGAUCHE',
+                                    DX=0.0,),
+                                 _F(GROUP_NO='LDROIT',
+                                    DX=0.0,),),);
+
+CALBAS=AFFE_CHAR_MECA(MODELE=MODELE,
+                      DDL_IMPO=_F(GROUP_NO='LBAS',
+                                  DY=0.0,),);
+
+CALHAUT=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(GROUP_NO='LHAUT',
+                                   DY=0.0,),);
+
+FLUXT=AFFE_CHAR_MECA(MODELE=MODELE,
+                     FLUX_THM_REP=_F(GROUP_MA='LHAUT',
+                                     FLUN=100.0,
+                                     FLUN_HYDR1=0.0,),);
+
+U0=STAT_NON_LINE(MODELE=MODELE,
+                 CHAM_MATER=CHMAT0,
+                 EXCIT=(_F(CHARGE=CALBAS,),
+                        _F(CHARGE=CALHAUT,),
+                        _F(CHARGE=CALBORD,),
+                        _F(CHARGE=FLUXT,),),
+                 SCHEMA_THM=_F(PARM_THETA=0.57,),
+                 COMPORTEMENT=_F(RELATION='KIT_THM',
+                              RELATION_KIT=('ELAS','LIQU_SATU','HYDR_UTIL'),),
+                 INCREMENT=_F(LIST_INST=INST1,),
+                 NEWTON=_F(MATRICE='TANGENTE',
+                           REAC_ITER=1,),
+                 CONVERGENCE=_F(ITER_GLOB_MAXI=50,),
+                 ARCHIVAGE=_F(PAS_ARCH=1,),);
+
+U0=CALC_CHAMP(reuse=U0,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=U0)
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N22',
+                   NOM_CMP='PRE1',
+                   VALE_CALC= 2.97452831E+06,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N17',
+                   NOM_CMP='PRE1',
+                   VALE_CALC= 3.54652893E+06,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N12',
+                   NOM_CMP='PRE1',
+                   VALE_CALC= 4.09428001E+06,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N7',
+                   NOM_CMP='PRE1',
+                   VALE_CALC= 4.49865823E+06,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N2',
+                   NOM_CMP='PRE1',
+                   VALE_CALC= 4.64875719E+06,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N22',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=12.662606857,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N17',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=17.907457410,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N12',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=24.654837557,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N7',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=33.074056784,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N2',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=43.275494162,),
+                ),
+          )
+
+# Modele mixte: THM+NON-THM (ticket #26301 + #28345)
+MODELM=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=(_F(GROUP_MA='BOX2',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='D_PLAN_THMD',),
+                         _F(GROUP_MA='BOX1',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='D_PLAN',),)
+                       );
+
+
+CHMATM=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=(_F(GROUP_MA='BG',
+                             MATER=MATERBG,),
+                           _F(GROUP_MA='BOX1',
+                             MATER=MATERBF,),),
+                     AFFE_VARC=_F(TOUT='OUI',
+                                    CHAM_GD=CHNEUT,
+                                    NOM_VARC='NEUT1'),
+
+                     );
+
+CALBORM=AFFE_CHAR_MECA(MODELE=MODELM,
+                       DDL_IMPO=(_F(GROUP_NO='LGAUCHE',
+                                    DX=0.0,),
+                                 _F(GROUP_NO='LDROIT',
+                                    DX=0.0,),
+                                 _F(NOEUD=('N452','N453','N454'),
+                                    PRE1=0.0,),
+                                 _F(NOEUD=('N452','N453','N454'),
+                                    TEMP=0.0,),
+
+),);
+
+CALBAM=AFFE_CHAR_MECA(MODELE=MODELM,
+                      DDL_IMPO=_F(GROUP_NO='LBAS',
+                                  DY=0.0,),);
+
+CALHAUM=AFFE_CHAR_MECA(MODELE=MODELM,
+                       DDL_IMPO=_F(GROUP_NO='LHAUT',
+                                   DY=0.0,),);
+
+FLUXM=AFFE_CHAR_MECA(MODELE=MODELM,
+                     FLUX_THM_REP=_F(GROUP_MA='LHAUT',
+                                     FLUN=100.0,
+                                     FLUN_HYDR1=0.0,),);
+
+
+ACC_0=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                 OPERATION='AFFE',
+                 MODELE=MODELM,
+                 AFFE=(_F(TOUT='OUI',
+                          NOM_CMP=('DX','DY','TEMP','PRE1'),
+                          VALE=(0.,0.,0.,0.),),
+                       ),)
+
+U0M=DYNA_NON_LINE(MODELE=MODELM,
+                 CHAM_MATER=CHMATM,
+                 EXCIT=(_F(CHARGE=CALBAM,),
+                        _F(CHARGE=CALHAUM,),
+                        _F(CHARGE=CALBORM,),
+                        _F(CHARGE=FLUXM,),),
+                 SCHEMA_THM=_F(PARM_THETA=0.57,),
+                 ETAT_INIT=_F(ACCE=ACC_0,),
+                 SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',
+                                FORMULATION='DEPLACEMENT',),
+                 COMPORTEMENT=(
+                               _F(GROUP_MA='BOX1',
+                                  RELATION='ELAS',),
+                               _F(GROUP_MA='BOX2',
+                                  RELATION='KIT_THM',
+                                  RELATION_KIT=('ELAS','LIQU_SATU','HYDR_UTIL'),),
+                              ),
+
+                 INCREMENT=_F(LIST_INST=INST1,),
+                 NEWTON=_F(MATRICE='TANGENTE',
+                           REAC_ITER=1,),
+                 CONVERGENCE=_F(ITER_GLOB_MAXI=50,),
+                 ARCHIVAGE=_F(PAS_ARCH=1,),);
+
+U0M=CALC_CHAMP(reuse=U0M,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=U0M)
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N22',
+                   NOM_CMP='PRE1',
+                   VALE_CALC=2866194.25637,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N17',
+                   NOM_CMP='PRE1',
+                   VALE_CALC=3438211.90698,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N12',
+                   NOM_CMP='PRE1',
+                   VALE_CALC=3985979.21864,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N7',
+                   NOM_CMP='PRE1',
+                   VALE_CALC=4390368.71136,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N2',
+                   NOM_CMP='PRE1',
+                   VALE_CALC=4540470.95386,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N22',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=12.6613760383,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N17',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=17.9062199908,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N12',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=24.6535929266,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N7',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=33.0728057472,),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0M,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N2',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=43.2742398593,),
+                ),
+          )
+
+FIN();

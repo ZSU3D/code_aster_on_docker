@@ -1,0 +1,103 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+POURSUITE(CODE='OUI', PAR_LOT='NON')
+#
+from Utilitai.Table import Table
+
+
+t=Table()
+t.append({'AAA':5, 'BBB':7})
+t.append({'AAA':3, 'BBB':9, 'CCC':1})
+t.append({'AAA':3, 'CCC':0})
+print(t)
+
+p = 'AAA'
+print('<<< TRI sur %s >>>' % p)
+t.sort(p)
+print(t)
+print(t.rows)
+assert t.rows[0][p] == 3
+assert t.rows[1][p] == 3
+assert t.rows[2][p] == 5
+
+p = 'BBB'
+print('<<< TRI sur %s >>>' % p)
+t.sort(p)
+print(t)
+print(t.rows)
+assert t.rows[0].get(p) is None
+assert t.rows[1][p] == 7
+assert t.rows[2][p] == 9
+
+p = 'AAA'
+print('<<< TRI sur %s >>>' % p)
+t.sort(p)
+print(t)
+print(t.rows)
+assert t.rows[0][p] == 3
+assert t.rows[1][p] == 3
+assert t.rows[2][p] == 5
+
+# vérification de l'impression en utilisant les formats de customisation
+IMPR_TABLE(TABLE=tp7,
+           DEBUT_TABLE='<table>',
+           FIN_TABLE='</table>',
+           DEBUT_LIGNE='<tr><td>',
+           FIN_LIGNE='</td></tr>\n',
+           SEPARATEUR='</td><td>',
+           COMMENTAIRE='',
+           UNITE=88)
+
+# vérification minimaliste du code "html" produit
+from html.parser import HTMLParser
+
+
+class MyHTMLParser( HTMLParser ):
+    """Minimal html code checker"""
+
+    def __init__( self ):
+        """Constructor - store a stack of opened tags"""
+        HTMLParser.__init__(self)
+        self._stack = []
+
+    def handle_starttag( self, tag, attrs ):
+        """Store the new opened tag"""
+        self._stack.append( tag )
+
+    def handle_endtag(self, tag):
+        """Check that the closed tag is the last opened"""
+        last = self._stack.pop(-1)
+        assert last == tag, "tag unclosed '{}', got unexpected tag '{}'".format(last, tag)
+
+
+parser = MyHTMLParser()
+
+with open('fort.88', 'r') as fobj:
+    code = fobj.read()
+
+print("Checking the html code written by IMPR_TABLE... ", end=' ')
+try:
+    parser.feed( code )
+    print("ok")
+except AssertionError:
+    print("error")
+    raise
+
+FIN()

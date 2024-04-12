@@ -1,0 +1,133 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+from Contrib.calc_matr_ifs import CALC_MATR_IFS
+
+DEBUT(PAR_LOT='OUI',CODE=_F(NIV_PUB_WEB='INTERNET'),);
+
+# --------------------------------
+# Donnees physiques des parametres
+# --------------------------------
+
+# parametres du fluide
+rho_eau   = 1000.0               # masse volumique
+cele_eau  = 1500.0               # celerite du son
+
+# parametres du materiau elastique
+e_elas    = 1.77e+11             # module Young
+nu_elas   = 0.3                  # coefficient de Poisson
+rho_elas  = 7450.0               # masse volumique
+
+# parametres du materiau visco (Deltane 350 - fractional derivative Zener model), voir draft de article FINEL
+nu_visc   = 0.49
+rho_visc  = 1460.0
+Gzer      = 2.11e+06
+Ginf      = 0.59e+09
+Tau       = 0.44e-06
+Alp       = 0.53
+
+# Pour adimensionalisation
+long_ad      = 1.0
+rho_eau_ad   = 1.0
+cele_eau_ad  = 1.0
+e_elas_ad    = e_elas/(rho_eau*cele_eau**2)
+rho_elas_ad  = rho_elas/rho_eau
+rho_visc_ad  = rho_visc/rho_eau
+
+# Condition d'impédance
+r_impe       = 0.15                 # rayon pour condition d impedance BGT
+ZiAd         = r_impe
+ZrAd         = 1.0
+
+# Maillage
+mesh=LIRE_MAILLAGE(FORMAT='MED',);
+mesh=DEFI_GROUP(reuse=mesh, MAILLAGE=mesh, CREA_GROUP_NO=(_F(GROUP_MA='acier1',),
+                                                          _F(GROUP_MA='acier2',),
+                                                          _F(GROUP_MA='visco',),
+                                                          _F(GROUP_MA='fluide',),
+                                                          _F(GROUP_MA='ifspar',),
+                                                          _F(GROUP_MA='fluext',),
+                                                          _F(GROUP_MA='encast1',),
+                                                          _F(GROUP_MA='encast2',),
+                                                          _F(GROUP_MA='encast3',),),);
+
+# Modele
+model=AFFE_MODELE(MAILLAGE=mesh,
+                  AFFE=(_F(GROUP_MA=('fluide','fluext',), PHENOMENE='MECANIQUE', MODELISATION='2D_FLUIDE',),
+                        _F(GROUP_MA=('acier1','acier2','visco',), PHENOMENE='MECANIQUE', MODELISATION='D_PLAN',),
+                        _F(GROUP_MA='ifspar', PHENOMENE='MECANIQUE', MODELISATION='2D_FLUI_STRU',),),);
+
+
+# Conditions aux limites
+Encast=AFFE_CHAR_CINE(MODELE=model, MECA_IMPO=_F(GROUP_MA=('encast1','encast2','encast3',),
+                                                 DX=0.0, DY=0.0, DZ=0.0,),);
+Press =AFFE_CHAR_MECA(MODELE=model, FORCE_NODALE=_F(GROUP_NO='effort1', FX=1.0e-5,),);
+
+
+# CALCUL DES MATRICES
+CALC_MATR_IFS(
+
+# INPUT GENERAL DATA
+                 MAILLAGE        = mesh,
+                 MODELE          = model,
+                 CHAR_CINE       = Encast,
+                 NUME_DDL        = CO('NDDL'),
+
+# Zones d'affectation
+                 GROUP_MA_ELAS   = ('acier1','acier2'),
+                 GROUP_MA_FLUI   = ('fluide','ifspar','fluext',),
+                 GROUP_MA_VISC   = ('visco',),
+                 GROUP_MA_IMPE   = ('fluext',),
+
+# MATERIAL PROPERTIES
+                 RHO_ELAS        = rho_elas_ad,
+                 NU_ELAS         = nu_elas,
+                 RHO_FLUI        = rho_eau_ad,
+                 C_FLUI          = cele_eau_ad,
+                 RHO_VISC        = rho_visc_ad,
+                 NU_VISC         = nu_visc,
+                 CHAR_IMPE_R     = ZrAd,
+                 CHAR_IMPE_C     = ZiAd,
+
+# Sorties (matrices)
+                 MASS_E          = CO('MASS_E'),
+                 MASS_F          = CO('MASS_F'),
+                 MASS_FI         = CO('MASS_FI'),
+                 RIGI_E          = CO('RIGI_E'),
+                 RIGI_F          = CO('RIGI_F'),
+                 RIGI_V          = CO('RIGI_V'),
+                 IMPE_R          = CO('IMPE_R'),
+                 IMPE_I          = CO('IMPE_I'),
+);
+
+# Conversion en complexe
+MASS_Ec  = COMB_MATR_ASSE(COMB_C=_F(MATR_ASSE=MASS_E, COEF_R=1.0,),);
+MASS_FIc = COMB_MATR_ASSE(COMB_C=_F(MATR_ASSE=MASS_FI, COEF_R=1.0,),);
+IMPE_Rc  = COMB_MATR_ASSE(COMB_C=_F(MATR_ASSE=IMPE_R, COEF_R=1.0,),);
+RIGI_Ec  = COMB_MATR_ASSE(COMB_C=_F(MATR_ASSE=RIGI_E, COEF_R=1.0,),);
+RIGI_Fc  = COMB_MATR_ASSE(COMB_C=_F(MATR_ASSE=RIGI_F, COEF_R=1.0,),);
+
+# Construction des vecteurs élémentaires
+ElemF    = CALC_VECT_ELEM(OPTION='CHAR_MECA', CHARGE=Press,);
+
+# Assemblage des vecteurs
+Force      = ASSE_VECTEUR(VECT_ELEM=ElemF, NUME_DDL=NDDL,);
+ForcC      = CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_C', OPERATION='R2C', CHAM_GD=Force,);
+
+FIN();

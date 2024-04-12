@@ -1,0 +1,76 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      PAR_LOT='NON', IGNORE_ALARM='SUPERVIS_1',
+      LANG='EN')
+
+import aster
+lopt = set(aster.get_option_dependency('SIGM_ELGA'))
+assert len(lopt) == 4, lopt
+assert len(lopt.difference(('DEPL', 'SIEF_ELGA', 'SIGM_ELGA', 'STRX_ELGA'))) == 0, lopt
+
+lopt = aster.get_option_dependency('ACCE')
+assert len(lopt) == 0, lopt
+
+lopt = aster.get_option_dependency('SING_ELEM')
+assert len(lopt) == 0, lopt
+
+lopt = aster.get_option_dependency('SING_NOEU')
+assert len(lopt) == 2, lopt
+assert lopt == ('SING_ELNO', 'SING_NOEU'), lopt
+
+tab = CREA_TABLE(LISTE=(_F(PARA='NBVAL',
+                           LISTE_I=len(lopt),),),)
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=2,
+           VALE_REFE_I=2,
+           PRECISION=0,
+           NOM_PARA='NBVAL',
+           TABLE=tab,)
+
+help(aster.get_option_dependency)
+
+# test que le dictionnaire anglais est disponible
+# Noyau/N_ASSD.py: assd.__convert__
+from code_aster.Cata.Syntax import tr
+translation = tr("On attend un objet concept.")
+test = translation == "A concept object is expected."
+
+tab2 = CREA_TABLE(LISTE=(_F(PARA='BOOL',
+                            LISTE_I=int(test),),),)
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           PRECISION=0,
+           NOM_PARA='BOOL',
+           TABLE=tab2,)
+
+# Check catalog version
+from code_aster.Cata import aster_version
+assert type(aster_version.VERSION_MAJOR) is int, aster_version.VERSION_MAJOR
+assert type(aster_version.VERSION_MINOR) is int, aster_version.VERSION_MINOR
+assert type(aster_version.VERSION_PATCH) is int, aster_version.VERSION_PATCH
+assert type(aster_version.VERSION_STR) is str, aster_version.VERSION_STR
+
+FIN()

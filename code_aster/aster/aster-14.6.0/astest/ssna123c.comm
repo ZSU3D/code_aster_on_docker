@@ -1,0 +1,158 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# PARTIE GONFLEMENT
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MODEL=AFFE_MODELE(
+   MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='AXIS',),
+);
+
+
+R02=DEFI_CONSTANTE(VALE=5000000000)
+RM=DEFI_CONSTANTE(VALE=5000000000)
+EU=DEFI_CONSTANTE(VALE=0.)
+
+# MATERIAU 304 BORNE INFERIEURE POUR LE GONFLEMENT
+UN   =DEFI_CONSTANTE(VALE = 1.0)
+
+ACIER=DEFI_MATERIAU(
+   ELAS=_F(E=210000.0, NU=0.30, ALPHA=0.0, ),
+   IRRAD3M=_F(R02=R02, RM=RM, EPSI_U=EU, AI0=0.0, ETAI_S=1000000.0,
+              RG0=0.0025, ZETA_F=UN, ALPHA=1.0, PHI0=1.0, KAPPA=0.8, ZETA_G=UN,),
+)
+
+TEMP_0=CREA_CHAMP(
+   TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=0.0,),
+)
+
+IRRA_0=CREA_CHAMP(
+   TYPE_CHAM='NOEU_IRRA_R', OPERATION='AFFE', MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', NOM_CMP='IRRA', VALE=0.0,),
+)
+
+IRRA_1=CREA_CHAMP(
+   TYPE_CHAM='NOEU_IRRA_R', OPERATION='AFFE', MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', NOM_CMP='IRRA', VALE=140.0,),
+)
+
+CL=AFFE_CHAR_MECA(
+   MODELE=MODEL,
+   DDL_IMPO=(
+      _F(GROUP_MA='AD',DX=0.,),
+      _F(GROUP_MA='AB',DY=0.,),
+   ),
+)
+
+LISTE =DEFI_LIST_REEL(
+   DEBUT=0.,
+   INTERVALLE=(
+      _F(JUSQU_A= 0.10  , NOMBRE =   2, ),
+      _F(JUSQU_A= 1.00  , NOMBRE =   5, ),
+   ),
+);
+
+# RAMPE D IRRADIATION, LA TEMPERATURE NE JOUANT AUCUN ROLE DANS CE CAS TEST
+IRRAD=CREA_RESU(OPERATION='AFFE',
+   TYPE_RESU='EVOL_VARC',
+   NOM_CHAM='IRRA',
+   AFFE=(
+      _F(CHAM_GD=IRRA_0, INST=0.,),
+      _F(CHAM_GD=IRRA_1, INST=1.,),),
+);
+
+TEMPER=CREA_RESU(OPERATION='AFFE',
+   TYPE_RESU='EVOL_THER',
+   NOM_CHAM='TEMP',
+   AFFE=(
+      _F(CHAM_GD=TEMP_0, INST=0.,),
+      _F(CHAM_GD=TEMP_0, INST=1.,),),
+)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+   AFFE=_F(TOUT='OUI', MATER=ACIER,),
+   AFFE_VARC= (
+      _F(TOUT='OUI', EVOL=IRRAD,  NOM_VARC='IRRA'),
+      _F(TOUT='OUI', EVOL=TEMPER, NOM_VARC='TEMP',VALE_REF=0.0),
+   ),
+)
+
+STAT=STAT_NON_LINE(
+   MODELE=MODEL,
+   CHAM_MATER=CHMAT,
+   EXCIT=_F(CHARGE=CL,),
+   COMPORTEMENT=_F(RELATION='IRRAD3M'),
+   NEWTON=_F(MATRICE='TANGENTE',REAC_INCR=1,REAC_ITER=1,
+   PREDICTION='ELASTIQUE'),
+   CONVERGENCE=_F(RESI_GLOB_MAXI=1e-10),
+   INCREMENT=_F(LIST_INST=LISTE,),
+)
+
+STAT=CALC_CHAMP(reuse=STAT,RESULTAT=STAT,  DEFORMATION=('EPSI_ELNO'));
+
+
+# CONTRAINTES, DEPLACEMENT ET VARIABLES INTERNES
+TEST_RESU(RESU=_F(INST=0.100,
+                  RESULTAT=STAT,
+                  NOM_CHAM='EPSI_ELNO',
+                  NOEUD='N2',
+                  NOM_CMP='EPYY',
+                  VALE_CALC= 0.010572283810674,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=0.100,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='VARI_ELGA',
+                  NOM_CMP='V4',
+                  VALE_CALC=0.010572283810674,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  RESULTAT=STAT,
+                  NOM_CHAM='EPSI_ELNO',
+                  NOEUD='N2',
+                  NOM_CMP='EPYY',
+                  VALE_CALC=0.11557228192707,
+                  MAILLE='M1',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  POINT=1,
+                  RESULTAT=STAT,
+                  NOM_CHAM='VARI_ELGA',
+                  NOM_CMP='V4',
+                  VALE_CALC=0.11557228192707,
+                  MAILLE='M1',
+                  ),
+          )
+
+FIN();

@@ -1,0 +1,152 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# PLAQUE RECTANGULAIRE MINCE ENCASTREE SOUMISE
+# A UN GRADIENT THERMIQUE DANS L'EPAISSEUR
+# ET MODELISEE EN DKT - DST - Q4G
+# TEST DE NON REGRESSION INCLUDE_MATERIAU
+#====================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTRANET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(GROUP_MA='AB',),
+                             _F(GROUP_MA='BC',),
+                             _F(GROUP_MA='CD',),
+                             _F(GROUP_MA='DA',),),);
+
+MOD=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='C_PLAN',),);
+
+TEMP=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                OPERATION='AFFE',
+                MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        NOM_CMP='TEMP',
+                        VALE=100.0,),);
+
+CHAR=AFFE_CHAR_MECA(MODELE=MOD,
+                    DDL_IMPO=_F(GROUP_NO=('AB','BC','CD','DA',),
+                                DX=0.0,
+                                DY=0.0,),);
+#====================================================================
+# DEFINITION DU MATERIAU DANS LE FICHIER .COMM AVEC TEMP_DEF_ALPHA
+# E EN FONCTION DE LA TEMPERATURE
+
+YOUN=200000000000.0;
+#
+# NU EN FONCTION DE LA TEMPERATURE
+
+NU=0.3;
+#
+# ALPHA EN FONCTION DE LA TEMPERATURE
+
+ALPH=1.179e-05;
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E=YOUN,
+                           NU=NU,
+                           ALPHA=ALPH,),);
+
+CHMAT1=AFFE_MATERIAU(MAILLAGE=MA,
+                     AFFE=_F(GROUP_MA=('STRIA1','STRIA2','SQUA',),
+                             MATER=MAT1,),
+                     AFFE_VARC=_F( TOUT='OUI',
+                            CHAM_GD=TEMP,
+                            NOM_VARC='TEMP',
+                            VALE_REF=20.0),);
+
+MESTAT1=MECA_STATIQUE(MODELE=MOD,
+                      CHAM_MATER=CHMAT1,
+                      EXCIT=_F(CHARGE=CHAR,),);
+
+MESTAT1=CALC_CHAMP(reuse=MESTAT1,RESULTAT=MESTAT1,CONTRAINTE=('SIGM_ELNO'))
+
+
+SIGNO1=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                  OPERATION='EXTR',
+                  RESULTAT=MESTAT1,
+                  NOM_CHAM='SIGM_ELNO',
+                  NUME_ORDRE=1,);
+
+# DEFINITION DU MATERIAU PAR INCLUDE_MATERIAU
+MAT3=INCLUDE_MATERIAU(NOM_AFNOR='18MND5',
+                      TYPE_MODELE='REF',
+                      VARIANTE='A',
+                      TYPE_VALE='NOMI',
+                      EXTRACTION=_F(COMPOR='ELAS',
+                                    TEMP_EVAL=100.0,),
+                      INFO=2,);
+
+CHMAT3=AFFE_MATERIAU(MAILLAGE=MA,
+                     AFFE=_F(GROUP_MA=('STRIA1','STRIA2','SQUA',),
+                             MATER=MAT3,),
+                     AFFE_VARC=_F( TOUT='OUI',
+                            CHAM_GD=TEMP,
+                            NOM_VARC='TEMP',
+                            VALE_REF=20.0),);
+
+MESTAT3=MECA_STATIQUE(MODELE=MOD,
+                      CHAM_MATER=CHMAT3,
+                      EXCIT=_F(CHARGE=CHAR,),);
+
+MESTAT3=CALC_CHAMP(reuse=MESTAT3,RESULTAT=MESTAT3,CONTRAINTE=('SIGM_ELNO'))
+
+
+SIGNO3=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                  OPERATION='EXTR',
+                  RESULTAT=MESTAT3,
+                  NOM_CHAM='SIGM_ELNO',
+                  NUME_ORDRE=1,);
+
+TEST_RESU(CHAM_ELEM=(_F(NOEUD='N104',
+                        CRITERE='RELATIF',
+                        NOM_CMP='SIXX',
+                        MAILLE='M98',
+                        CHAM_GD=SIGNO1,
+                        VALE_CALC=-2.6948571428600001E8,),
+                     _F(NOEUD='N104',
+                        CRITERE='RELATIF',
+                        NOM_CMP='SIYY',
+                        MAILLE='M98',
+                        CHAM_GD=SIGNO1,
+                        VALE_CALC=-2.6948571428600001E8,),
+                     _F(NOEUD='N104',
+                        CRITERE='RELATIF',
+                        NOM_CMP='SIXX',
+                        MAILLE='M98',
+                        CHAM_GD=SIGNO3,
+                        VALE_CALC=-2.6948571428600001E8,),
+                     _F(NOEUD='N104',
+                        CRITERE='RELATIF',
+                        NOM_CMP='SIYY',
+                        MAILLE='M98',
+                        CHAM_GD=SIGNO3,
+                        VALE_CALC=-2.6948571428600001E8,),
+                     ),
+          )
+
+#----------------------------------------------------------------
+
+FIN();
+#

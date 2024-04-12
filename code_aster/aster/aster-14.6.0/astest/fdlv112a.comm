@@ -1,0 +1,193 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# FLUIDES INCOMPRESSIBLES - MASSES AJOUTEES.
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'),)
+
+LIST_IN = DEFI_LIST_REEL( DEBUT=0.,
+                           INTERVALLE=_F(  JUSQU_A = 11.14,  PAS = 0.01))
+
+MAILLAGE=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAILLAGE=DEFI_GROUP(reuse =MAILLAGE,
+                    MAILLAGE=MAILLAGE,
+                    CREA_GROUP_NO=_F(GROUP_MA='FONDATIO',),);
+
+MAILLAGE=DEFI_GROUP(reuse =MAILLAGE,
+                    MAILLAGE=MAILLAGE,
+                    CREA_GROUP_NO=_F(GROUP_MA='BARRAGE',),);
+
+MAILLAGE=DEFI_GROUP(reuse =MAILLAGE,
+                    MAILLAGE=MAILLAGE,
+                    CREA_GROUP_NO=_F(GROUP_MA='FONDRET',),);
+
+MAILLAGE=DEFI_GROUP(reuse =MAILLAGE,
+                    MAILLAGE=MAILLAGE,
+                    CREA_GROUP_NO=_F(INTERSEC=('FONDATIO','BARRAGE'),
+                                     NOM='BARFOND',),);
+
+BETON=DEFI_MATERIAU(ELAS=_F(E=3.6000000000E10,
+                            NU=0.20000000000000001,
+                            RHO=2400.0,
+                            AMOR_ALPHA=2.E-3,
+                            AMOR_BETA=0.29999999999999999,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAILLAGE,
+                    AFFE=_F(GROUP_MA='BARRAGE',
+                            MATER=BETON,),);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAILLAGE,
+                   AFFE=_F(GROUP_MA='BARRAGE',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+CONDLIM=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(NOEUD='NO130',
+                                   DX=0.0,
+                                   DY=0.0,
+                                   DZ=0.0,),
+                       LIAISON_UNIF=(_F(GROUP_NO=('BARFOND'),
+                                        DDL='DX',),
+                                     _F(GROUP_NO=('BARFOND'),
+                                        DDL='DY',),
+                                     _F(GROUP_NO=('BARFOND'),
+                                        DDL='DZ',),),);
+
+INCLUDE(UNITE=38,
+        INFO=1,);
+
+DYN2 = DYNA_LINE(TYPE_CALCUL='TRAN',
+                 BASE_CALCUL='GENE',
+                 MODELE=MODELE,
+                 CHAM_MATER=CHMAT,
+                 CHARGE=CONDLIM,
+                 AMORTISSEMENT=_F(TYPE_AMOR="MODAL",
+                                  AMOR_REDUIT=0.05,),
+                 SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                 INCREMENT=_F(INST_INIT=0.0,
+                              INST_FIN=4.,
+                              PAS=2.E-3,),
+                 ARCHIVAGE=_F(PAS_ARCH=5),
+                 BANDE_ANALYSE=23,
+                 EXCIT=(_F(
+                           TYPE_APPUI = "MONO",
+                           DIRECTION =(1., 0., 0., ),
+                           NOEUD='NO130',
+                           FONC_MULT=ACC_X,
+                           ),
+                        _F(
+                           TYPE_APPUI = "MONO",
+                           DIRECTION =(0., 1., 0., ),
+                           NOEUD='NO130',
+                           FONC_MULT=ACC_Y,
+                           ),
+                        _F(
+                           TYPE_APPUI = "MONO",
+                           DIRECTION =(0., 0., 1., ),
+                           NOEUD='NO130',
+                           FONC_MULT=ACC_Z,
+                           ),),
+                 IFS='OUI',
+                 FORC_AJOU = 'OUI',
+                 GROUP_MA_FLUIDE='RETENUE',
+                 GROUP_MA_INTERF='BARRET',
+                 MODELISATION_FLU = '3D',
+                 RHO_FLUIDE = _F(TOUT='OUI',
+                                 RHO = 1000.0),
+                 PRESSION_FLU_IMPO = _F(PRES_FLUIDE = 0.0,
+                                        GROUP_NO    ='SURFLIBR'),
+
+                 )
+
+
+FREQSPEC=DEFI_LIST_REEL(DEBUT=0.10000000000000001,
+                        INTERVALLE=(_F(JUSQU_A=10.0,
+                                       NOMBRE=99,),
+                                    _F(JUSQU_A=20.0,
+                                       NOMBRE=100,),
+                                    _F(JUSQU_A=100.0,
+                                       NOMBRE=80,),),);
+
+
+DXR2=RECU_FONCTION(RESULTAT=DYN2,
+                   NOM_CHAM='ACCE',
+                   TOUT_ORDRE='OUI',
+                   NOM_CMP='DX',
+                   NOEUD='NO1909',);
+
+DYR2=RECU_FONCTION(RESULTAT=DYN2,
+                   NOM_CHAM='ACCE',
+                   TOUT_ORDRE='OUI',
+                   NOM_CMP='DY',
+                   NOEUD='NO1909',);
+
+DZR2=RECU_FONCTION(RESULTAT=DYN2,
+                   NOM_CHAM='ACCE',
+                   TOUT_ORDRE='OUI',
+                   NOM_CMP='DZ',
+                   NOEUD='NO1909',);
+
+SPXR2=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=DXR2,
+                                 AMOR_REDUIT=0.050000000000000003,
+                                 LIST_FREQ=FREQSPEC,
+                                 NORME=1.0,),);
+
+SPYR2=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=DYR2,
+                                 AMOR_REDUIT=0.050000000000000003,
+                                 LIST_FREQ=FREQSPEC,
+                                 NORME=1.0,),);
+
+SPZR2=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=DZR2,
+                                 AMOR_REDUIT=0.050000000000000003,
+                                 LIST_FREQ=FREQSPEC,
+                                 NORME=1.0,),);
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=5.858848554807,
+                         VALE_PARA=1.0,
+                         FONCTION=DXR2,
+                         ),
+                      _F(VALE_CALC=17.57891868214,
+                         VALE_PARA=(9.0, 0.05),
+                         NOM_PARA=('FREQ', 'AMOR'),
+                         FONCTION=SPXR2,
+                         ),
+                      _F(VALE_CALC=2.807564211514,
+                         VALE_PARA=1.0,
+                         FONCTION=DYR2,
+                         ),
+                      _F(VALE_CALC=9.749478382075,
+                         VALE_PARA=(9.0, 0.05),
+                         NOM_PARA=('FREQ', 'AMOR'),
+                         FONCTION=SPYR2,
+                         ),
+                      _F(VALE_CALC=-0.77467028853403,
+                         VALE_PARA=1.02,
+                         FONCTION=DZR2,
+                         ),
+                      _F(VALE_CALC=3.805156796736,
+                         VALE_PARA=(17.4, 0.05),
+                         NOM_PARA=('FREQ', 'AMOR'),
+                         FONCTION=SPZR2,
+                         ),
+                      ),
+              )
+
+FIN()

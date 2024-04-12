@@ -1,0 +1,907 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# A) METHODE DE DEVOGELARE (INTEGRATION SUR BASE MODALE)
+#
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),
+         BASE=_F(  FICHIER = 'GLOBALE',
+                 LONG_REPE = 30000)
+,DEBUG=_F(SDVERI='OUI'))
+
+#
+#
+# LIRE ACCELEROGRAMME FFFF EN R11
+#
+CENTROA=LIRE_FONCTION(          UNITE=17,
+                                  NOM_PARA='INST',
+                                  NOM_RESU='ACCEL_SOL',
+                                     TITRE='ACCELE - A ',
+                                  INTERPOL='LIN',
+                               PROL_DROITE='EXCLU',
+                               PROL_GAUCHE='EXCLU'
+                           )
+
+#
+VITESSA=CALC_FONCTION(    INTEGRE=_F( FONCTION = CENTROA,
+                                        COEF = 0.)
+
+                          )
+
+#
+#
+DEPLACA=CALC_FONCTION(    INTEGRE=_F( FONCTION = VITESSA,
+                                        COEF = 0.)
+                           )
+
+#
+CENTROB=LIRE_FONCTION(          UNITE=38,
+                                  NOM_PARA='INST',
+                                  NOM_RESU='ACCEL_SOL',
+                                     TITRE='ACCELE - B ',
+                                  INTERPOL='LIN',
+                               PROL_DROITE='EXCLU',
+                               PROL_GAUCHE='EXCLU'
+                           )
+
+#
+VITESSB=CALC_FONCTION(    INTEGRE=_F( FONCTION = CENTROB,
+                                        COEF = 0.)
+                           )
+
+#
+DEPLACB=CALC_FONCTION(    INTEGRE=_F( FONCTION = VITESSB,
+                                        COEF = 0.)
+                           )
+
+#
+MA=LIRE_MAILLAGE(FORMAT="ASTER",  )
+
+#
+MA=DEFI_GROUP( reuse=MA,        MAILLAGE=MA,
+                           CREA_GROUP_NO=_F( GROUP_MA = ( 'POUTRE',
+                                                     ))
+                        )
+
+#
+# DEFINITION DES CARACTERISTIQUES DE LA SECTION RECTANGULAIRE
+#
+HY=0.0508
+
+#
+HZ=0.0254
+
+#
+# DEFINITION DES PARAMETRES POUR LA DISCRETISATION TEMPORELLE
+#
+DEBUTR=0.
+
+DEBUTI=0
+
+#
+TFIN=2.
+
+#
+PAS=0.001
+
+#
+NPAS=2000
+
+#
+# LISTE DE DISCRETISATION TEMPORELLE
+#
+L_INST1=DEFI_LIST_REEL(         DEBUT=DEBUTR,
+                              INTERVALLE=_F( JUSQU_A = TFIN,
+                                          PAS = PAS)
+                          )
+
+#
+# LISTE D ARCHIVAGE
+#
+L_ARCH=DEFI_LIST_ENTI(         DEBUT=DEBUTI,
+                              INTERVALLE=_F( JUSQU_A = NPAS,
+                                          PAS = 10)
+                          )
+
+#
+L_ARCH2=DEFI_LIST_ENTI(         DEBUT=DEBUTI,
+                               INTERVALLE=_F( JUSQU_A = NPAS,
+                                           PAS = 20)
+                           )
+
+#
+# DEFINITION DU MODELE
+#
+MO=AFFE_MODELE(    MAILLAGE=MA,
+                                AFFE=_F( PHENOMENE = 'MECANIQUE',
+                                      GROUP_MA = 'POUTRE',
+                                      MODELISATION = 'POU_D_T')
+                        )
+
+#
+# CARACTERISTIQUES DES POUTRES, ET AUTRES ELEMENTS
+#
+CARAELEM=AFFE_CARA_ELEM(      MODELE=MO,
+                                 POUTRE=_F( GROUP_MA = 'POUTRE',
+                                         SECTION = 'RECTANGLE',
+                                         CARA = ('HY',  'HZ', ),
+                                         VALE = ( HY,    HZ,  ))
+                           )
+
+#
+# DEFINITION DU MATERIAU
+#
+MAT=DEFI_MATERIAU(    ELAS=_F( E = 2.068E11,
+                                    NU = 0.3,
+                                    RHO = 7780.)
+                          )
+
+#
+# AFFECTATION DU MATERIAU
+#
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MA,
+                                  AFFE=_F( TOUT = 'OUI',
+                                        MATER = MAT)
+                          )
+
+#
+# CONDITIONS AUX LIMITES
+#
+CH1A=AFFE_CHAR_MECA(      MODELE=MO,DDL_IMPO=(
+                                _F( GROUP_NO = ('P0', 'P2',),
+                                          DX = 0.,
+                                          DY = 0.,
+                                          DZ = 0.,
+                                          DRX = 0.,
+                                          DRY = 0.,
+                                          DRZ = 0.),
+                                _F( TOUT = 'OUI',
+                                          DZ = 0.))
+                            )
+
+#
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITES
+#
+RIGIELEM=CALC_MATR_ELEM(        MODELE=MO,
+                                   CHARGE=CH1A,
+                                   OPTION='RIGI_MECA',
+                               CHAM_MATER=CHMAT,
+                                CARA_ELEM=CARAELEM
+                           )
+
+#
+# CALCUL DES MATRICES ELEMENTAIRES DE MASSES
+#
+MASSELEM=CALC_MATR_ELEM(        MODELE=MO,
+                                   CHARGE=CH1A,
+                                   OPTION='MASS_MECA',
+                               CHAM_MATER=CHMAT,
+                                CARA_ELEM=CARAELEM
+                           )
+
+#
+# NUMEROTATIOM
+#
+NUMEDDL=NUME_DDL(    MATR_RIGI=RIGIELEM )
+
+#
+# MATRICE DE RIGIDITE
+#
+RIGIDITE=ASSE_MATRICE(    MATR_ELEM=RIGIELEM,
+                             NUME_DDL=NUMEDDL
+                        )
+
+#
+# MATRICE DE MASSE
+#
+MASSE=ASSE_MATRICE(    MATR_ELEM=MASSELEM,
+                             NUME_DDL=NUMEDDL
+                        )
+
+#
+# CALCUL MODAL
+#
+MODE1=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 OPTION='PLUS_PETITE',
+                 CALC_FREQ=_F(NMAX_FREQ=6,
+                              ),
+                 MATR_MASS=MASSE,
+                 )
+
+
+#
+# DEFINITION DE LA DIRECTION DU SEISME
+#
+# CALCUL DES MODES STATIQUES
+#
+MODESTA=MODE_STATIQUE(    MATR_RIGI=RIGIDITE,
+                             MATR_MASS=MASSE,
+                              MODE_STAT =_F(  GROUP_NO = ('P0', 'P2',),
+                                         AVEC_CMP = 'DY')
+                         )
+
+#
+# CALCUL DE CHARGEMENT SISMIQUE EN RELATIF
+#
+MONOX1=CALC_CHAR_SEISME(     MATR_MASS=MASSE,
+                                 DIRECTION=(0., 1., 0.,),
+                                 MODE_STAT=MODESTA,
+                                  GROUP_NO=('P0',)
+                            )
+
+#
+MONOX2=CALC_CHAR_SEISME(     MATR_MASS=MASSE,
+                                 DIRECTION=(0., 1., 0.,),
+                                 MODE_STAT=MODESTA,
+                                  GROUP_NO=('P2',)
+                            )
+
+#
+#  RESOLUTION TEMPORELLE SUR BASE MODALE
+#
+# PROJECTION DANS LA BASE DES MODES : MODE1
+#
+NUMGEN=NUME_DDL_GENE(        BASE=MODE1,
+                             STOCKAGE='PLEIN'
+                         )
+
+#
+VECTGENA=PROJ_VECT_BASE(             BASE=MODE1,
+                              NUME_DDL_GENE=NUMGEN,
+                                  VECT_ASSE=MONOX1,
+                                  TYPE_VECT='FORC'
+                          )
+
+#
+VECTGENB=PROJ_VECT_BASE(             BASE=MODE1,
+                              NUME_DDL_GENE=NUMGEN,
+                                  VECT_ASSE=MONOX2,
+                                  TYPE_VECT='FORC'
+                          )
+
+#
+RIGIGEN1=PROJ_MATR_BASE(             BASE=MODE1,
+                              NUME_DDL_GENE=NUMGEN,
+                                  MATR_ASSE=RIGIDITE
+                          )
+
+#
+MASSGEN1=PROJ_MATR_BASE(             BASE=MODE1,
+                              NUME_DDL_GENE=NUMGEN,
+                                  MATR_ASSE=MASSE
+                          )
+
+#
+
+
+L_INSTA=DEFI_LIST_REEL(         DEBUT=DEBUTR,
+                              INTERVALLE=_F( JUSQU_A = TFIN,
+                                          PAS = 0.01)
+                          )
+
+REPBASE1=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                               SCHEMA_TEMPS=_F(SCHEMA='DEVOGE', PAS_MINI=PAS, PAS_MAXI=PAS),
+                               MATR_RIGI=RIGIGEN1,
+                               MATR_MASS=MASSGEN1,
+                               ARCHIVAGE=_F( PAS_ARCH = 10),
+                               INCREMENT=_F(  INST_INIT = DEBUTR,
+                                          PAS = PAS/10,
+                                          INST_FIN = TFIN),
+                               EXCIT=(
+                                   _F(  VECT_ASSE_GENE = VECTGENA,
+                                           MULT_APPUI = 'OUI',
+                                           ACCE = CENTROA,
+                                           VITE = VITESSA,
+                                           DEPL = DEPLACA,
+                                           DIRECTION = (0., 1., 0.,),
+                                           GROUP_NO = ('P0',)),
+                                   _F(  VECT_ASSE_GENE = VECTGENB,
+                                           MULT_APPUI = 'OUI',
+                                           ACCE = CENTROB,
+                                           VITE = VITESSB,
+                                           DEPL = DEPLACB,
+                                           DIRECTION = (0., 1., 0.,),
+                                           GROUP_NO = ('P2',))),
+                               MODE_STAT=MODESTA,
+                           )
+
+#
+#
+# PROJECTION DANS LA BASE PHYSIQUE DES DEPLACEMENTS ABSOLUS
+#
+REP_LIN1=REST_GENE_PHYS(     RESU_GENE=REPBASE1,
+                                 MODE_MECA=MODE1,
+                                  NOM_CHAM='DEPL',
+                                  INTERPOL='LIN',
+                                MULT_APPUI='OUI',
+                                LIST_INST = L_INSTA,
+                            )
+
+#
+# DEPLACEMENTS ABSOLUS AU POINT P1
+#
+P1_DY1=RECU_FONCTION(      RESULTAT=REP_LIN1,
+                                 NOM_CHAM='DEPL',
+                                 GROUP_NO='P1',
+                                      NOM_CMP='DY'
+                           )
+
+#
+# TEST_RESU : MODES PROPRES
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=4.63517040466,
+                  VALE_REFE=4.5999999999999996,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=12.7720786342,
+                  VALE_REFE=12.779999999999999,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=25.0261746096,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=41.346406106,
+                  VALE_REFE=41.420000000000002,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=5,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=61.7285388875,
+                  VALE_REFE=61.869999999999997,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=6,
+                  PARA='FREQ',
+                  RESULTAT=MODE1,
+                  VALE_CALC=86.1690839445,
+                  VALE_REFE=86.420000000000002,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+#
+# DEPLACEMENTS ABSOLUS SUIVANT Y
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=11,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.000263453265327,
+                  VALE_REFE=-2.6431239999999997E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=4.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=21,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00119063166557,
+                  VALE_REFE=-1.1853925999999999E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=31,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00051992356998,
+                  VALE_REFE=-5.2387500000000004E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=8.0000000000000002E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=41,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00219670198869,
+                  VALE_REFE=-2.1924264000000001E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=51,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.000252949893806,
+                  
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=61,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00146592053179,
+                  VALE_REFE=-1.4602967999999999E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=4.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=71,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00024743937177,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=81,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00258668513348,
+                  VALE_REFE=-2.5907999999999999E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=91,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00359383405955,
+                  VALE_REFE=-3.6067999999999994E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=4.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=101,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.011167772133,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=111,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00476903113969,
+                  VALE_REFE=-4.7777399999999999E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=121,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.0151661930664,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=131,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00357728633167,
+                  VALE_REFE=-3.5813999999999993E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=141,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.0120605877524,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=151,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.000407930095497,
+                  CRITERE='ABSOLU',
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=161,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00914583684979,
+                  VALE_REFE=-9.1719399999999982E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=171,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00146818554587,
+                  VALE_REFE=-1.4330425999999998E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=0.025000000000000001,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=181,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00729580169815,
+                  VALE_REFE=-7.3558400000000006E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=8.9999999999999993E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=191,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00668199081947,
+                  VALE_REFE=-6.62686E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=8.9999999999999993E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=200,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00178166345664,
+                  VALE_REFE=-3.5077400000000001E-3,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='ABSOLU',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+#
+# METHODE DE NEWMARK (INTEGRATION DIRECTE SUR BASE PHYSIQUE)
+#
+#  RESOLUTION TEMPORELLE PAR INTEGRATION DIRECTE
+#
+#
+L_INSTA2=DEFI_LIST_REEL(         DEBUT=DEBUTR,
+                              INTERVALLE=_F( JUSQU_A = TFIN,
+                                          PAS = PAS*20)
+                          )
+
+REP_LIN2=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                               MATR_RIGI=RIGIDITE,
+                               MATR_MASS=MASSE,
+                               SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',BETA = 0.25,
+                                          GAMMA = 0.50),
+                             INCREMENT=_F(  LIST_INST = L_INST1),
+                               ARCHIVAGE=_F( LIST_INST = L_INSTA2,
+                                          CHAM_EXCLU = ('ACCE', 'VITE',)),EXCIT=(
+                                   _F(  VECT_ASSE = MONOX1,
+                                           FONC_MULT = CENTROA),
+                                   _F(  VECT_ASSE = MONOX2,
+                                           FONC_MULT = CENTROB))
+
+                           )
+
+#
+# RECUPERATION DE LA FONCTION
+#
+# DEPLACEMENT AU POINT P1
+#
+P1_DY2=RECU_FONCTION(    RESULTAT=REP_LIN2,
+                              NOM_CHAM='DEPL',
+                              GROUP_NO='P1',
+                                   NOM_CMP='DY'
+                          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=5,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.000290887266827,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=10,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.000669205972367,
+                  VALE_REFE=-6.6806000000000005E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=15,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.000723536190158,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=20,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.0011418996935,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=25,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.000910622138604,
+                  VALE_REFE=9.0959999999999999E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=1.5E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=30,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00129143752307,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=35,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00162888154993,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=40,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.000487366834043,
+                  VALE_REFE=-4.8480000000000002E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=6.0000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=45,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00220009868827,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=50,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00333387927307,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=55,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00461502045652,
+                  VALE_REFE=4.6090000000000002E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=1.5E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=60,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00508002026858,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=65,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00534933712661,
+                  VALE_REFE=5.3410000000000003E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=1.8E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=70,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00576042953919,
+                  VALE_REFE=-5.7520000000000002E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=1.5E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=75,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0049749278189,
+                  ),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=80,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00458185445873,
+                  VALE_REFE=-4.5710000000000004E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.5000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=85,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00343473114857,
+                  VALE_REFE=3.4259999999999998E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=2.7000000000000001E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=90,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.00105061867061,
+                  VALE_REFE=-1.044E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=6.4999999999999997E-3,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=95,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-0.000422677168324,
+                  VALE_REFE=-4.349E-4,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=0.029999999999999999,),
+          )
+
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=100,
+                  GROUP_NO='P1',
+                  RESULTAT=REP_LIN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00194466972181,
+                  VALE_REFE=1.9550000000000001E-3,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=6.0000000000000001E-3,),
+          )
+
+#
+FIN()
+#

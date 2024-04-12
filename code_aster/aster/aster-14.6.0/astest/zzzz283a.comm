@@ -1,0 +1,302 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: samuel.geniaut at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),IMPR_MACRO='NON')
+
+#----------------------------------------------
+#                 MAILLAGE
+#----------------------------------------------
+
+# MAILLAGE 10X10 ELEMENTS
+box10=LIRE_MAILLAGE(FORMAT='MED')
+
+MODbox10=AFFE_MODELE(MAILLAGE=box10,
+                     AFFE=_F(GROUP_MA=('VOL',),
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D',)),
+
+# MAILLAGE 20X20 ELEMENTS
+box20=LIRE_MAILLAGE(FORMAT='MED',UNITE=38)
+
+MODbox20=AFFE_MODELE(MAILLAGE=box20,
+                     AFFE=_F(GROUP_MA=('VOL',),
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D',)),
+
+
+#----------------------------------------------
+#                 GRILLE
+#----------------------------------------------
+
+# ON UTILISE LE MAILLAGE 20X20 POUR LA GRILLE
+grille=DEFI_GRILLE(MAILLAGE=box20)
+
+#-----------------------------------------------------------------------
+# FISS: MAILLAGE 10X10 POUR LA STRUCTURE,
+#       MAILLAGE 20X20 POUR LA GRILLE AUXILIAIRE
+#       CALCUL DIRECT DES LEVEL SETS SUR LA GRILLE AUXILIAIRE
+#-----------------------------------------------------------------------
+
+nb_step = 2
+FISS = [None]*(nb_step+1)
+MODX = [None]*(nb_step+1)
+
+fLSN = FORMULE(VALE='Z',
+               NOM_PARA='Z',)
+fLST = FORMULE(VALE='Y-1.0',
+               NOM_PARA='Y',)
+
+FISS[0]=DEFI_FISS_XFEM(DEFI_FISS=_F(FONC_LN=fLSN,
+                                    FONC_LT=fLST),
+                       MAILLAGE_GRILLE=grille,
+                       MAILLAGE=box10,);
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+Mat=DEFI_MATERIAU(ELAS=_F(E=1.,NU=0.3,),);
+
+#----------------------------------------------
+# PROPAGATION DE FISS (SANS HOMARD)
+#----------------------------------------------
+
+# AVANCEE DE LA FISSURE
+da=0.6
+# ANGLE DE PROPAGATION
+beta=5./180.*pi
+# RAYON CALC_G
+ray=0.1
+
+# TABLES DES FACTEURS D'INTENSITE' DES CONTRAINTES IMPOSES
+# MAILLAGE 10X10
+SIF10=CREA_TABLE(LISTE=(_F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='K1'),
+                        _F(LISTE_R=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.),PARA='K2'),
+                        _F(LISTE_R=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.),PARA='K3'),
+                        _F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='G'),
+                        _F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='G_IRWIN'),
+                        _F(LISTE_R=(beta,beta,beta,beta,beta,beta,beta,beta,beta,beta,beta),PARA='BETA'),
+                        _F(LISTE_I=(1,1,1,1,1,1,1,1,1,1,1),PARA='NUME_FOND'),
+                        _F(LISTE_I=(1,1,1,1,1,1,1,1,1,1,1),PARA='NUME_ORDRE'),
+                        _F(LISTE_I=(1,2,3,4,5,6,7,8,9,10,11),PARA='NUM_PT'),))
+
+# MAILLAGE 20X20
+SIF20=CREA_TABLE(LISTE=(_F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,
+                                    1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='K1'),
+                        _F(LISTE_R=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                    0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.),PARA='K2'),
+                        _F(LISTE_R=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,
+                                    0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.),PARA='K3'),
+                        _F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,
+                                    1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='G'),
+                        _F(LISTE_R=(1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,
+                                    1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,1.),PARA='G_IRWIN'),
+                        _F(LISTE_R=(beta,beta,beta,beta,beta,beta,beta,beta,beta,beta,
+                                    beta,beta,beta,beta,beta,beta,beta,beta,beta,beta,beta),PARA='BETA'),
+                        _F(LISTE_I=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),PARA='NUME_FOND'),
+                        _F(LISTE_I=(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),PARA='NUME_ORDRE'),
+                        _F(LISTE_I=(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21),PARA='NUM_PT'),))
+
+MODboxH = [None]*(nb_step+1)
+MODXH = [None]*(nb_step+1)
+LSNraf = [None]*(nb_step+1)
+LSTraf = [None]*(nb_step+1)
+
+for i in range(nb_step-1) :
+
+   MODXH[i]=MODI_MODELE_XFEM(MODELE_IN=MODbox10,FISSURE=FISS[i],INFO=1,);
+
+   FISS[i+1] = CO('FISS_%d'%(i+1))
+   PROPA_FISS(MODELE=MODXH[i],
+              FISSURE=_F(FISS_ACTUELLE=FISS[i],
+                         FISS_PROPAGEE=FISS[i+1],
+                         TABLE=SIF10,),
+              METHODE_PROPA='UPWIND',
+              DA_MAX=da,
+              LOI_PROPA=_F(LOI='PARIS',
+                           C=1,
+                           M=1,
+                           MATER=Mat),
+              RAYON=ray,
+              COMP_LINE=_F(COEF_MULT_MINI=0.,
+                           COEF_MULT_MAXI=1.,),
+              CRIT_ANGL_BIFURCATION = 'ANGLE_IMPO',
+              INFO=1,);
+
+# ON RECUPERE LES CHAMPS LEVEL SETS DE L'AVANT DERNIERE PROPAGATION
+LSNraf[i+1]=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                       OPERATION='EXTR',
+                       NOM_CHAM='LNNO',
+                       FISSURE=FISS[i+1],);
+
+LSTraf[i+1]=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                       OPERATION='EXTR',
+                       NOM_CHAM='LTNO',
+                       FISSURE=FISS[i+1],);
+
+#--------------------------------------------
+# ON RAFFINE LE MAILLAGE DE LA STRUCTURE
+#--------------------------------------------
+
+boxRaf = CO('boxRaf')
+LSNlast = CO('LSNlast')
+LSTlast = CO('LSTlast')
+MACR_ADAP_MAIL(MAILLAGE_N=box10,
+               MAILLAGE_NP1=boxRaf,
+               ADAPTATION='RAFF_DERA_ZONE',
+               ZONE=_F(TYPE='BOITE',
+                       X_MINI=0.,
+                       X_MAXI=4.,
+                       Y_MINI=0.,
+                       Y_MAXI=4.,
+                       Z_MINI=-1.,
+                       Z_MAXI=1.,),
+               MAJ_CHAM=(_F(CHAM_GD=LSNraf[i+1],
+                            TYPE_CHAM='NOEU_NEUT_R',
+                            CHAM_MAJ=LSNlast,),
+                         _F(CHAM_GD=LSTraf[i+1],
+                            TYPE_CHAM='NOEU_NEUT_R',
+                            CHAM_MAJ=LSTlast,),),
+               )
+
+
+# ON DEFINIE LA FISSURE OBTENUE PAR L'AVANT DERNIERE PROPAGATION SUR
+# LE MAILLAGE RAFFINE EN GARDANT LA MEME GRILLE AUXILIAIRE
+
+MODraff=AFFE_MODELE(MAILLAGE=boxRaf,
+                    AFFE=_F(GROUP_MA=('VOL',),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='3D',)),
+
+FISSlast=DEFI_FISS_XFEM(DEFI_FISS=_F(CHAM_NO_LSN=LSNlast,
+                                     CHAM_NO_LST=LSTlast,),
+                         FISS_GRILLE=FISS[i+1],
+                         MAILLAGE=boxRaf,);
+
+#----------------------------------------------
+# DERNIER PAS DE PROPAGATION DE FISS SUR UN
+# MAILLAGE RAFFINE PAR HOMARD (ON GARDE LA GRILLE)
+#----------------------------------------------
+
+MODXlast=MODI_MODELE_XFEM(MODELE_IN=MODraff,FISSURE=FISSlast,INFO=1,);
+
+FISSresu = CO('FISSresu')
+PROPA_FISS(MODELE=MODXlast,
+           FISSURE=_F(FISS_ACTUELLE=FISSlast,
+                      FISS_PROPAGEE=FISSresu,
+                      TABLE=SIF20,),
+           METHODE_PROPA='UPWIND',
+           DA_MAX=da,
+           LOI_PROPA=_F(LOI='PARIS',
+                        C=1,
+                        M=1,
+                        MATER=Mat),
+           RAYON=ray,
+           COMP_LINE=_F(COEF_MULT_MINI=0.,
+                        COEF_MULT_MAXI=1.,),
+           CRIT_ANGL_BIFURCATION = 'ANGLE_IMPO',
+           INFO=1,);
+
+# ON EXTRACT LES CHAMPS LEVEL SETS DE LA FISSURE OBTENUE
+
+LSNresu=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                   OPERATION='EXTR',
+                   NOM_CHAM='LNNO',
+                   FISSURE=FISSresu,);
+
+LSTresu=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+               OPERATION='EXTR',
+               NOM_CHAM='LTNO',
+               FISSURE=FISSresu,);
+
+#---------------------------------------------------------
+# VERIFICATION DE LA POSITION DU FOND APRES LA PROPAGATION
+#---------------------------------------------------------
+
+# COORDONNEES DU FOND AU DEBUT DE LA PROPAGATION
+y=1.0
+z=0.0
+
+#   CALCUL DE LA POSITION DU FOND APRES LA PROPAGATION
+for i in range(nb_step) :
+    y=y+da*cos((i+1)*beta)
+    z=z+da*sin((i+1)*beta)
+
+# ON CALCULE LES VALEURS DES LEVEL SET SUR LA DROITE QUI DONNE LA POSITION
+# DU FOND APRES LA PROPAGATION
+
+TABLSN=MACR_LIGN_COUPE(CHAM_GD=LSNresu, MODELE=MODXlast, NOM_CHAM='NEUT',
+                     LIGN_COUPE=(
+                       _F(TYPE='SEGMENT', NB_POINTS=10, COOR_ORIG=(0,y,z), COOR_EXTR=(4,y,z),),
+                    ))
+#IMPR_TABLE(TABLE=TABLSN,UNITE=6)
+
+TABLST=MACR_LIGN_COUPE(CHAM_GD=LSTresu, MODELE=MODXlast, NOM_CHAM='TEMP',
+                     LIGN_COUPE=(
+                       _F(TYPE='SEGMENT', NB_POINTS=10, COOR_ORIG=(0,y,z), COOR_EXTR=(4,y,z),),
+                    ))
+#IMPR_TABLE(TABLE=TABLST,UNITE=6)
+
+
+
+
+# TOLERANCE SUR LA DIFFERENCE ENTRE LES LEVEL SETS: 15% LONGUEUR ARETE MAILLAGE
+tol=0.15*0.2
+
+#   VERIFICATION DES VALEURS DES LEVEL SETS. POUR LES POINTS
+#   SELECTIONNES, LES LEVEL SETS DOIVENT ETRE EGAL A ZERO.
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=5.86185904136E-05,
+           VALE_REFE=0.0,
+           NOM_PARA='X1',
+           TYPE_TEST='MAX',
+           TABLE=TABLSN,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=5.68520364082E-05,
+           VALE_REFE=0.0,
+           NOM_PARA='X1',
+           TYPE_TEST='MIN',
+           TABLE=TABLSN,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=-8.71556984728E-06,
+           VALE_REFE=0.0,
+           NOM_PARA='X1',
+           TYPE_TEST='MAX',
+           TABLE=TABLST,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=-8.715569848E-06,
+           VALE_REFE=0.0,
+           NOM_PARA='X1',
+           TYPE_TEST='MIN',
+           TABLE=TABLST,)
+
+FIN()

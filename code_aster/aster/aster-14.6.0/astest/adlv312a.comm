@@ -1,0 +1,222 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ELEMENTS  : HEXA8 , PENTA6
+# REFERENCE : SAMCEF
+#--------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+#
+# DEFINITION DU MODELE
+#
+
+MODELE=AFFE_MODELE(    MAILLAGE=MAYA,AFFE=(
+                             _F(  GROUP_MA = 'FLUIDE',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = '3D_FLUIDE'),
+                                  _F(  GROUP_MA = 'COQUE',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = 'DKT'),
+                                  _F(  GROUP_MA = 'INTERF',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = 'FLUI_STRU'),
+                                  _F(  GROUP_MA = 'PESANT',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = '2D_FLUI_PESA'))
+                     )
+
+#
+# DEFINITION DES CARACTERISTIQUES PHYSIQUES
+#
+
+EAU=DEFI_MATERIAU(    FLUIDE=_F(  RHO = 1000.,
+                                   PESA_Z=9.81,
+                                      CELE_R = 1400.)
+                         )
+
+MATER=DEFI_MATERIAU(    ELAS=_F(  RHO = 7850.,
+                                    E = 2.06E11,
+                                    NU = 0.3)
+                         )
+
+CH_MATER=AFFE_MATERIAU(    MAILLAGE=MAYA,AFFE=(
+                                 _F(  GROUP_MA = ( 'FLUIDE',
+                                                     'INTERF',
+                                                     'PESANT', ),
+                                        MATER = EAU),
+                                      _F(  GROUP_MA = 'COQUE',
+                                        MATER = MATER))
+                         )
+
+CARA=AFFE_CARA_ELEM(      MODELE=MODELE,
+                                 COQUE=_F(  GROUP_MA = 'COQUE',
+                                         EPAIS = 0.254E-3)
+                          )
+
+#
+# DEFINITION DES CONDITIONS AUX LIMITES
+#
+
+CONDLIM=AFFE_CHAR_MECA(       MODELE=MODELE,
+                              DDL_IMPO=(
+
+                               _F(  GROUP_NO = 'FIXA',
+                                          DX = 0.,
+                                          DY = 0.,
+                                          DZ = 0.,
+                                          DRX = 0.,
+                                          DRY = 0.,
+                                          DRZ = 0.),
+
+                               _F(  GROUP_NO = 'SYMETRIE',
+                                          DY = 0.,
+                                          DRX = 0.,
+                                          DRZ = 0.))
+                          )
+
+#
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITE ET DE MASSE
+#
+
+K_ELEM=CALC_MATR_ELEM(       MODELE=MODELE,
+                                 OPTION='RIGI_MECA',
+                                 CHARGE=CONDLIM,
+                              CARA_ELEM=CARA,
+                             CHAM_MATER=CH_MATER )
+
+M_ELEM=CALC_MATR_ELEM(       MODELE=MODELE,
+                                 OPTION='MASS_MECA',
+                                 CHARGE=CONDLIM,
+                              CARA_ELEM=CARA,
+                             CHAM_MATER=CH_MATER )
+
+#
+# NUMEROTATION ET ASSEMBLAGE DES MATRICES ELEMENTAIRES
+#
+
+NUMERO=NUME_DDL(          MATR_RIGI=K_ELEM   )
+
+K_ASSE=ASSE_MATRICE(      MATR_ELEM=K_ELEM,
+                               NUME_DDL=NUMERO   )
+
+M_ASSE=ASSE_MATRICE(      MATR_ELEM=M_ELEM,
+                               NUME_DDL=NUMERO   )
+
+TABL_MAS=POST_ELEM(        MODELE=MODELE,
+                          CHAM_MATER=CH_MATER,
+                           CARA_ELEM=CARA,
+                          MASS_INER=_F(GROUP_MA=('FLUIDE','COQUE','INTERF'))
+                      )
+
+#
+# CALCUL DES MODES
+#
+
+MODES=CALC_MODES(MATR_RIGI=K_ASSE,
+                 OPTION='BANDE',
+                 SOLVEUR_MODAL=_F(COEF_DIM_ESPACE=4),
+                 CALC_FREQ=_F(FREQ=(70.,300.,),),
+                 MATR_MASS=M_ASSE,
+                 )
+
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=158,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=74.340815511,
+                   VALE_REFE=71.200000000000003,
+                   CRITERE='RELATIF',
+                   PRECISION=0.045999999999999999,),
+                _F(PARA='FREQ',
+                   NUME_MODE=160,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=80.030205192,
+                   VALE_REFE=77.400000000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.035000000000000003,),
+                _F(PARA='FREQ',
+                   NUME_MODE=169,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=104.112005083,
+                   VALE_REFE=98.800000000000006,
+                   CRITERE='RELATIF',
+                   PRECISION=0.053999999999999999,),
+                _F(PARA='FREQ',
+                   NUME_MODE=170,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=135.918862351,
+                   VALE_REFE=133.40000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(PARA='FREQ',
+                   NUME_MODE=171,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=157.169759664,
+                   VALE_REFE=147.80000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=0.065000000000000002,),
+                _F(PARA='FREQ',
+                   NUME_MODE=172,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=228.606256092,
+                   VALE_REFE=212.59999999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.076999999999999999,),
+                ),
+          )
+
+#----------------------------------------------------------------------------------
+# Pour valider le fait que l'on peut calculer la rigidite geometrique
+# sur un modele contenant du 3D_FLUIDE :
+
+MO2=AFFE_MODELE(    MAILLAGE=MAYA,AFFE=(
+                                  _F(  GROUP_MA = 'FLUIDE',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = '3D_FLUIDE'),
+                                  _F(  GROUP_MA = 'COQUE',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = 'DKT')))
+CARA2=AFFE_CARA_ELEM( MODELE=MO2,
+                      COQUE=_F(  GROUP_MA = 'COQUE', EPAIS = 0.254E-3))
+
+
+CHSIEF=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='ELGA_SIEF_R', MODELE=MO2,
+                   PROL_ZERO='OUI', INFO=1,
+                   AFFE_SP=_F(CARA_ELEM=CARA2,),
+                   AFFE=  _F(  TOUT = 'OUI',  NOM_CMP = ('SIXX',),  VALE = (  1.E+07, ),
+                  ))
+
+RIGEELEM=CALC_MATR_ELEM(   MODELE=MO2,
+                           OPTION='RIGI_GEOM',
+                           CHAM_MATER=CH_MATER, CARA_ELEM=CARA2,
+                           SIEF_ELGA=CHSIEF,
+                             )
+
+
+
+FIN()
+#

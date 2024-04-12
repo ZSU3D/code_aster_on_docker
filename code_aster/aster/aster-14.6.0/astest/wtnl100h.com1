@@ -1,0 +1,141 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+##################################
+# TEST DES INDICATEURS D'ERREUR HM
+##################################
+#
+# LE CALCUL EST REALISE EN 2 PASSES.
+# INTERET : VALIDATION DU CALCUL D'INDICATEUR EN POURSUITE
+#
+# ON NE FAIT PAS D'ADAPTATION DE MAILLAGE CAR ASTER NE POURRAIT
+# PAS REDEMARRER LE CALCUL SUR UN NOUVEAU MAILLAGE
+#
+# 2eme PASSE
+#
+
+POURSUITE(CODE='OUI',
+          DEBUG=_F(SDVERI='OUI',),);
+
+RESU[nbadap]=STAT_NON_LINE(reuse =RESU[nbadap],
+                           MODELE=MODE[nbadap],
+                           CHAM_MATER=CHMAT[nbadap],
+                           EXCIT=_F(CHARGE=CHAR[nbadap],),
+                           SCHEMA_THM=_F(PARM_THETA=0.57,),
+                           COMPORTEMENT=_F(RELATION='KIT_HM',
+                                        RELATION_KIT=('ELAS','LIQU_SATU','HYDR_UTIL',),
+                                        ),
+                           ETAT_INIT=_F(EVOL_NOLI=RESU[nbadap],),
+                           INCREMENT=_F(LIST_INST=LI,
+                                        INST_INIT = T1_FIN,
+                                        INST_FIN = T2_FIN,),
+                           CRIT_QUALITE = _F(ERRE_TEMPS_THM='OUI',),
+                           NEWTON=_F(MATRICE='TANGENTE',
+                                     REAC_ITER=10,),
+                           CONVERGENCE=_F(ITER_GLOB_MAXI=10,),
+                           SOLVEUR=_F(METHODE='LDLT',),);
+
+RESU[nbadap]=CALC_CHAMP(reuse=RESU[nbadap],RESULTAT=RESU[nbadap],LIST_INST=LI2_BIS,CONTRAINTE=('SIEF_ELNO'))
+
+
+RESU[nbadap]=CALC_ERREUR(reuse =RESU[nbadap],
+                         RESULTAT=RESU[nbadap],
+                         LIST_INST=LI2_BIS,
+                         OPTION=('ERME_ELEM','ERME_ELNO',),);
+
+RESU[nbadap]=CALC_ERREUR(reuse =RESU[nbadap],
+                         RESULTAT=RESU[nbadap],
+                         INST=T2_FIN,
+                         OPTION='ERME_NOEU',);
+
+TEST_RESU(RESU=(_F(GROUP_NO='NO_TEST',
+                   INST=500.0,
+                   RESULTAT=RESU_2,
+                   NOM_CHAM='ERME_NOEU',
+                   NOM_CMP='ESTERG1',
+                   VALE_CALC=0.00688931662605,
+
+                   CRITERE='RELATIF',
+                   ),
+                _F(PARA='ERRE_TPS_GLOB',
+                   INST=500.0,
+                   RESULTAT=RESU_2,
+                   VALE_CALC=0.0984633573862,
+
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+#  le meme calcul en 1 seul coup
+
+RESU_TOT=STAT_NON_LINE(MODELE=MODE[nbadap],
+                       CHAM_MATER=CHMAT[nbadap],
+                       EXCIT=_F(CHARGE=CHAR[nbadap],),
+                       SCHEMA_THM=_F(PARM_THETA=0.57,),
+                       COMPORTEMENT=_F(RELATION='KIT_HM',
+                                    RELATION_KIT=('ELAS','LIQU_SATU','HYDR_UTIL',),
+                                    ),
+                       INCREMENT=_F(LIST_INST=LI,
+                                    INST_INIT = 0.0,
+                                    INST_FIN = T2_FIN,),
+                       CRIT_QUALITE = _F(ERRE_TEMPS_THM='OUI',),
+                       NEWTON=_F(MATRICE='TANGENTE',
+                                 REAC_ITER=10,),
+                       CONVERGENCE=_F(ITER_GLOB_MAXI=10,),
+                       SOLVEUR=_F(METHODE='LDLT',),);
+
+####dico = RESU_TOT.LIST_PARA()
+
+####print dico['ERRE_TPS_LOC']
+
+####print dico['ERRE_TPS_GLOB']
+####print "Derniere valeur de ERRE_TPS_GLOB = ", dico['ERRE_TPS_GLOB'][-1]
+
+RESU_TOT=CALC_ERREUR(reuse =RESU_TOT,
+                     RESULTAT=RESU_TOT,
+                     LIST_INST=LI,
+                     OPTION=('ERME_ELEM','ERME_ELNO',),);
+
+RESU_TOT=CALC_ERREUR(reuse =RESU_TOT,
+                     RESULTAT=RESU_TOT,
+                     INST=T2_FIN,
+                     OPTION='ERME_NOEU',);
+
+TEST_RESU(RESU=(_F(GROUP_NO='NO_TEST',
+                   INST=500.0,
+                   RESULTAT=RESU_TOT,
+                   NOM_CHAM='ERME_NOEU',
+                   NOM_CMP='ESTERG1',
+                   VALE_CALC=0.00688931662605,
+
+                   CRITERE='RELATIF',
+                   ),
+                _F(PARA='ERRE_TPS_GLOB',
+                   INST=500.0,
+                   RESULTAT=RESU_TOT,
+                   VALE_CALC=0.0984633573862,
+
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+FIN();

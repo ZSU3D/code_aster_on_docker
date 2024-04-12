@@ -1,0 +1,242 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+TCARA=MACR_CARA_POUTRE(    FORMAT='ASTER',SYME_Y='OUI',
+                                 SYME_Z='OUI'   )
+
+TEST_TABLE(VALE_CALC=7.0190292529178E-05,
+           VALE_REFE=7.0189000000000002E-05,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='A_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=0.014518221992301,
+           VALE_REFE=0.0145182,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='CDG_Y_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=0.014518221992301,
+           VALE_REFE=0.0145182,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='CDG_Z_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=3.4265720379176E-09,
+           VALE_REFE=3.4265700000000001E-09,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IY_G_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=3.4265720379176E-09,
+           VALE_REFE=3.4265700000000001E-09,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IZ_G_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=-3.1001544409698E-09,
+           VALE_REFE=-3.1001499999999999E-09,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IYZ_G_M',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=2.8076117011671E-04,
+           VALE_REFE=2.8075600000000001E-4,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='A',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0E+00,
+           VALE_REFE=0.0,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='CDG_Y',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0E+00,
+           VALE_REFE=0.0,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='CDG_Z',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=7.2884782201462E-08,
+           VALE_REFE=7.2882399999999999E-08,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IY_G',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=7.2884782201462E-08,
+           VALE_REFE=7.2882399999999999E-08,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IZ_G',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0E+00,
+           VALE_REFE=0.0,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IYZ_G',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=7.2884782201462E-08,
+           VALE_REFE=7.2882399999999999E-08,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IY',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=7.2884782201462E-08,
+           VALE_REFE=7.2882399999999999E-08,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='IZ',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=-0.023096988493356,
+           VALE_REFE=-0.023096700000000001,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='Y_MIN',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=0.023096988493356,
+           VALE_REFE=0.023096700000000001,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='Y_MAX',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=-0.023096988493356,
+           VALE_REFE=-0.023096700000000001,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='Z_MIN',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=0.023096988493356,
+           VALE_REFE=0.023096700000000001,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='Z_MAX',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+TEST_TABLE(VALE_CALC=0.025000000000000,
+           VALE_REFE=0.025000000000000001,
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='R_MAX',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+#
+# ALPHA : angle de passage du repere GXY au repere principal d'inertie Gxy
+# sur Alphaserver en nodebug le test ci-dessous est OK avec
+#   IXX   7.288478220146156E-008
+#   IYY   7.288478220146154E-008
+# on a IXX > IYY => ALPHA = 90.
+#
+# sur Alphaserver en debug et sur Linux Rocks le test ci-dessous est NOOK car
+#   IXX   7.288478220146156E-008
+#   IYY   7.288478220146158E-008
+# on a IYY > IXX => ALPHA = 0.
+#
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=(0.0, 90.0),
+           VALE_REFE=(0.0, 90.0),
+           REFERENCE = 'ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='ALPHA',
+           TABLE=TCARA,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='.9000000',),
+           )
+
+FIN( )
+#

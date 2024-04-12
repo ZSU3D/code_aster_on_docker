@@ -1,0 +1,446 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+#CFP_TMOY : conduite pleine, poids de l'acier+de l'eau, pression interne (hydrostatique + surpression), Temp moyenne en service
+#############################
+#### Lecture du maillage
+
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+##Creation d'un groupe permettant de definir l'abscisse curviligne de la conduite
+
+
+MAIL=MODI_MAILLAGE(reuse =MAIL,
+                   MAILLAGE=MAIL,
+                   ABSC_CURV=_F(GROUP_MA='CF_all',
+                                GROUP_NO_ORIG='No_aval',),);
+##Creation d'un groupe permettant de definir l'abscisse curviligne de la conduite
+
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=_F(OPTION='NOEUD_ORDO',
+                                 NOM='abs_curv',
+                                 GROUP_MA='CF_all',
+                                 GROUP_NO_ORIG='No_aval',),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.1e+11,
+                            NU=0.3,
+                            RHO=7800.0,
+                            ALPHA=1.2e-05,),);
+
+RESSORT=DEFI_MATERIAU(DIS_CONTACT=_F(RIGI_NOR=1e+13,
+                                     RIGI_TAN=1e+13,
+                                     COULOMB=0.4,
+                                     DIST_1=1.0,),);
+
+L_INST=DEFI_LIST_INST(METHODE='AUTO', 
+                      DEFI_LIST=_F(
+                                   VALE=(0.0,1.0,),
+                                   PAS_MINI=1e-06,
+                                   PAS_MAXI=1.0,),);
+
+L_INST2=DEFI_LIST_INST(METHODE='AUTO',
+                       DEFI_LIST=_F(
+                                    VALE=(0.0,1.0,2.0,),
+                                    PAS_MINI=1e-06,
+                                    PAS_MAXI=1.0,),);
+
+L_GRAV=DEFI_FONCTION(
+                     NOM_PARA='INST',
+                     VALE=(0.0 ,0.0 ,
+                           1.0 ,1.0 ,),
+                     PROL_DROITE='CONSTANT',
+                     PROL_GAUCHE='CONSTANT',);
+
+L_RAMP=DEFI_FONCTION(
+                     NOM_PARA='INST',
+                     VALE=(0.0 ,0.0 ,
+                           1.0 ,0.0 ,
+                           2.0 ,1.0 ,),
+                     PROL_DROITE='CONSTANT',
+                     PROL_GAUCHE='CONSTANT',);
+
+MODE=AFFE_MODELE(MAILLAGE=MAIL,
+                 AFFE=(_F(GROUP_MA='CF_all',
+                          PHENOMENE='MECANIQUE',
+                          MODELISATION='TUYAU_3M',),
+                       _F(GROUP_MA='pilette',
+                          PHENOMENE='MECANIQUE',
+                          MODELISATION='DIS_T',),),);
+
+TUYAU=AFFE_CARA_ELEM(MODELE=MODE,
+                     POUTRE=_F(GROUP_MA='CF_all',
+                               SECTION='CERCLE',
+                               VARI_SECT='CONSTANT',
+                               CARA=('EP','R',),
+                               VALE=(0.045,0.85,),
+                               MODI_METRIQUE='OUI',
+                               TUYAU_NSEC=16,
+                               TUYAU_NCOU=1,),
+                     DISCRET=(_F(CARA='K_T_D_L',
+                                 GROUP_MA='pilette',
+                                 VALE=(0.0,0.0,0.0,),),
+                              _F(CARA='M_T_D_L',
+                                 GROUP_MA='pilette',
+                                 VALE=0.0,),),
+                     ORIENTATION=_F(GROUP_NO='No_amont',
+                                    CARA='GENE_TUYAU',
+                                    VALE=(0.0,0.0,1.0,),),);
+
+CH_TREF=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                   OPERATION='AFFE',
+                   MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA='CF_all',
+                           NOM_CMP='TEMP',
+                           VALE=25.0,),);
+
+R_TREF=CREA_RESU(OPERATION='AFFE',
+                 TYPE_RESU='EVOL_VARC',
+                 NOM_CHAM='TEMP',
+                 AFFE=(
+                 _F(CHAM_GD=CH_TREF,
+                    CARA_ELEM=TUYAU,
+                    INST=0.0,),
+                 _F(CHAM_GD=CH_TREF,
+                    CARA_ELEM=TUYAU,
+                    INST=2.0,),),);
+
+M_TREF=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=(_F(GROUP_MA='CF_all',
+                              MATER=ACIER,),
+                           _F(GROUP_MA='pilette',
+                              MATER=RESSORT,),),
+                     AFFE_VARC=_F(NOM_VARC='TEMP',
+                                  EVOL=R_TREF,
+                                  VALE_REF=25.0,),);
+
+CHTMOY=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                  OPERATION='AFFE',
+                  MAILLAGE=MAIL,
+                  AFFE=_F(GROUP_MA='CF_all',
+                          NOM_CMP='TEMP',
+                          VALE=15.0,),);
+
+R_TMOY=CREA_RESU(OPERATION='AFFE',
+                 TYPE_RESU='EVOL_VARC',
+                 NOM_CHAM='TEMP',
+                 AFFE=(
+                 _F(CHAM_GD=CH_TREF,
+                    CARA_ELEM=TUYAU,
+                    INST=0.0,),
+                 _F(CHAM_GD=CHTMOY,
+                    CARA_ELEM=TUYAU,
+                    INST=1.0,),
+                 _F(CHAM_GD=CHTMOY,
+                    CARA_ELEM=TUYAU,
+                    INST=2.0,),),);
+
+M_TMOY=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=(_F(GROUP_MA='CF_all',
+                              MATER=ACIER,),
+                           _F(GROUP_MA='pilette',
+                              MATER=RESSORT,),),
+                     AFFE_VARC=_F(NOM_VARC='TEMP',
+                                  EVOL=R_TMOY,
+                                  VALE_REF=25.0,),);
+
+COND_LIM=AFFE_CHAR_MECA(MODELE=MODE,
+                        DDL_IMPO=(_F(GROUP_NO='No_amont',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,
+                                     DRX=0.0,
+                                     DRY=0.0,
+                                     DRZ=0.0,),
+                                  _F(GROUP_NO='No_aval',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,
+                                     DRX=0.0,
+                                     DRY=0.0,
+                                     DRZ=0.0,),
+                                  _F(GROUP_NO='ancrage',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,),
+                                  _F(GROUP_MA='massif',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,
+                                     DRX=0.0,
+                                     DRY=0.0,
+                                     DRZ=0.0,),),);
+
+GRAV=AFFE_CHAR_MECA(MODELE=MODE,
+                    PESANTEUR=_F(GRAVITE=9.81,
+                                 DIRECTION=(0.0,0.0,-1.0,),),);
+
+EAU=AFFE_CHAR_MECA(MODELE=MODE,
+                   FORCE_POUTRE=_F(GROUP_MA='CF_all',
+                                   TYPE_CHARGE='FORCE',
+                                   FZ=-22266.7447907,),);
+
+FPSTAT=DEFI_FONCTION(
+                     NOM_PARA='Z',
+                     VALE=(-10.0 ,98100.0 ,
+                           0.0 ,0.0 ,),
+                     INTERPOL=('LIN','LIN',),
+                     PROL_DROITE='LINEAIRE',
+                     PROL_GAUCHE='LINEAIRE',);
+
+PSTAT=AFFE_CHAR_MECA_F(MODELE=MODE,
+                       FORCE_TUYAU=_F(GROUP_MA='CF_all',
+                                      PRES=FPSTAT,),);
+
+F_SURP = FORMULE(VALE='ABSC*9.81*1000.',
+                 NOM_PARA='ABSC',)
+
+SURP=AFFE_CHAR_MECA_F(MODELE=MODE,
+                      FORCE_TUYAU=_F(GROUP_MA='CF_all',
+                                     PRES=F_SURP,),);
+
+CFP_TMOY=STAT_NON_LINE(MODELE=MODE,
+                       CHAM_MATER=M_TMOY,
+                       CARA_ELEM=TUYAU,
+                       EXCIT=(_F(CHARGE=COND_LIM,),
+                              _F(CHARGE=GRAV,
+                                 FONC_MULT=L_GRAV,),
+                              _F(CHARGE=EAU,
+                                 FONC_MULT=L_RAMP,),
+                              _F(CHARGE=PSTAT,
+                                 FONC_MULT=L_RAMP,),
+                              _F(CHARGE=SURP,
+                                 FONC_MULT=L_RAMP,),),
+                       COMPORTEMENT=(_F(GROUP_MA='pilette',
+                                        RELATION='DIS_CHOC',),
+                                     _F(GROUP_MA='CF_all',
+                                        RELATION='ELAS',),),
+                       INCREMENT=_F(LIST_INST=L_INST2,),
+                       NEWTON=_F(REAC_INCR=1,
+                                 MATRICE='TANGENTE',
+                                 REAC_ITER=1,),);
+
+CFP_TMOY=CALC_CHAMP(reuse =CFP_TMOY,
+                    RESULTAT=CFP_TMOY,
+                    INST=2.0,
+                    GROUP_MA='CF_all',
+                    CONTRAINTE=('SIGM_ELNO','SIGM_ELGA',),
+                    CRITERES='SIEQ_ELGA',);
+
+CFP_TMOY=CALC_CHAMP(reuse =CFP_TMOY,
+                    RESULTAT=CFP_TMOY,
+                    INST=2.0,
+                    GROUP_MA='pilette',
+                    CONTRAINTE='EFGE_ELNO',
+                    FORCE='REAC_NODA',);
+
+DEPL4=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                              INTITULE='Deplacement ',
+                              RESULTAT=CFP_TMOY,
+                              NOM_CHAM='DEPL',
+                              INST=2.0,
+                              GROUP_NO='abs_curv',
+                              NOM_CMP=('DX','DY','DZ',),),);
+
+TA_DEPL=CREA_TABLE(LISTE=(_F(PARA='ABSC_CURV',
+                             LISTE_R=(1.0,2.0,3.0,4.0,),),
+                          _F(PARA='--',
+                             LISTE_K=('--','--','--','--',),),
+                          _F(PARA='DZ-CFP-TMOY',
+                             LISTE_R=(1.0,2.0,3.0,4.0,),),),);
+
+IMPR_TABLE(TABLE=TA_DEPL,
+           FORMAT='TABLEAU',
+           UNITE=8,
+           SEPARATEUR=';',
+           COMMENTAIRE='#',
+           COMM_PARA=
+"""Deplacements de la CF - Depl X - Depl Y - Depl Z - et module - selon l abscisse curviligne pour les differents cas de charge;
+""",);
+
+DETRUIRE(CONCEPT=_F(NOM=TA_DEPL,),
+         INFO=1,);
+
+VMIS4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                         NOM_CHAM='SIEQ_ELGA',
+                         INST=2.0,
+                         NOM_CMP='VMIS',
+                         GROUP_MA='CF_all',),);
+
+TRESCA4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                           NOM_CHAM='SIEQ_ELGA',
+                           INST=2.0,
+                           NOM_CMP='TRESCA',
+                           GROUP_MA='CF_all',),);
+
+DETRUIRE(CONCEPT=(_F(NOM=TRESCA4,),
+                  _F(NOM=VMIS4,),),
+         INFO=1,);
+
+SIXXMAX4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                            NOM_CHAM='SIGM_ELGA',
+                            INST=2.0,
+                            NOM_CMP='SIXX',
+                            GROUP_MA='CF_all',),);
+
+SIYYMAX4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                            NOM_CHAM='SIGM_ELGA',
+                            INST=2.0,
+                            NOM_CMP='SIYY',
+                            GROUP_MA='CF_all',),);
+
+P_ANG=POST_CHAMP(RESULTAT=CFP_TMOY,
+                 INST=2.0,
+                 GROUP_MA='CF_all',
+                 EXTR_TUYAU=_F(NOM_CHAM='SIGM_ELGA',
+                               NUME_COUCHE=1,
+                               NIVE_COUCHE='SUP',
+                               ANGLE=45,),);
+
+T_ANG=CREA_TABLE(RESU=_F(RESULTAT=P_ANG,
+                         NOM_CHAM='SIGM_ELGA',
+                         INST=2.0,
+                         NOM_CMP=('SIXX','SIYY',),
+                         GROUP_MA='CF_all',),);
+
+PIL4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                        NOM_CHAM='EFGE_ELNO',
+                        INST=2.0,
+                        TOUT_CMP='OUI',
+                        GROUP_MA='pilette',),);
+
+PIL_G_4=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                           NOM_CHAM='REAC_NODA',
+                           INST=2.0,
+                           NOM_CMP=('DX','DY','DZ',),
+                           GROUP_NO='ancrage',),);
+
+CFP_TMOY=CALC_CHAMP(reuse =CFP_TMOY,
+                    RESULTAT=CFP_TMOY,
+                    INST=2.0,
+                    GROUP_MA='CF_all',
+                    FORCE='REAC_NODA',);
+
+MASS=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                             INTITULE='Massif-CFP-TMOY',
+                             RESULTAT=CFP_TMOY,
+                             NOM_CHAM='REAC_NODA',
+                             INST=2.0,
+                             GROUP_NO='No_amont',
+                             RESULTANTE=('DX','DY','DZ',),
+                             MOMENT=('DRX','DRY','DRZ',),
+                             POINT=(0.0,0.0,0.0,),
+                             REPERE='GLOBAL',),);
+
+IMPR_TABLE(TABLE=MASS,
+           UNITE=12,
+           NOM_PARA=('INTITULE','RESULT_X','RESULT_Y','RESULT_Z','MOMENT_X','MOMENT_Y','MOMENT_Z',),
+           SEPARATEUR=';',
+           COMM_PARA='Torseur du massif ',);
+
+FVM4=DEFI_FONCTION(
+                   NOM_PARA='ABSC',
+                   ABSCISSE=(1.0,2.0,3.0,4.0,),
+                   ORDONNEE=(10.0,20.0,30.0,40.0,),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',
+                   VERIF='NON',);
+
+ABS_GAUS=DEFI_LIST_REEL(VALE=(1.0,2.0,3.0,4.0,),);
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              PILOTE='',
+              UNITE=54,
+              COURBE=_F(FONCTION=FVM4,
+                        LIST_PARA=ABS_GAUS,
+                        LEGENDE='CFP-TMOY',
+                        COULEUR=4,
+                        MARQUEUR=0,
+                        FREQ_MARQUEUR=0,),
+              TITRE='Contrainte de Von Mises Maxi',
+              BORNE_Y=(0.0,10000.0,),
+              LEGENDE_X='Abscisse curviligne de la CF',
+              LEGENDE_Y='Vmis Max',);
+
+IMPR_RESU(FORMAT='MED',
+          UNITE=80,
+          RESU=_F(RESULTAT=CFP_TMOY,
+                  NOM_CHAM='DEPL',
+                  INST=2.0,
+                  NOM_CMP=('DX','DY','DZ',),
+                  NOM_RESU_MED='CFP_TMOY',),);
+
+TOTO=CREA_TABLE(RESU=_F(RESULTAT=CFP_TMOY,
+                        NOM_CHAM='DEPL',
+                        INST=2.0,
+                        TOUT_CMP='OUI',
+                        GROUP_NO='abs_curv',),);
+
+IMPR_TABLE(TABLE=TOTO,
+           UNITE=8,
+           SEPARATEUR=';',);
+
+#### TEST SUR LES RESULTATS #####
+
+
+TEST_RESU(RESU=(_F(RESULTAT=CFP_TMOY,
+                   NUME_ORDRE=2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   NOEUD='N1',
+                   CRITERE='RELATIF',
+                   VALE_CALC=0.000221865632786,),
+                _F(RESULTAT=CFP_TMOY,
+                   NUME_ORDRE=2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='WO',
+                   NOEUD='N1',
+                   CRITERE='RELATIF',
+                   VALE_CALC=-0.000115524385573,),
+                _F(RESULTAT=CFP_TMOY,
+                   NUME_ORDRE=2,
+                   NOM_CHAM='SIEQ_ELGA',
+                   NOM_CMP='TRESCA',
+                   MAILLE='M4',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   CRITERE='RELATIF',
+                   VALE_CALC=32614582.7879,),
+                _F(RESULTAT=CFP_TMOY,
+                   NUME_ORDRE=2,
+                   NOM_CHAM='SIEQ_ELGA',
+                   NOM_CMP='VMIS',
+                   MAILLE='M4',
+                   POINT=1,
+                   SOUS_POINT=1,
+                   CRITERE='RELATIF',
+                   VALE_CALC=29972121.8432,),
+                _F(RESULTAT=CFP_TMOY,
+                   NUME_ORDRE=2,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DZ',
+                   NOEUD='N4',
+                   CRITERE='RELATIF',
+                   VALE_CALC=-2200417.99324,),),);
+
+FIN();

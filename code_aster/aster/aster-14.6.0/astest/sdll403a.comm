@@ -1,0 +1,227 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ELEMENTS  : HEXA20
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=7.E10,
+                            NU=0.3,
+                            RHO=2700.0,),);
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MATER=AFFE_MATERIAU(MAILLAGE=MAYA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=ACIER,),);
+
+STRUCTUR=AFFE_MODELE(MAILLAGE=MAYA,
+                     AFFE=(_F(GROUP_MA='VOLUME',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),
+                           _F(GROUP_MA='FACES',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),),);
+# CONDITIONS AUX LIMITES
+
+CHARGE_1=AFFE_CHAR_MECA(MODELE=STRUCTUR, INFO=2,
+                        PESANTEUR=_F(GRAVITE=-9.81,
+                                     DIRECTION=(0.0,0.0,1.0,),),
+                        ROTATION= _F(VITESSE=10.0,
+                                     AXE=(0.0,0.0,1.0,),),
+                        DDL_IMPO=(_F(GROUP_NO='POINT_A',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,),
+                                  _F(NOEUD='NO000697',
+                                     DY=0.0,
+                                     DZ=0.0,),
+                                  _F(NOEUD='NO000001',
+                                     DY=0.0,),),
+                        LIAISON_SOLIDE=_F(GROUP_MA='FACES', DIST_MIN=3.e-5),);
+#
+# CALCUL STATIQUE
+
+RESU=MECA_STATIQUE(MODELE=STRUCTUR,INFO=2,
+                   CHAM_MATER=MATER,
+                   SOLVEUR=_F(POSTTRAITEMENTS='MINI'),
+                   EXCIT=_F(CHARGE=CHARGE_1,),);
+
+#
+# CALCUL DU CHAMP DE CONTRAINTES
+
+SIGMA=CREA_CHAMP( OPERATION='EXTR',
+                  TYPE_CHAM='ELGA_SIEF_R',
+                  RESULTAT=RESU, NUME_ORDRE=1,
+                  NOM_CHAM='SIEF_ELGA' )
+
+CHARGE_2=AFFE_CHAR_MECA(MODELE=STRUCTUR,
+                        PESANTEUR=_F(GRAVITE=-9.81,
+                                     DIRECTION=(0.0,0.0,1.0,),),
+                        ROTATION= _F(VITESSE=10.0,
+                                     AXE=(0.0,0.0,1.0,),),
+                        DDL_IMPO=(_F(GROUP_NO='POINT_A',
+                                     DX=0.0,
+                                     DY=0.0,
+                                     DZ=0.0,),
+                                  _F(NOEUD='NO000697',
+                                     DY=0.0,),
+                                  _F(NOEUD='NO000001',
+                                     DY=0.0,),),
+                        LIAISON_SOLIDE=_F(GROUP_MA='FACES', DIST_MIN=3.e-5),);
+#
+# CALCUL DES MATRICES ELEMENTAIRES POUR LE CALCUL MODAL
+
+KS_ELEM=CALC_MATR_ELEM(OPTION='RIGI_GEOM',
+                       MODELE=STRUCTUR,
+                       SIEF_ELGA=SIGMA,);
+
+K2_ELEM=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                       MODELE=STRUCTUR,
+                       CHAM_MATER=MATER,
+                       CHARGE=CHARGE_2,);
+
+KR_ELEM=CALC_MATR_ELEM(OPTION='RIGI_ROTA',
+                       MODELE=STRUCTUR,
+                       CHAM_MATER=MATER,
+                       CHARGE=CHARGE_2,);
+
+M_ELEM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=STRUCTUR,
+                      CHAM_MATER=MATER,
+                      CHARGE=CHARGE_2,);
+#
+# NUMEROTATION POUR LE CALCUL MODAL
+
+NUMERO_2=NUME_DDL(MATR_RIGI=(K2_ELEM,KS_ELEM,KR_ELEM),
+                  );
+#
+# ASSEMBLAGE DE LA MATRICE DE RAIDEUR STATIQUE KTOT = K + KW
+
+K2_ASSE=ASSE_MATRICE(MATR_ELEM=K2_ELEM,
+                     NUME_DDL=NUMERO_2,);
+
+KS_ASSE=ASSE_MATRICE(MATR_ELEM=KS_ELEM,
+                     NUME_DDL=NUMERO_2,);
+
+KR_ASSE=ASSE_MATRICE(MATR_ELEM=KR_ELEM,
+                     NUME_DDL=NUMERO_2,);
+
+K_MODAL=COMB_MATR_ASSE(COMB_R=(_F(MATR_ASSE=K2_ASSE,
+                                  COEF_R=1.0,),
+                               _F(MATR_ASSE=KR_ASSE,
+                                  COEF_R=1.0,),
+                               _F(MATR_ASSE=KS_ASSE,
+                                  COEF_R=1.0,),),);
+
+M_ASSE=ASSE_MATRICE(MATR_ELEM=M_ELEM,
+                    NUME_DDL=NUMERO_2,);
+
+MODE_1=CALC_MODES(MATR_RIGI=K_MODAL,
+                  VERI_MODE=_F(SEUIL=0.0001,
+                               ),
+                  CALC_FREQ=_F(NMAX_FREQ=20,
+                               ),
+                  OPTION='PLUS_PETITE',
+                  SOLVEUR=_F(METHODE='MUMPS',
+                             ),
+                  MATR_MASS=M_ASSE,
+                  )
+
+#----------------------------------------------------------------------
+# pour tester la possibilite d'imprimer un MODE_MECA au format 'IDEAS'
+# et de poursuivre la calcul apres l'avoir relu :
+#----------------------------------------------------------------------
+
+IMPR_RESU( FORMAT='IDEAS',UNITE=75,PROC0='NON',
+           RESU=_F(RESULTAT=MODE_1, ),);
+
+MODE_2=LIRE_RESU(TYPE_RESU='MODE_MECA',
+                 FORMAT='IDEAS',
+                 UNITE=75,
+                 NOM_CHAM='DEPL',
+                 MATR_RIGI=K_MODAL,
+                 MATR_MASS=M_ASSE,
+                 MODELE=STRUCTUR,
+                 FORMAT_IDEAS=_F(NOM_CHAM='DEPL',
+                                 NUME_DATASET=55,
+                                 RECORD_6=(1,2,3,8,2,6,),
+                                 POSI_ORDRE=(7,3,),
+                                 POSI_NUME_MODE=(7,4,),
+                                 POSI_MASS_GENE=(8,2,),
+                                 POSI_FREQ=(8,1,),
+                                 NOM_CMP=('DX','DY','DZ',),),
+                 TOUT_ORDRE='OUI',);
+#----------------------------------------------------------------------
+
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=1,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+# TOLE_MACHINE: Mauvais conditionnement de la matrice (1E+12)
+                   TOLE_MACHINE = 1.E-5,
+                   VALE_CALC=1.75979,
+                   VALE_REFE=1.75,
+                   CRITERE='RELATIF',
+                   PRECISION=6.0E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+                   VALE_CALC=100.272,
+                   VALE_REFE=100.2,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=6,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+                   VALE_CALC=324.649,
+                   VALE_REFE=324.0,
+                   CRITERE='RELATIF',
+                   PRECISION=3.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=9,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+                   VALE_CALC=677.147,
+                   VALE_REFE=674.39999999999998,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=12,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+                   VALE_CALC=1157.79,
+                   VALE_REFE=1150.0,
+                   CRITERE='RELATIF',
+                   PRECISION=7.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=15,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODE_2,
+                   VALE_CALC=1766.73,
+                   VALE_REFE=1748.0,
+                   CRITERE='RELATIF',
+                   PRECISION=0.010999999999999999,),
+                ),
+          );
+
+
+FIN();

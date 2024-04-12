@@ -1,0 +1,197 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#  - ANALYSE DYNAMIQUE D'UNE TUYAUTERIE TRIDIMENSIONNELLE COMPORTANT
+#    DES COUDES
+#  - MODELISATION AVEC DES ELEMENTS 'TUYAU'
+#    (SEG4 ; 3 MODES DE FOURIER)
+#---------------------------------------------------------------------
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+#
+MA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MAIL=CREA_MAILLAGE(     MAILLAGE=MA,
+                 MODI_MAILLE=_F(  OPTION = 'SEG3_4', TOUT = 'OUI')
+                 )
+
+#
+MO=AFFE_MODELE(   MAILLAGE=MAIL,
+                        AFFE=_F( TOUT = 'OUI',
+                              PHENOMENE = 'MECANIQUE',
+                              MODELISATION = 'TUYAU_3M')
+                  )
+
+#
+#---------------------------------------------------------------------
+#                     CARACTERISTIQUES ELEMENTAIRES
+#---------------------------------------------------------------------
+#
+CAR_ELE=AFFE_CARA_ELEM(        MODELE=MO,
+                                 POUTRE=_F( GROUP_MA = 'TOUT_ELT',
+                                         SECTION = 'CERCLE',
+                                         CARA = ('R', 'EP',),
+                                         VALE = (0.0925, 0.00612,)),
+                            ORIENTATION=_F( GROUP_NO = 'C',
+                                         CARA = 'GENE_TUYAU',
+                                         VALE = (1., 0., 0.,))
+                          )
+
+#
+#---------------------------------------------------------------------
+#                     CARACTERISTIQUES MATERIAUX
+#---------------------------------------------------------------------
+#
+MAT=DEFI_MATERIAU(   ELAS=_F( E = 1.658E+11,
+                             NU = 0.3,
+                             RHO = 13404.106)
+                     )
+
+#
+AFFMAT=AFFE_MATERIAU(   MAILLAGE=MAIL,
+                              AFFE=_F( TOUT = 'OUI', MATER = MAT)
+                        )
+
+#
+#---------------------------------------------------------------------
+#                     CHARGEMENTS
+#---------------------------------------------------------------------
+#
+CHAR=AFFE_CHAR_MECA(     MODELE=MO,
+                         DDL_IMPO=_F( GROUP_NO = ('H','C',),
+                                   DX = 0.,  DY = 0., DZ = 0.,
+                                   DRX = 0.,  DRY = 0., DRZ = 0.,
+                                   UI2 = 0., VI2 = 0., WI2 = 0.,
+                                   UO2 = 0., VO2 = 0., WO2 = 0.,
+                                   UI3 = 0., VI3 = 0., WI3 = 0.,
+                                   UO3 = 0., VO3 = 0., WO3 = 0.,
+                                   WI1 = 0., WO1 = 0., WO = 0.)
+                       )
+
+#
+#---------------------------------------------------------------------
+#                        RESOLUTION
+#---------------------------------------------------------------------
+#
+ASSEMBLAGE(      MODELE=MO,
+                    CARA_ELEM=CAR_ELE,
+                   CHAM_MATER=AFFMAT,
+                       CHARGE=CHAR,
+                     NUME_DDL=CO("NU"),
+                      MATR_ASSE=(
+                    _F(  MATRICE = CO("K"),  OPTION = 'RIGI_MECA'),
+                    _F(  MATRICE = CO("M"),  OPTION = 'MASS_MECA')),
+                        TITRE='MAT_ASSE'
+                 )
+
+#
+MODES=CALC_MODES(MATR_RIGI=K,
+                 OPTION='PLUS_PETITE',
+                 CALC_FREQ=_F(NMAX_FREQ=9,
+                              ),
+                 MATR_MASS=M,
+                 SOLVEUR_MODAL=_F(METHODE='TRI_DIAG',
+                                  ),
+                 )
+
+#
+#---------------------------------------------------------------------
+#                        VERIFICATION DES RESULTATS
+#---------------------------------------------------------------------
+#
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=10.508321738,
+                   VALE_REFE=10.390000000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=20.283690603,
+                   VALE_REFE=20.02,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=25.865715511,
+                   VALE_REFE=25.449999999999999,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=48.937012340,
+                   VALE_REFE=48.32,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=53.030430619,
+                   VALE_REFE=52.600000000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=85.387289806,
+                   VALE_REFE=84.810000000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=87.996708735,
+                   VALE_REFE=87.159999999999997,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=130.580928078,
+                   VALE_REFE=129.31,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=9,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=133.162677466,
+                   VALE_REFE=131.69,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=0.02,),
+                ),
+          )
+
+#
+FIN()
+#
+#

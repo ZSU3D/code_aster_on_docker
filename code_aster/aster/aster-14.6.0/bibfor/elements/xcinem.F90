@@ -1,0 +1,228 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine xcinem(axi, igeom, nnop, nnos, idepl, grand,&
+                  ndim, he,&
+                  nfiss, nfh, nfe, ddls, ddlm,&
+                  fk, dkdgl, ff, dfdi, f,&
+                  eps, grad, heavn)
+!
+!
+! aslint: disable=W1504
+    implicit none
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "asterfort/indent.h"
+#include "asterfort/matini.h"
+#include "asterfort/vecini.h"
+#include "asterfort/xcalc_heav.h"
+#include "asterfort/xcalc_code.h"
+#include "asterfort/assert.h"
+!
+    aster_logical, intent(in) :: axi
+    integer, intent(in) :: igeom
+    integer, intent(in) :: nnop
+    integer, intent(in) :: nnos
+    integer, intent(in) :: idepl
+    aster_logical, intent(in) :: grand
+    integer, intent(in) :: ndim
+    integer, intent(in) :: nfiss
+    real(kind=8), intent(in) :: he(nfiss)
+    integer, intent(in) :: nfh
+    integer, intent(in) :: nfe
+    integer, intent(in) :: ddls
+    integer, intent(in) :: ddlm
+    integer, intent(in) :: heavn(nnop, 5)
+    real(kind=8), intent(in)::  fk(27,3,3)
+    real(kind=8), intent(in)::  dkdgl(27,3,3,3)
+    real(kind=8), intent(in) :: ff(nnop)
+    real(kind=8), intent(in) :: dfdi(nnop, ndim)
+    real(kind=8), intent(out) :: f(3, 3)
+    real(kind=8), intent(out) :: eps(6)
+    real(kind=8), intent(out) :: grad(ndim, ndim)
+!
+! ----------------------------------------------------------------------
+!
+! X-FEM : CALCUL DES ELEMENTS CINEMATIQUES F, EPS ET GRAD CONNAISSANT 
+!         FF ET DFDI (VALEURS DES FF CLASSIQUES ET DE LEUR DERIVEES DANS 
+!         LE REPERE DE REFERENCE PREALABLEMENT CALCULEES AVEC REEREF)
+!
+! ----------------------------------------------------------------------
+!
+!
+! IN   AXI   : INDIQUER POUR MODEL AXIS
+! IN  NNOP   : NOMBRE DE NOEUDS DE L'ELT DE RÉF PARENT
+!   L'ORDRE DES DDLS DOIT ETRE 'DC' 'H1' 'E1' 'E2' 'E3' 'E4' 'LAGC'
+! IN  DEPL   : DEPLACEMENT RÉEL À PARTIR DE LA CONF DE REF
+! IN  GRAND  : INDICATEUR SI GRANDES TRANSFORMATIONS
+!              SI GRAND = .FALSE.
+!                --> MATRICE F: UNITE
+!                --> DEFORMATION EPS PETITES
+! IN  NDIM   : DIMENSION DE L'ESPACE
+! IN  HE     : VALEUR DE LA FONCTION HEAVISIDE SUR LE SOUS-ÉLT
+! IN  R      : RADIUS POUR CALCULER EPSILON_33 POUR AXI
+! IN UR      : DEPLACEMNET RADIAL POUR CALCULER EPSILON_33 POUR AXI
+! IN  NFH    : NOMBRE DE FONCTIONS HEAVYSIDE (PAR NOEUD)
+! IN  NFE    : NOMBRE DE FONCTIONS SINGULIÈRES D'ENRICHISSEMENT
+! IN  DDLT   : NOMBRE DE DDLS TOTAL PAR NOEUD
+! IN  DKDGL  : DÉRIVÉES DES FONCTIONS D'ENRICHISSEMENT
+! IN  FF     : FONCTIONS DE FORMES EN XE
+! IN  DFDI   : DÉRIVÉES DES FONCTIONS DE FORMES EN XE
+! OUT F      : GRADIENT DE LA TRANSFORMATION
+! OUT EPS    : DÉFORMATIONS
+! OUT GRAD   : GRADIENT DES DÉPLACEMENTS
+! IN  HEAVN  : DEFINITION DES DOMAINES DES FONCTIONS HEAVISIDES
+!
+    real(kind=8) :: zero, un, rac2, r, ur
+    integer :: i, j, k, n, p, ig, cpt, nn, hea_se, alp
+    real(kind=8) :: kron(3, 3), tmp, epstab(3, 3)
+    aster_logical :: ldec
+!
+! ----------------------------------------------------------------------
+!
+!
+! --- INITIALISATIONS
+!
+    zero = 0.d0
+    un = 1.d0
+    rac2 = sqrt(2.d0)
+    hea_se=xcalc_code(nfiss, he_real=[he])
+    ASSERT(nfe.le.1)
+    r = 0.d0
+    ur = 0.d0
+!
+! --- MATRICE IDENTITE
+!
+    call matini(3, 3, zero, kron)
+    do 10 p = 1, 3
+        kron(p,p) = un
+ 10 continue
+!
+! --- CALCUL DES GRADIENTS : GRAD(U) ET F
+!
+    do 21 j = 1, 3
+        do 20 i = 1, 3
+            f(i,j) = kron(i,j)
+ 20     continue
+ 21 continue
+!
+    do 31 j = 1, ndim
+        do 30 i = 1, ndim
+            grad(i,j) = zero
+ 30     continue
+ 31 continue
+!
+    ldec=.false.
+    if (ddlm .eq. 0 .or. ddlm .eq. -1 .or. ddlm .eq. ddls) ldec=.true.
+!
+! --- L'ORDRE DES DDLS DOIT ETRE 'DC' 'H1' 'E1' 'E2' 'E3' 'E4' 'LAGC'
+!
+    do 402 n = 1, nnop
+        if (ldec) then
+! --- DDLM=-1 PERMET D'EVITER D'AVOIR A FOURNIR DDLM DANS CHAQUE CAS
+            nn=ddls*(n-1)
+        else
+            call indent(n, ddls, ddlm, nnos, nn)
+        endif
+!
+        cpt=0
+!
+! -- DDLS CLASSIQUES
+        do 403 i = 1, ndim
+            cpt = cpt+1
+            do 404 j = 1, ndim
+                grad(i,j) = grad(i,j) + dfdi(n,j) * zr(idepl-1+nn+cpt)
+404         continue
+403     continue
+        if(axi) then
+            r = r + ff(n) * zr(igeom-1+2*(n-1)+1)
+            ur = ur + ff(n) * zr(idepl-1+nn+1)
+        endif
+!
+! -- DDLS HEAVISIDE
+        do 405 ig = 1, nfh
+            do 406 i = 1, ndim
+                cpt = cpt+1
+                do 407 j = 1, ndim
+                    grad(i,j) = grad(i,j) +  xcalc_heav(heavn(n,ig),hea_se,heavn(n,5))&
+                            * dfdi(n, j) * zr(idepl-1+nn+cpt)
+407             continue
+406         continue
+            if(axi) then
+                ur = ur + ff(n) * zr(idepl-1+nn+ndim*ig+1) * xcalc_heav(&
+                          heavn(n,ig),hea_se,heavn(n,5))
+            endif
+405     continue
+!
+! -- DDL ENRICHIS EN FOND DE FISSURE
+        do 408 ig = 1, nfe
+            do 409 alp = 1, ndim
+                cpt = cpt+1
+                do 410 i = 1, ndim
+                  do 411 j = 1, ndim
+                    grad(i,j) = grad(i,j) + zr(idepl-1+nn+cpt) * dkdgl(n,alp,i,j)
+411               continue
+410             continue
+                if(axi) then
+                    ur = ur + zr(idepl-1+nn+cpt) * fk(n,alp,1)
+                endif
+409         continue
+408     continue
+!
+402 continue
+!
+    if(axi) then
+        ASSERT(r.gt.zero)
+    endif
+!
+    if (grand) then
+        do 421 j = 1, ndim
+            do 420 i = 1, ndim
+                f(i,j) = f(i,j) + grad(i,j)
+420          continue
+421      continue
+         if(axi) f(3,3) = 1.d0+ur/r
+    endif
+!
+! --- CALCUL DES DÉFORMATIONS : EPS
+!
+    do 430 i = 1, ndim
+        do 431 j = 1, i
+            tmp = grad(i,j) + grad(j,i)
+            if (grand) then
+                do 432 k = 1, ndim
+                    tmp = tmp + grad(k,i)*grad(k,j)
+432             continue
+            endif
+            epstab(i,j) = 0.5d0*tmp
+431     continue
+430 continue
+    call vecini(6, zero, eps)
+    eps(1) = epstab(1,1)
+    eps(2) = epstab(2,2)
+    eps(4) = epstab(2,1)*rac2
+    if (ndim .eq. 3) then
+        eps(3) = epstab(3,3)
+        eps(5) = epstab(3,1)*rac2
+        eps(6) = epstab(3,2)*rac2
+    else if (axi) then
+        eps(3) = ur/r
+        if(grand) eps(3) = eps(3)+0.5d0*ur*ur/(r*r)
+    endif
+!
+end subroutine

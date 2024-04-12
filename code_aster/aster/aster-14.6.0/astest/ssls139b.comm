@@ -1,0 +1,168 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),)
+
+#
+# -------------------------------------------------
+# MISE EN DONNEES
+# -------------------------------------------------
+#
+
+import math
+
+#  Parametres geometriques
+pas      = 0.1
+diametre = 0.02
+section  = math.pi*diametre**2/4.
+
+# Comportement du beton et de l'acier
+E_A    = 200.E9
+NU_A   = 0.3
+E_B    = 30.E9
+NU_B   = 0.22
+
+MA_B=DEFI_MATERIAU(ELAS =_F(E  = E_B,
+                            NU = NU_B,),)
+
+MA_A=DEFI_MATERIAU(ELAS =_F(E  = E_A,
+                            NU = NU_A,),)
+
+MA_0=LIRE_MAILLAGE(FORMAT    = 'MED',);
+
+MAIL=CREA_MAILLAGE(MAILLAGE      = MA_0,
+                   CREA_MAILLE =_F(NOM         = 'MEMBRA_T',
+                                     GROUP_MA    = 'MEMBRA',
+                                     PREF_MAILLE = 'T_',),);
+
+MODE=AFFE_MODELE(MAILLAGE = MAIL,
+                 AFFE     = (_F(GROUP_MA    = ('BETON','BOUT'),
+                               PHENOMENE    = 'MECANIQUE',
+                               MODELISATION = '3D'),
+                             _F(GROUP_MA    = ('MEMBRA','MEMBRA_T'),
+                               PHENOMENE    = 'MECANIQUE',
+                               MODELISATION = 'GRILLE_MEMBRANE')))
+
+MATE=AFFE_MATERIAU(MAILLAGE = MAIL,
+                   AFFE     = (_F(GROUP_MA = ('MEMBRA','MEMBRA_T'),
+                                  MATER    = MA_A,),
+                               _F(GROUP_MA = 'BETON',
+                                  MATER    = MA_B,)));
+
+CL_DEPL=AFFE_CHAR_CINE(MODELE   = MODE,
+                       MECA_IMPO =(_F(GROUP_MA = 'ENCAST',
+                                      DX = 0.,
+                                      DY = 0.,
+                                      DZ = 0.),
+                                   _F(GROUP_MA = 'BORDS',
+                                      DY = 0.)),);
+
+# Couple de 400 N.m exerce en bout de plaque
+F_FORCE = FORMULE(VALE='((Z-0.08)/0.08)*937500.',
+                  NOM_PARA='Z',)
+
+COUPLE=AFFE_CHAR_MECA_F(MODELE   = MODE,
+                      FORCE_FACE = _F(GROUP_MA = 'BOUT',
+                                      FX       = F_FORCE))
+
+ORI_GRIL=AFFE_CARA_ELEM(MODELE = MODE,
+                        GRILLE =(_F(GROUP_MA   = 'MEMBRA',
+                                    SECTION    = section/pas,
+                                    ANGL_REP_1 = (0., 0.,),),
+                                _F(GROUP_MA    = 'MEMBRA_T',
+                                    SECTION    = section/pas,
+                                    ANGL_REP_1 = (90., 0.,),),));
+
+#
+# ----------------------------------------------
+# CALCUL
+# ----------------------------------------------
+#
+
+RESU = MECA_STATIQUE(MODELE        = MODE,
+                     CHAM_MATER    = MATE,
+                     CARA_ELEM     = ORI_GRIL,
+                     EXCIT         =(_F(CHARGE = CL_DEPL),
+                                     _F(CHARGE = COUPLE)),
+                     SOLVEUR       = _F(METHODE = 'MUMPS'
+                                       ),)
+
+#
+# ----------------------------------------------
+# POST-TRAITEMENT
+# ----------------------------------------------
+#
+
+RESU = CALC_CHAMP(RESULTAT    = RESU,
+                  reuse       = RESU,
+                  GROUP_MA    = ('MEMBRA'),
+                  DEFORMATION = 'EPSI_NOEU',
+                  CONTRAINTE  = 'SIEF_NOEU')
+
+#
+# ----------------------------------------------
+# TESTS SUR LES RESULTATS
+# ----------------------------------------------
+#
+
+# Deplacement vertical en bout de plaque
+# (comparaison a la solution 3D de reference et test de non-regression)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='POINT_1',
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-8.39637862664E-05,
+                   VALE_REFE=-8.7100000000000003E-05,
+                   PRECISION=0.040000000000000001,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='POINT_1',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-8.39637862664E-05,
+                   
+                   ),
+                ),
+          )
+
+# Contrainte et deformation dans la grille (non-regression)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='POINT_2',
+                   RESULTAT=RESU,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOM_CMP='EXX',
+                   VALE_CALC=5.64030196185E-06,
+                   
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='POINT_2',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIEF_NOEU',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=1128060.39237,
+                   
+                   ),
+                ),
+          )
+
+FIN();

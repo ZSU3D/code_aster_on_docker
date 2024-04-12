@@ -1,0 +1,216 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=1e9,
+                            NU=0.2,),);
+
+L_TPS=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=1.0,
+                                   NOMBRE=1,),);
+
+L_ARCH=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                   NOMBRE=1,),);
+
+# MODELISATION DKT
+
+MO0=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='DKT',),);
+
+MOMAT0=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),);
+
+CARA0=AFFE_CARA_ELEM(MODELE=MO0,
+                     COQUE=_F(EPAIS=1.,
+                              GROUP_MA='FACE'),);
+
+AX=0.0
+AY=0.0
+AZ=0.0
+ARX=0.0
+ARY=0.0
+ARZ=0.0
+BX=1.E-3
+BY=0.0
+BZ=0.0
+CX=2.E-3
+CY=-2.E-3
+CZ=0.0
+DX=1.E-3
+DY=-2.E-3
+DZ=0.0
+
+BLOC0=AFFE_CHAR_MECA(MODELE=MO0,
+                       DDL_IMPO=(_F(GROUP_NO='A',
+                                    DX=AX,
+                                    DY=AY,
+                                    DZ=AZ,
+                                    DRX=ARX,
+                                    DRY=ARY,
+                                    DRZ=ARZ,),
+                                 _F(GROUP_NO='B',
+                                    DX=BX,
+                                    DY=BY,
+                                    DZ=BZ,),
+                                 _F(GROUP_NO='C',
+                                    DX=CX,
+                                    DY=CY,
+                                    DZ=CZ,),
+                                 _F(GROUP_NO='D',
+                                    DX=DX,
+                                    DY=DY,
+                                    DZ=DZ,),),);
+
+U0=STAT_NON_LINE(MODELE=MO0,
+                CARA_ELEM=CARA0,
+                CHAM_MATER=MOMAT0,
+                EXCIT=_F(CHARGE=BLOC0,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_TPS,),
+                ARCHIVAGE=_F(LIST_INST=L_ARCH,),);
+
+U0=CALC_CHAMP(reuse = U0, ENERGIE='ENEL_ELEM', RESULTAT=U0, );
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U0,
+                  NOM_CHAM='ENEL_ELEM',
+                  NOM_CMP='TOTALE',
+                  VALE_REFE=2395.833333,
+                  VALE_CALC=2395.833333,
+                  MAILLE='M5',),);
+
+# MODELISATION DKTG
+
+MO1=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKTG',),);
+
+MOMAT1=AFFE_MATERIAU(MAILLAGE=MA,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=MAT,),);
+
+CARA1=AFFE_CARA_ELEM(MODELE=MO1,
+                     COQUE=_F(EPAIS=1.,
+                              GROUP_MA='FACE'),);
+
+BLOC1=AFFE_CHAR_MECA(MODELE=MO1,
+                       DDL_IMPO=(_F(GROUP_NO='A',
+                                    DX=AX,
+                                    DY=AY,
+                                    DZ=AZ,
+                                    DRX=ARX,
+                                    DRY=ARY,
+                                    DRZ=ARZ,),
+                                 _F(GROUP_NO='B',
+                                    DX=BX,
+                                    DY=BY,
+                                    DZ=BZ,),
+                                 _F(GROUP_NO='C',
+                                    DX=CX,
+                                    DY=CY,
+                                    DZ=CZ,),
+                                 _F(GROUP_NO='D',
+                                    DX=DX,
+                                    DY=DY,
+                                    DZ=DZ,),),);
+
+U1=STAT_NON_LINE(MODELE=MO1,
+                CARA_ELEM=CARA1,
+                CHAM_MATER=MOMAT1,
+                EXCIT=_F(CHARGE=BLOC1,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_TPS,),
+                ARCHIVAGE=_F(LIST_INST=L_ARCH,),);
+
+U1=CALC_CHAMP(reuse = U1, ENERGIE='ENEL_ELEM', RESULTAT=U1, );
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U1,
+                  NOM_CHAM='ENEL_ELEM',
+                  NOM_CMP='TOTALE',
+                  VALE_REFE=2395.833333,
+                  VALE_CALC=2395.833333,
+                  MAILLE='M5',),);
+
+# MODELISATION Q4GG
+
+MO2=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='Q4GG',),);
+
+MOMAT2=AFFE_MATERIAU(MAILLAGE=MA,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=MAT,),);
+
+CARA2=AFFE_CARA_ELEM(MODELE=MO2,
+                     COQUE=_F(EPAIS=1.,
+                              GROUP_MA='FACE'),);
+
+BLOC2=AFFE_CHAR_MECA(MODELE=MO2,
+                       DDL_IMPO=(_F(GROUP_NO='A',
+                                    DX=AX,
+                                    DY=AY,
+                                    DZ=AZ,
+                                    DRX=ARX,
+                                    DRY=ARY,
+                                    DRZ=ARZ,),
+                                 _F(GROUP_NO='B',
+                                    DX=BX,
+                                    DY=BY,
+                                    DZ=BZ,),
+                                 _F(GROUP_NO='C',
+                                    DX=CX,
+                                    DY=CY,
+                                    DZ=CZ,),
+                                 _F(GROUP_NO='D',
+                                    DX=DX,
+                                    DY=DY,
+                                    DZ=DZ,),),);
+
+U2=STAT_NON_LINE(MODELE=MO2,
+                CARA_ELEM=CARA2,
+                CHAM_MATER=MOMAT2,
+                EXCIT=_F(CHARGE=BLOC2,),
+                COMPORTEMENT=_F(RELATION='ELAS',),
+                INCREMENT=_F(LIST_INST=L_TPS,),
+                ARCHIVAGE=_F(LIST_INST=L_ARCH,),);
+
+U2=CALC_CHAMP(reuse = U2, ENERGIE='ENEL_ELEM', RESULTAT=U2, );
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=U2,
+                  NOM_CHAM='ENEL_ELEM',
+                  NOM_CMP='TOTALE',
+                  VALE_REFE=2395.833333,
+                  VALE_CALC=2395.833333,
+                  MAILLE='M5',),);
+
+FIN();

@@ -1,0 +1,143 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# MAILLAGE 1/4 DE LA PLAQUE
+#
+# MODELISATION DKT (TRIA3)
+#
+
+MATERI=DEFI_MATERIAU( ELAS=_F(  E = 210000.,     NU = 0.3000, ) )
+
+#
+
+MAILLA=LIRE_MAILLAGE(FORMAT='MED'  )
+
+MAILLA=DEFI_GROUP( reuse=MAILLA,   MAILLAGE=MAILLA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT',   TOUT = 'OUI',   ))
+
+#
+
+CH_MAT=AFFE_MATERIAU(  MAILLAGE=MAILLA,
+                            AFFE=_F(  TOUT = 'OUI',   MATER = MATERI,  ) )
+
+#
+
+MODELE=AFFE_MODELE(  MAILLAGE=MAILLA,
+                     AFFE=_F( TOUT = 'OUI', MODELISATION = 'DKT',
+                                PHENOMENE = 'MECANIQUE', ) )
+
+#
+
+CHARGE=AFFE_CHAR_MECA(MODELE=MODELE,DDL_IMPO=(
+                  _F( GROUP_NO = 'G_23', DZ = 0.,),
+                  _F( GROUP_NO = 'G_34', DZ = 0.,),
+                  _F( GROUP_NO = 'G_12', DY = 0., DRX = 0., DRZ = 0., ),
+                  _F( GROUP_NO = 'G_41', DX = 0., DRY = 0., DRZ = 0.,)),
+                  FORCE_ARETE=_F(  GROUP_MA = 'G_2233', FX = -1.,)
+#
+                  )
+
+CARAC=AFFE_CARA_ELEM(   MODELE=MODELE,
+                               COQUE=_F(
+       GROUP_MA = 'TOUT',
+  EPAIS = 5.,
+                                                             )
+                           )
+
+#
+RESU=MECA_STATIQUE(MODELE=MODELE,
+                   CHAM_MATER=CH_MAT,
+                   CARA_ELEM=CARAC,
+                   EXCIT=_F(CHARGE=CHARGE,),
+                   );
+#
+#
+####################################################################
+#
+###### ETAT DE CONTRAINTES
+#
+
+SIGMA=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=RESU, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' ),
+
+
+ASSEMBLAGE ( MODELE=MODELE,
+             CHAM_MATER=CH_MAT,
+             CARA_ELEM=CARAC,
+             CHARGE= (CHARGE,),
+             NUME_DDL= CO('NUMSTA'),
+             MATR_ASSE=(
+              _F( MATRICE= CO('MATASS'), OPTION= 'RIGI_MECA'),
+              _F( MATRICE= CO('RIGASG'), OPTION= 'RIGI_GEOM',SIEF_ELGA=SIGMA),),);
+
+
+MOD=CALC_MODES(MATR_RIGI=MATASS,
+               TYPE_RESU='MODE_FLAMB',
+               MATR_RIGI_GEOM=RIGASG,
+               CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=9,
+                                 ),
+               SOLVEUR_MODAL=_F(DIM_SOUS_ESPACE=30,
+                                ),
+               )
+
+#
+##### CHARGE CRITIQUE 1 ( MODE 1 ) = MODE 1 TOUTE LA PLAQUE
+#
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=1,
+                  RESULTAT=MOD,
+                  VALE_CALC=379.58559820275,
+                  VALE_REFE=379.60016927266759,
+                  REFERENCE='ANALYTIQUE',
+                  CRITERE='RELATIF',
+                  PRECISION=0.0001,),
+          )
+
+#
+##### CHARGE CRITIQUE 2 ( MODE 2 ) = MODE 3 TOUTE LA PLAQUE
+#
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=2,
+                  RESULTAT=MOD,
+                  VALE_CALC=1069.2758913517,
+                  VALE_REFE=1054.4449146462989,
+                  REFERENCE='ANALYTIQUE',
+                  CRITERE='RELATIF',
+                  PRECISION=0.02,),
+          )
+#
+##### CHARGE CRITIQUE 3 ( MODE 3 ) = MODE 5 TOUTE LA PLAQUE
+#
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=3,
+                  RESULTAT=MOD,
+                  VALE_CALC=2678.4186445318,
+                  VALE_REFE=2566.0971442832338,
+                  REFERENCE='ANALYTIQUE',
+                  CRITERE='RELATIF',
+                  PRECISION=0.05,),
+          )
+
+FIN()

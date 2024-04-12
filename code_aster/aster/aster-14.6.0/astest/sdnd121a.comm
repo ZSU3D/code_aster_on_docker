@@ -1,0 +1,252 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: harinaivo.andriambololona at edf.fr
+#
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),);
+
+MAILLA=LIRE_MAILLAGE(FORMAT='ASTER',);
+
+MODEL=AFFE_MODELE(MAILLAGE=MAILLA,
+                  AFFE=(_F(GROUP_MA='M_PATIN',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='DIS_T',),),);
+
+
+k_rappel = 2.E6 # ressort de rappel (N/m)
+m = 156         # masse du patin (kg)
+
+CARA_ELE=AFFE_CARA_ELEM(MODELE=MODEL,
+                        DISCRET=(_F(CARA='K_T_D_N',
+                                    GROUP_MA='M_PATIN',
+                                    VALE=(k_rappel,0.,0.,),),
+                                 _F(CARA='M_T_D_N',
+                                    GROUP_MA='M_PATIN',
+                                    VALE=m,),
+                                    ),);
+
+# Le patin ne se deplace que suivant X :
+CHAR_MEC=AFFE_CHAR_MECA(MODELE=MODEL,
+                        DDL_IMPO=_F(GROUP_MA='M_PATIN',
+                                    DY=0.,
+                                    DZ=0.,
+                                    ),);
+# Definition du chargement patin selon X :
+
+F_EXT=AFFE_CHAR_MECA(MODELE=MODEL,
+                     FORCE_NODALE=_F(GROUP_NO='N_PATIN',
+                                     FX=1.,),);
+
+# Calcul des matrices (raideur et masse, il n'y a pas
+# d'amortissement structural) et des vecteurs assembles:
+
+ASSEMBLAGE(MODELE=MODEL,
+                CARA_ELEM=CARA_ELE,
+                CHARGE=CHAR_MEC,
+                NUME_DDL=CO('NUM_DDL'),
+                MATR_ASSE=(_F(MATRICE=CO('K_ASSE'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('M_ASSE'),
+                              OPTION='MASS_MECA',),),
+                VECT_ASSE=(_F(VECTEUR=CO("F_ASSE"),
+                              OPTION='CHAR_MECA',
+                              CHARGE=F_EXT),),);
+
+
+# Calcul du mode associe au ressort de rappel :
+modes=CALC_MODES(MATR_RIGI=K_ASSE,
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=1,
+                              FREQ=50.,
+                              ),
+                 MATR_MASS=M_ASSE,
+                 )
+
+# Definition du chargement exterieur (force sinusoidale)
+f = 5 ;   # freq de l'excitation (Hz)
+Fa = 3.E3; # amplitude de l'excitation
+EXCIT = FORMULE(VALE='Fa*sin(2*pi*f*(INST))',
+                Fa=Fa,
+                f=f,
+                NOM_PARA='INST',)
+
+# Calcul des matrices generalisees :
+PROJ_BASE(BASE=modes,
+          STOCKAGE='DIAG',
+          MATR_ASSE_GENE=(_F(MATRICE=CO('M_GENE'),
+                             MATR_ASSE=M_ASSE,),
+                          _F(MATRICE=CO('K_GENE'),
+                             MATR_ASSE=K_ASSE,),),
+          VECT_ASSE_GENE=_F(VECTEUR=CO('F_GENE'),
+                            VECT_ASSE=F_ASSE, TYPE_VECT='FORC'),);
+
+
+# Definition de l'obstacle
+OBSTA_C=DEFI_OBSTACLE(TYPE='PLAN_Z',);
+kn_choc = 1.E10
+cn_choc = 0.
+jeu_choc = 1.E-3
+
+
+# Calcul transitoire (Euler puis Differences centrees)
+duree = 4.0
+pdt = 4.e-06
+pas_archi = 1
+
+# Schema d'Euler:
+DTMEULER=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                         MATR_MASS=M_GENE,
+                         MATR_RIGI=K_GENE,
+                         INCREMENT=_F(INST_INIT=0.,
+                                      INST_FIN=duree,
+                                      PAS=pdt,
+                                      ),
+                         ARCHIVAGE=_F(PAS_ARCH=pas_archi,),
+                         EXCIT=_F(VECT_ASSE_GENE=F_GENE,
+                                  FONC_MULT=EXCIT,),
+                         COMPORTEMENT=(
+                               _F(RELATION='DIS_CHOC',
+                                  GROUP_NO_1='N_PATIN',
+                                  OBSTACLE=OBSTA_C,
+                                  ORIG_OBST=(-0.5,0.,0.,),
+                                  NORM_OBST=(0.,0.,1.,),
+                                  JEU=(0.5+jeu_choc),
+                                  RIGI_NOR=kn_choc,
+                                  AMOR_NOR=cn_choc,
+                                 ),
+                               ),
+                        );
+
+# Schema des differences centrees ('ADAPT' a pas constant):
+DTMADAPT=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+# ON IMPOSE PAS_MAXI = PAS POUR RETROUVER LES ANCIENS RESULTATS
+# POUR AMELIORER LE TEMPS CPU IL VAUT MIEUX TESTER AVEC UN PAS_MAXI PLUS GRAND
+                                      PAS_MAXI=pdt,
+                                      COEF_MULT_PAS=1.0,
+                                      COEF_DIVI_PAS=1.0,),
+                         MATR_MASS=M_GENE,
+                         MATR_RIGI=K_GENE,
+                         INCREMENT=_F(INST_INIT=0.,
+                                      INST_FIN=duree,
+                                      PAS=pdt,
+                                      ),
+                         ARCHIVAGE=_F(
+                                      PAS_ARCH=pas_archi,
+                                      ),
+                         EXCIT=_F(VECT_ASSE_GENE=F_GENE,
+                                  FONC_MULT=EXCIT,),
+                         COMPORTEMENT=(
+                               _F(RELATION='DIS_CHOC',
+                                  GROUP_NO_1='N_PATIN',
+                                  OBSTACLE=OBSTA_C,
+                                  ORIG_OBST=(-0.5,0.,0.,),
+                                  NORM_OBST=(0.,0.,1.,),
+                                  JEU=(0.5+jeu_choc),
+                                  RIGI_NOR=kn_choc,
+                                  AMOR_NOR=cn_choc,
+                                 ),
+                               ),
+                        );
+
+# Schema 'ADAPT' (ne sert que pour verifier les forces de contact) :
+DTMADAP2=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                         SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+# ON IMPOSE PAS_MAXI = PAS POUR RETROUVER LES ANCIENS RESULTATS
+# POUR AMELIORER LE TEMPS CPU IL VAUT MIEUX TESTER AVEC UN PAS_MAXI PLUS GRAND
+                                      PAS_MAXI=3.E-5,
+                                      COEF_MULT_PAS=1.2,
+                                      COEF_DIVI_PAS=1.4,),
+                         MATR_MASS=M_GENE,
+                         MATR_RIGI=K_GENE,
+                         INCREMENT=_F(INST_INIT=0.,
+                                      INST_FIN=3.0,
+                                      PAS=3.E-5,
+                                      ),
+                         ARCHIVAGE=_F(
+                                      PAS_ARCH=100,
+                                      ),
+                         EXCIT=_F(VECT_ASSE_GENE=F_GENE,
+                                  FONC_MULT=EXCIT,),
+                         COMPORTEMENT=(
+                               _F(RELATION='DIS_CHOC',
+                                  GROUP_NO_1='N_PATIN',
+                                  OBSTACLE=OBSTA_C,
+                                  ORIG_OBST=(-0.5,0.,0.,),
+                                  NORM_OBST=(0.,0.,1.,),
+                                  JEU=(0.5+jeu_choc),
+                                  RIGI_NOR=kn_choc,
+                                  AMOR_NOR=cn_choc,
+                                 ),
+                               ),
+                        );
+
+### Grandeurs cinematiques et force de choc :
+D_EULER=RECU_FONCTION(RESU_GENE=DTMEULER,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+V_EULER=RECU_FONCTION(RESU_GENE=DTMEULER,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='VITE',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+A_EULER=RECU_FONCTION(RESU_GENE=DTMEULER,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='ACCE',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+D_ADAPT=RECU_FONCTION(RESU_GENE=DTMADAPT,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+V_ADAPT=RECU_FONCTION(RESU_GENE=DTMADAPT,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='VITE',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+A_ADAPT=RECU_FONCTION(RESU_GENE=DTMADAPT,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='ACCE',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+D_ADAP2=RECU_FONCTION(RESU_GENE=DTMADAP2,
+                      TOUT_INST='OUI',
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='N_PATIN',);
+
+FC_ADAP2=RECU_FONCTION(RESU_GENE=DTMADAP2,
+                       GROUP_NO_CHOC='N_PATIN',
+                       PARA_X='INST',
+                       PARA_Y='FN',);
+
+FIN();

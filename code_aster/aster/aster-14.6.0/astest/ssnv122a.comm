@@ -1,0 +1,436 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MO=AFFE_MODELE(
+
+                MAILLAGE=MA,
+
+
+                AFFE=_F(
+                TOUT = 'OUI',
+                PHENOMENE = 'MECANIQUE',
+                MODELISATION = '3D')
+              )
+
+ACIER=DEFI_MATERIAU(
+
+               ELAS=_F( E = 200000.,  NU = 0.3)
+              )
+
+CHP_MATE=AFFE_MATERIAU(
+
+                MAILLAGE=MA,
+
+                AFFE=_F(
+                TOUT = 'OUI',
+                MATER = ACIER)
+              )
+
+CHR_PLAN=AFFE_CHAR_MECA(
+
+               MODELE=MO,
+
+                DDL_IMPO=_F( NOEUD = ('NO1', 'NO2', 'NO3', 'NO4', 'NO5', 'NO6', 'NO7', 'NO8',), DZ = 0.)
+              )
+
+INSTANTS=DEFI_LIST_REEL(
+
+               DEBUT=0.0,INTERVALLE=(
+
+                _F( JUSQU_A = 1.,   NOMBRE = 5),
+                _F( JUSQU_A = 2.,   NOMBRE = 2))
+              )
+
+# CALCUL DE LA ROTATION RIGIDE
+
+ROT_Xa = FORMULE(VALE='- 1000. * sin(INST*pi/2.)',
+                 NOM_PARA='INST',)
+
+ROT_Ya = FORMULE(VALE='- 1000. * (1. - cos(INST*pi/2.))',
+                 NOM_PARA='INST',)
+
+ROT_X=CALC_FONC_INTERP(
+                 FONCTION=ROT_Xa,
+                LIST_PARA=INSTANTS,
+              NOM_PARA='INST',
+              PROL_GAUCHE='EXCLU',
+               PROL_DROITE='EXCLU',
+                 INTERPOL='LIN'
+             )
+
+ROT_Y=CALC_FONC_INTERP(
+                 FONCTION=ROT_Ya,
+                LIST_PARA=INSTANTS,
+              NOM_PARA='INST',
+              PROL_GAUCHE='EXCLU',
+               PROL_DROITE='EXCLU',
+                 INTERPOL='LIN'
+             )
+
+ZERO=DEFI_CONSTANTE(
+
+              VALE=0.
+             )
+
+CHR_ROTA=AFFE_CHAR_MECA_F(
+
+               MODELE=MO,DDL_IMPO=(
+
+               _F( NOEUD = ('NO3', 'NO7',),  DX = ZERO,     DY = ZERO),
+               _F( NOEUD = ('NO1', 'NO5',),  DX = ROT_X,    DY = ROT_Y))
+             )
+
+V=STAT_NON_LINE(
+                MODELE=MO,
+                CHAM_MATER=CHP_MATE,
+                EXCIT=( _F( CHARGE = CHR_PLAN),
+                        _F( CHARGE = CHR_ROTA)),
+                COMPORTEMENT=_F( RELATION = 'ELAS',
+                              DEFORMATION = 'GROT_GDEP'),
+                INCREMENT=_F(  LIST_INST = INSTANTS,
+                               INST_FIN = 1.),
+                NEWTON=_F( MATRICE = 'TANGENTE',
+                           REAC_ITER = 1),
+                CONVERGENCE=_F(  RESI_GLOB_MAXI = 1.E-3,
+                                 ITER_GLOB_MAXI = 50),
+                RECH_LINEAIRE=_F( ITER_LINE_MAXI = 4)
+              )
+
+# CHARGEMENT DE PRESSION DANS LA CONFIGURATION DEFORMEE
+
+
+F_CHAR=DEFI_FONCTION(
+
+                  NOM_PARA='INST',
+               PROL_GAUCHE='CONSTANT',
+                PROL_DROITE='CONSTANT',
+                      VALE=(1.,0.,  2.,1.,)
+              )
+
+CHR_PRES=AFFE_CHAR_MECA(
+
+                 MODELE=MO,
+               PRES_REP=_F( MAILLE = 'MA2',  PRES = -26610.31)
+              )
+
+LIAISON=AFFE_CHAR_MECA(
+
+                 MODELE=MO,DDL_IMPO=(
+
+                _F( NOEUD = ('NO3', 'NO7',),  DX = 0., DY = 0.),
+                _F( NOEUD = ('NO1', 'NO5',),  DY = 0.))
+              )
+
+V=STAT_NON_LINE( reuse=V,
+                            MODELE=MO,
+                        CHAM_MATER=CHP_MATE,EXCIT=(
+                             _F(
+                CHARGE = CHR_PLAN), _F(
+                CHARGE = LIAISON,
+                TYPE_CHARGE = 'DIDI'), _F(
+                CHARGE = CHR_PRES,
+                TYPE_CHARGE = 'SUIV',
+                FONC_MULT = F_CHAR)),
+                         ETAT_INIT=_F(
+                EVOL_NOLI = V),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                DEFORMATION = 'GROT_GDEP'),
+                         INCREMENT=_F(
+                LIST_INST = INSTANTS,
+                INST_FIN = 1.5),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-5,
+                ITER_GLOB_MAXI = 20),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 5)
+              )
+
+# REPRISE POUR VERIFIER LE MOT-CLE GEOMETRIE: 'DEFORMEE'
+# S'IL N'EST PAS PRESENT, IL FAUT 11 ITERATIONS POUR CV.
+# AVEC ITER_GLOB_MAXI: 7, ON TESTE EFFECTIVEMENT.
+
+V=STAT_NON_LINE( reuse=V,
+                            MODELE=MO,
+                        CHAM_MATER=CHP_MATE,EXCIT=(
+                             _F(
+                CHARGE = CHR_PLAN), _F(
+                CHARGE = LIAISON,
+                TYPE_CHARGE = 'DIDI'), _F(
+                CHARGE = CHR_PRES,
+                TYPE_CHARGE = 'SUIV',
+                FONC_MULT = F_CHAR)),
+                         ETAT_INIT=_F(
+                EVOL_NOLI = V),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                DEFORMATION = 'GROT_GDEP'),
+                         INCREMENT=_F(
+                LIST_INST = INSTANTS),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-5,
+                ITER_GLOB_MAXI = 10),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 5)
+              )
+
+# POST-TRAITEMENT
+
+# verification de la prise en compte de TYPE_CHARGE SUIV et DIDI dans CALC_CHAMP
+# le test est NOOK si on commente TYPE_CHARGE='SUIV'
+VV=CALC_CHAMP(
+             
+                RESULTAT=V,
+                  FORCE='REAC_NODA',
+                EXCIT=(
+                      _F(CHARGE = CHR_PLAN), 
+                      _F(CHARGE = LIAISON,
+                         TYPE_CHARGE = 'DIDI'
+                         ), 
+                      _F(CHARGE = CHR_PRES,
+                         TYPE_CHARGE = 'SUIV',
+                         FONC_MULT = F_CHAR)),
+             )
+
+
+V=CALC_CHAMP(
+             reuse=V,
+                RESULTAT=V,
+                  DEFORMATION=('EPSG_ELNO','EPSG_ELGA'),
+                  CRITERES=('EPGQ_ELGA','EPGQ_ELNO','EPGQ_NOEU')
+             )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO2',
+                   NOM_CMP='DX',
+                   VALE_CALC=-1953.93919731,
+                   VALE_REFE=-1953.9400000000001,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   ),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO2',
+                   NOM_CMP='DY',
+                   VALE_CALC=100.000008366,
+                   VALE_REFE=100.0,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   ),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=5.70035756396E-06,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=26610.3100462,
+                   VALE_REFE=2.6610310000000001E4,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=6597.59743364,
+                   VALE_REFE=6597.6000000000004,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=8.05728508528E-12,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIXZ',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   POINT=1,
+                   RESULTAT=V,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYZ',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=VV,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='NO3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.6,),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=VV,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='NO4',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.6,),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=VV,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='NO3',
+                   NOM_CMP='DY',
+                   VALE_CALC=-6346154451.4,
+                   VALE_REFE=-6.346200000E9,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   ),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=VV,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='NO3',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-1730769383.16,
+                   VALE_REFE=-1.730700000E9,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   ),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=0.105000009203,
+                   VALE_REFE=0.105,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPYY',
+                   VALE_CALC=-0.0450000039196,
+                   VALE_REFE=-0.044999999999999998,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.E-3,
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPZZ',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0000000000000001E-05,
+                   CRITERE='ABSOLU',
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPXY',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0000000000000001E-05,
+                   CRITERE='ABSOLU',
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPXZ',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0000000000000001E-05,
+                   CRITERE='ABSOLU',
+                   MAILLE='MA1',),
+                _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPSG_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='EPYZ',
+                   VALE_CALC=0.,
+                   VALE_REFE=0.0,
+                   REFERENCE = 'ANALYTIQUE',
+                   PRECISION=1.0000000000000001E-05,
+                   CRITERE='ABSOLU',
+                   MAILLE='MA1',),
+                 _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPGQ_ELGA',
+                   POINT=1,
+                   NOM_CMP='PRIN_1',
+                   VALE_CALC=-0.0450000039196,
+                   MAILLE='MA1',),
+                 _F(NUME_ORDRE=7,
+                   RESULTAT=V,
+                   NOM_CHAM='EPGQ_ELNO',
+                   NOEUD='NO8',
+                   NOM_CMP='PRIN_3',
+                   VALE_CALC=0.105000009203,
+                   MAILLE='MA1',),
+                ),
+          )
+
+FIN()
+#
+#

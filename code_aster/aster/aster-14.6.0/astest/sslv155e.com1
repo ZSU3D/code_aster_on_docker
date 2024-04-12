@@ -1,0 +1,76 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+POURSUITE(CODE='OUI')
+
+# -------------------------------------------------------------
+#           TEST DE NON REGRESSION DES CONTRAINTES
+#    SIEF_ELGA CALCULEES PAR MECA_STATIQUE ET STAT_NON_LINE
+#              SUR LES ELEMENTS X-FEM AXIS (QUADRATIQUES)
+# -------------------------------------------------------------
+
+L_INST=DEFI_LIST_REEL(DEBUT=0., INTERVALLE=_F(JUSQU_A=1.,NOMBRE=1))
+
+# on realise avec STAT_NON_LINE un calcul strictement identique a celui
+# realise avec MECA_STATIQUE pour produire le resultat RESU
+RESSNL=STAT_NON_LINE(MODELE=MODX,
+                     CHAM_MATER=MATE,
+                     EXCIT=(_F(CHARGE=CHAR),),
+                     COMPORTEMENT=_F(RELATION='ELAS', TOUT='OUI'),
+                     INCREMENT=_F(LIST_INST=L_INST, INST_FIN=1.,))
+
+# test de non regression, 'M636' est une maille portant un element crack-tip
+# -> test sur le resultat produit par MECA_STATIQUE
+TEST_RESU(RESU=_F(RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  MAILLE='M636',
+                  POINT=22,
+                  VALE_CALC=18608143.656),)
+## -> test sur le resultat produit par STAT_NON_LINE
+TEST_RESU(RESU=_F(RESULTAT=RESSNL,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  MAILLE='M636',
+                  POINT=22,
+                  VALE_CALC=18608143.6559),)
+
+# test de non regression, 'M646' est une maille portant un element heaviside
+# -> test sur le resultat produit par MECA_STATIQUE
+TEST_RESU(RESU=_F(RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  MAILLE='M646',
+                  POINT=3,
+                  VALE_CALC=1168549.6209260903),)
+## -> test sur le resultat produit par STAT_NON_LINE
+TEST_RESU(RESU=_F(RESULTAT=RESSNL,
+                  NUME_ORDRE=1,
+                  NOM_CHAM='SIEF_ELGA',
+                  NOM_CMP='SIYY',
+                  MAILLE='M646',
+                  POINT=3,
+                  VALE_CALC=1168549.6209311497),)
+
+FIN()

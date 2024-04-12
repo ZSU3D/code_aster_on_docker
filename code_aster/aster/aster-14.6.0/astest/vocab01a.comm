@@ -1,0 +1,64 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',
+              ))
+
+# Ce test vérifie les arguments dans le catalogue de commandes
+# et imprime l'ensemble des mots-clés et les commandes qui les utilisent
+# sous cette forme :
+#
+#      DDL       :: AFFE_CHAR_ACOU   / AFFE_CHAR_THER   / ...
+#      DDL_1     :: AFFE_CHAR_THER   / AFFE_CHAR_MECA_F / ...
+#      DDL_2     :: AFFE_CHAR_THER   / AFFE_CHAR_MECA_F /
+#
+
+# this replaces 'import vocab01a.33'
+exec(compile(open('fort.33').read(), 'fort.33', 'exec'), globals())
+
+# read the previous 'fort.34'
+import re
+try:
+    with open('fort.34', 'r') as fobj:
+        text = fobj.read()
+    recmt = re.compile('^#')
+    existing_keywords = [line for line in text.splitlines() if not recmt.search(line)]
+except IOError:
+    existing_keywords = ['???']
+
+# En cas de NOOK, mettre INFO=2 dans l'appel à VOCAB01 ci-dessous,
+# Un message de ce type sera affiché dans l'output indiquant le
+# fichier produit contenant tous les mots-clés du catalogue.
+#
+# NB : Vous ne devez modifier ce fichier que si le vocabulaire a été validé !
+#
+#    ************************************************************
+#
+#     Nom du fichier à recopier pour mettre à jour vocab01a.34
+#
+#                        /tmp/vocab01a_OTsZV1
+#
+#    ************************************************************
+
+# TEST_TABLE are included in the "macro-command"
+VOCAB01(EXISTANT=existing_keywords,
+        INFO=1)
+
+FIN()

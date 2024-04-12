@@ -1,0 +1,613 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#ELEMENTS TRIA6  ET SEG3  POUR APPLICATION DU FLUX
+#.....................................................................
+
+DEBUT(   CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MODEL=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'THERMIQUE',
+                                        MODELISATION = 'AXIS')
+                         )
+
+ACIER=DEFI_MATERIAU(         THER=_F(  RHO_CP = 3552720.,
+                                      LAMBDA = 72.)
+                      )
+
+MATER=AFFE_MATERIAU(   MAILLAGE=MAYA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = ACIER)
+                         )
+
+FLUX_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.,      300000.,
+                                          100.,    300000.,  )
+                        )
+
+CHA=AFFE_CHAR_THER_F(      MODELE=MODEL,
+                             FLUX_REP=_F(  GROUP_MA = 'FACE_INT',
+                                        FLUN = FLUX_FO)
+                         )
+
+CAT=DEFI_LIST_REEL(    DEBUT=0.0,
+                          INTERVALLE=_F(  JUSQU_A = 25.,    NOMBRE = 50)
+                      )
+
+THERL=THER_LINEAIRE(        MODELE=MODEL,
+                           CHAM_MATER=MATER,
+                                EXCIT=_F( CHARGE = CHA),
+                            ETAT_INIT=_F( VALE = 0.),
+                            INCREMENT=_F( LIST_INST = CAT),
+                           PARM_THETA=1.
+                       )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000001',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=12.5357510468,
+                   VALE_REFE=12.535500000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000161',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=5.71224778373,
+                   VALE_REFE=5.7123299999999997,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000162',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=2.44531063998,
+                   VALE_REFE=2.4452600000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000163',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=1.12187944582,
+                   VALE_REFE=1.1218900000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000164',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.483654858879,
+                   VALE_REFE=0.48364400000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000165',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.222443037297,
+                   VALE_REFE=0.222443,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000166',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.0962059644922,
+                   VALE_REFE=0.0962036,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000167',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.0443444917032,
+                   VALE_REFE=0.044344399999999999,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000168',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.0192314559543,
+                   VALE_REFE=0.019231000000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000169',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.00887979724114,
+                   VALE_REFE=8.8797600000000004E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000170',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.00385970401003,
+                   VALE_REFE=3.8595999999999999E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000171',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.00178525216079,
+                   VALE_REFE=1.78524E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000172',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.000778669074611,
+                   VALE_REFE=7.7864999999999998E-4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000173',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.00036311688451,
+                   VALE_REFE=3.6311399999999999E-4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000174',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=0.000164451735917,
+                   VALE_REFE=1.6444800000000001E-4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000175',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=8.80583094479E-05,
+                   VALE_REFE=8.8057699999999995E-05,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=1,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000014',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=6.5491874679E-05,
+                   VALE_REFE=6.5490399999999999E-05,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000001',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=86.4267289995,
+                   VALE_REFE=86.426699999999997,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000161',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=76.5694950349,
+                   VALE_REFE=76.569500000000005,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000162',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=67.7355337021,
+                   VALE_REFE=67.735500000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000163',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=59.8610485072,
+                   VALE_REFE=59.860999999999997,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000164',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=52.8475846761,
+                   VALE_REFE=52.8476,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000165',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=46.6461809388,
+                   VALE_REFE=46.6462,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000166',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=41.1801060094,
+                   VALE_REFE=41.180100000000003,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000167',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=36.4106098437,
+                   VALE_REFE=36.410600000000002,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000168',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=32.2765412974,
+                   VALE_REFE=32.276499999999999,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000169',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=28.746756091,
+                   VALE_REFE=28.7468,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000170',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=25.7722968217,
+                   VALE_REFE=25.772300000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000171',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=23.3282714422,
+                   VALE_REFE=23.328299999999999,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000172',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=21.3760832475,
+                   VALE_REFE=21.376100000000001,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000173',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=19.8963216945,
+                   VALE_REFE=19.8963,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000174',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=18.8595814456,
+                   VALE_REFE=18.8596,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000175',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=18.2514105942,
+                   VALE_REFE=18.2514,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                _F(NUME_ORDRE=50,
+                   RESULTAT=THERL,
+                   NOM_CHAM='TEMP',
+                   NOEUD='NO000014',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=18.0506590649,
+                   VALE_REFE=18.050699999999999,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-4,),
+                ),
+          )
+
+MODEL2=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = 'AXIS')
+                         )
+
+#E_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+#                                VALE=( 0.,     195.E9,
+#                                       100.,   175.5E9,    )
+#                     )
+E_FO = FORMULE(VALE="""
+        195.E9 + ( TEMP * ( 175.5E9 - 195.E9 ) / 100. )
+                    """,
+               NOM_PARA='TEMP',)
+
+NU_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                 VALE=( 0.,     0.3,
+                                       100.,    0.3,   )
+                     )
+
+ALPHA_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                    VALE=( 0.,     12.E-6,
+                                          100.,    12.E-6,   )
+                     )
+#
+#ET_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+#                                 VALE=( 0.,     2857.504E6,
+#                                        100.,   1979.695E6, )
+#                     )
+ET_FO = FORMULE(VALE="""
+        2857.504E6 + ( TEMP * ( 1979.695E6 - 2857.504E6 ) / 100. )
+                    """,
+                NOM_PARA='TEMP',)
+#
+#SY_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+#                                 VALE=( 0.,     181.E6,
+#                                        100.,   145.E6,     )
+#                     )
+SY_FO = FORMULE(VALE="""
+        181.E6 + ( TEMP * ( 145.E6 - 181.E6 ) / 100. )
+                    """,
+                NOM_PARA='TEMP',)
+
+RHOF=DEFI_CONSTANTE(VALE = 7860.,)
+MAT2=DEFI_MATERIAU(      ELAS_FO=_F(  E = E_FO,
+                                         NU = NU_FO,
+                                         RHO = RHOF,
+                                         ALPHA = ALPHA_FO,TEMP_DEF_ALPHA=0.),
+                          ECRO_LINE_FO=_F(  D_SIGM_EPSI = ET_FO,
+                                         SY = SY_FO)
+                          )
+
+MATER2=AFFE_MATERIAU(   MAILLAGE=MAYA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = MAT2),
+                                AFFE_VARC=_F(TOUT='OUI',VALE_REF=0.,
+                                       NOM_VARC='TEMP',
+                                       EVOL=THERL,
+                                       NOM_CHAM='TEMP',),
+                         )
+
+PRES_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.,      0.,
+                                          15.,     0.,
+                                          20.,     1.,
+                                          25.,     0.,       )
+                        )
+
+
+ROTA=AFFE_CHAR_MECA(        MODELE=MODEL2,
+                             ROTATION=_F( VITESSE = 2400.,
+                                          AXE = (0.,1.,),),
+                         );
+
+ROTA_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.0,   0.0,
+                                         15.,    1.0,
+                                         25.,    1.0,   )
+                        )
+
+PRES=AFFE_CHAR_MECA(      MODELE=MODEL2,
+                           PRES_REP=_F(  GROUP_MA = 'FACE_INT',
+                                      PRES = 5.5E6)
+                        )
+
+CONDLIM=AFFE_CHAR_MECA(     MODELE=MODEL2,
+
+                                DDL_IMPO=_F(  NOEUD = 'NO000001', DY = 0.)
+                          )
+
+CAT2=DEFI_LIST_REEL(    DEBUT=0.0,INTERVALLE=(
+                          _F(  JUSQU_A = 15.,    NOMBRE = 3),
+                                     _F(  JUSQU_A = 20.,    NOMBRE = 1),
+                                     _F(  JUSQU_A = 25.,    NOMBRE = 1))
+                      )
+
+CALCNL=STAT_NON_LINE(
+                            MODELE=MODEL2,
+                        CHAM_MATER=MATER2,
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ISOT_LINE',
+                DEFORMATION = 'PETIT_REAC'),
+                         INCREMENT=_F(
+                LIST_INST = CAT2),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 50),EXCIT=(
+                              _F(
+                CHARGE = PRES,
+                FONC_MULT = PRES_FO), _F(
+                CHARGE = ROTA,
+                FONC_MULT = ROTA_FO), _F(
+                CHARGE = CONDLIM)),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 3)
+              )
+
+CALCNL=CALC_CHAMP(reuse=CALCNL,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=CALCNL)
+
+
+CALCNL=CALC_CHAMP( reuse=CALCNL,   RESULTAT=CALCNL,
+                                FORCE='FORC_NODA',
+                   )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=3,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000222',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=119893779.058,
+                   VALE_REFE=1.20472000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000090',),
+                _F(NUME_ORDRE=3,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000164',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=166172449.714,
+                   VALE_REFE=1.65934000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000101',),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000222',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=138240335.628,
+                   VALE_REFE=1.39164000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000090',),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000164',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=164309703.076,
+                   VALE_REFE=1.64031000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000101',),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000222',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=127437418.382,
+                   VALE_REFE=1.28421000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000090',),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000164',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=157071775.836,
+                   VALE_REFE=1.56861000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1E-2,
+                   MAILLE='MA000101',),
+                ),
+          )
+
+FIN()
+#

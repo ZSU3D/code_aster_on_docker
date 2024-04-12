@@ -1,0 +1,225 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: pierre.badel at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTRANET'),IMPR_MACRO='NON',PAR_LOT='NON')
+
+tabn = LIRE_TABLE(UNITE      = 38,
+                  FORMAT     = 'LIBRE',
+                  SEPARATEUR = '\t')
+
+MA1=LIRE_MAILLAGE(FORMAT='MED',UNITE=20);
+
+RESU_C1 = CALC_MAC3COEUR(TYPE_COEUR  = 'TEST',
+                         TABLE_N     =  tabn,
+                         MAILLAGE_N  =  MA1,
+                         DEFORMATION = _F(UNITE_THYC   = 32,
+                                          NIVE_FLUENCE = 3))
+
+tabp = LIRE_TABLE(UNITE      = 39,
+                  FORMAT     = 'LIBRE',
+                  SEPARATEUR = '\t')
+
+MA2=LIRE_MAILLAGE(FORMAT='MED',UNITE=21);
+
+INI_C2 = PERM_MAC3COEUR( TYPE_COEUR_N   = 'TEST',
+                         TYPE_COEUR_NP1   = 'TEST',
+                         RESU_N       = RESU_C1,
+                         TABLE_N      = tabn,
+                         TABLE_NP1    = tabp,
+                         MAILLAGE_NP1 = MA2,)
+
+RESU_C2 = CALC_MAC3COEUR(TYPE_COEUR  = 'TEST',
+                         TABLE_N     =  tabp,
+                         DEFORMATION = _F(RESU_INIT    = INI_C2,
+                                          UNITE_THYC   = 32,
+                                          NIVE_FLUENCE = 3))
+
+post_c1 = RESU_C1.LIST_PARA()['INST'][-1]
+TABC1_BB = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1,NOM_CHAM='DEPL',INST=post_c1,NOM_CMP=('DX','DY','DZ'),
+                            GROUP_MA=('CR_B_B', 'TG_B_B')))
+
+post_i2 = INI_C2.LIST_PARA()['INST'][-1]
+TABI2_AB = CREA_TABLE(RESU=_F(RESULTAT=INI_C2,NOM_CHAM='DEPL',INST=post_i2,NOM_CMP=('DX','DY','DZ'),
+                            GROUP_MA=('CR_A_B', 'TG_A_B')))
+
+TABI2_BA = CREA_TABLE(RESU=_F(RESULTAT=INI_C2,NOM_CHAM='DEPL',INST=post_i2,NOM_CMP=('DX','DY','DZ'),
+                            GROUP_MA=('CR_B_A', 'TG_B_A')))
+
+post_c2 = RESU_C2.LIST_PARA()['INST'][-1]
+TABC2_BA = CREA_TABLE(RESU=_F(RESULTAT=RESU_C2,NOM_CHAM='DEPL',INST=post_c2,NOM_CMP=('DX','DY','DZ'),
+                            GROUP_MA=('CR_B_A', 'TG_B_A')))
+
+TABC2_BB = CREA_TABLE(RESU=_F(RESULTAT=RESU_C2,NOM_CHAM='DEPL',INST=post_c2,NOM_CMP=('DX','DY','DZ'),
+                            GROUP_MA=('CR_B_B', 'TG_B_B')))
+
+TABV1_BA = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1,NOM_CHAM='VARI_ELGA',INST=post_c1,NOM_CMP=('V1','V2','V3'),
+                            GROUP_MA=('CR_B_A', 'TG_B_A')))
+
+TABV1_BB = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1,NOM_CHAM='VARI_ELGA',INST=post_c1,NOM_CMP=('V1','V2','V3'),
+                            GROUP_MA=('CR_B_B', 'TG_B_B')))
+
+TABV2_BA = CREA_TABLE(RESU=_F(RESULTAT=RESU_C2,NOM_CHAM='VARI_ELGA',INST=post_c2,NOM_CMP=('V1','V2','V3'),
+                            GROUP_MA=('CR_B_A', 'TG_B_A')))
+
+TABV2_BC = CREA_TABLE(RESU=_F(RESULTAT=RESU_C2,NOM_CHAM='VARI_ELGA',INST=post_c2,NOM_CMP=('V1','V2','V3'),
+                            GROUP_MA=('CR_B_C', 'TG_B_C')))
+
+TEST_TABLE(
+           VALE_CALC=0.00912850535119,
+           NOM_PARA='DX',
+           TYPE_TEST='SOMM',
+           TABLE=TABC1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.022001272860905193,
+           NOM_PARA='DY',
+           TYPE_TEST='SOMM',
+           TABLE=TABC1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=-0.022001272860066378 ,
+           NOM_PARA='DZ',
+           TYPE_TEST='SOMM',
+           TABLE=TABC1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00912850535119,
+           NOM_PARA='DX',
+           TYPE_TEST='SOMM',
+           TABLE=TABI2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.022001272860905193,
+           NOM_PARA='DY',
+           TYPE_TEST='SOMM',
+           TABLE=TABI2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=-0.022001272860066378,
+           NOM_PARA='DZ',
+           TYPE_TEST='SOMM',
+           TABLE=TABI2_BA,
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+           ORDRE_GRANDEUR=0.01,
+           NOM_PARA='DY',
+           TYPE_TEST='SOMM',
+           TABLE=TABI2_AB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.02300594058952759,
+           NOM_PARA='DX',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.03307497419042083,
+           NOM_PARA='DY',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=-0.022329158958011068,
+           NOM_PARA='DZ',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00994050315685,
+           NOM_PARA='DX',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=-0.012644189496675203,
+           NOM_PARA='DY',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=-0.011405018044697757,
+           NOM_PARA='DZ',
+           TYPE_TEST='SOMM',
+           TABLE=TABC2_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.00015440514374675282,
+           NOM_PARA='V1',
+           TYPE_TEST='MAX',
+           TABLE=TABV1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.0,
+           NOM_PARA='V2',
+           TYPE_TEST='MAX',
+           TABLE=TABV1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.000121289093602,
+           NOM_PARA='V3',
+           TYPE_TEST='MAX',
+           TABLE=TABV1_BB,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.0002622270983682585,
+           NOM_PARA='V1',
+           TYPE_TEST='MAX',
+           TABLE=TABV2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=6.0,
+           NOM_PARA='V2',
+           TYPE_TEST='MAX',
+           TABLE=TABV2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.000280587322812,
+           NOM_PARA='V3',
+           TYPE_TEST='MAX',
+           TABLE=TABV2_BA,
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.0,
+           NOM_PARA='V2',
+           TYPE_TEST='MAX',
+           TABLE=TABV2_BC,
+           )
+FIN()

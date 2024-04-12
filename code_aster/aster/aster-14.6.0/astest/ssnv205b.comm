@@ -1,0 +1,423 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ESSAI DE CISAILLEMENT AVE LE LOI IWAN
+# PRESSION DE CONSOLIDATION P0 = 50KPA
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+GammaRef=2.e-4
+n=0.78
+P0 = - 5.E4
+N=0.4
+PREF=-1.E6
+
+# modules mecaniques [kPa]
+K=516.2E6*(P0/PREF)**N
+G=238.2E6*(P0/PREF)**N
+YOUNG = 9.*K*G /(3.*K+G)
+POISSON = (3.*K-2.*G) /(6.*K+2.*G)
+
+MATE=DEFI_MATERIAU(ELAS=_F(E=YOUNG, 
+                              NU=POISSON,),
+                   Iwan=_F(YoungModulus = YOUNG ,
+                               PoissonRatio = POISSON ,
+                               GammaRef = GammaRef,
+                               n = n,),)
+
+TEMPS1=DEFI_LIST_REEL(DEBUT=0,
+                      INTERVALLE=(_F(JUSQU_A=10,
+                                     NOMBRE=10,),
+                                  _F(JUSQU_A=30,
+                                     NOMBRE=20,),
+                                  _F (JUSQU_A=50,
+                                     NOMBRE=20,),),);
+TEMPS2=DEFI_LIST_REEL(DEBUT=0,
+                      INTERVALLE=(_F(JUSQU_A=10,
+                                     NOMBRE=4,),
+                                  _F(JUSQU_A=30,
+                                     NOMBRE=8,),
+                                  _F (JUSQU_A=50,
+                                     NOMBRE=8,),),);
+
+DEFLIST1 =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = TEMPS1),
+                        ECHEC=_F(EVENEMENT     = 'ERREUR',
+                                 ACTION        = 'DECOUPE',
+                                 SUBD_METHODE  = 'MANUEL',
+                                 SUBD_PAS=2,
+                                 SUBD_NIVEAU=10),)
+
+DEFLIST2 =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = TEMPS2),
+                        ECHEC=_F(EVENEMENT     = 'ERREUR',
+                                 ACTION        = 'DECOUPE',
+                                 SUBD_METHODE  = 'MANUEL',
+                                 SUBD_PAS=2,
+                                 SUBD_NIVEAU=10),)
+
+################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.2% DE DEFORMATIONS IMPOSEES#
+################################################################
+
+#Valeur de P0 non prise en compte dans le modèle
+P0=-50e3
+
+COEF1=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,0,
+                          10,-0.002,
+                          30,0.002,
+                          50,-0.002,),PROL_DROITE='CONSTANT',);
+
+COEF2=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,P0,
+                          50,P0,),PROL_DROITE='CONSTANT',);
+
+COEF3=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,0,
+                          50,0.,
+                          ),PROL_DROITE='CONSTANT',);
+
+
+
+
+U1=SIMU_POINT_MAT(COMPORTEMENT=_F(RELATION='Iwan',
+                               RESI_INTE_RELA=1E-12,
+                               #ITER_INTE_MAXI=200,
+                                ),
+                  MATER=MATE,
+                  INCREMENT=_F(LIST_INST=DEFLIST1,
+                               NUME_INST_INIT=0,
+                               INST_FIN=50.,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(RESI_GLOB_MAXI = 1.E-6,
+                                 ITER_GLOB_MAXI = 10),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS2,),
+                  SIGM_IMPOSE=_F(SIXX=COEF2,
+                                 SIYY=COEF2,
+                                 SIZZ=COEF2,),
+                  EPSI_IMPOSE=_F(EPXY=COEF1,),
+                  SIGM_INIT=_F(SIXX=P0,
+                               SIYY=P0,
+                               SIZZ=P0,),
+                  EPSI_INIT=_F(EPXX=P0/(3*K),
+                               EPYY=P0/(3*K),
+                               EPZZ=P0/(3*K),
+                               EPXY=0,
+                               EPXZ=0,
+                               EPYZ=0,),);
+
+IMPR_TABLE(TABLE=U1,UNITE=29);
+
+#################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.02% DE DEFORMATIONS IMPOSEES#
+#################################################################
+COEF4=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,0,
+                          10,-0.0002,
+                          30,0.0002,
+                          50,-0.0002,),PROL_DROITE='CONSTANT',);
+
+U2=SIMU_POINT_MAT(COMPORTEMENT=_F(RELATION='Iwan',
+                               RESI_INTE_RELA=1E-12,
+                               #ITER_INTE_MAXI=100,
+                                ),
+                  MATER=MATE,
+                  INCREMENT=_F(LIST_INST=DEFLIST1,
+                               NUME_INST_INIT=0,
+                               INST_FIN=50.,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 10),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS2,),
+                  SIGM_IMPOSE=_F(SIXX=COEF2,
+                                 SIYY=COEF2,
+                                 SIZZ=COEF2,),
+                  EPSI_IMPOSE=_F(EPXY=COEF4,),
+                  SIGM_INIT=_F(SIXX=P0,
+                               SIYY=P0,
+                               SIZZ=P0,),
+                  EPSI_INIT=_F(EPXX=P0/(3*K),
+                               EPYY=P0/(3*K),
+                               EPZZ=P0/(3*K),
+                               EPXY=0,
+                               EPXZ=0,
+                               EPYZ=0,),);
+
+IMPR_TABLE(TABLE=U2,UNITE=30);
+
+##################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.002% DE DEFORMATIONS IMPOSEES#
+##################################################################
+COEF5=DEFI_FONCTION(NOM_PARA='INST',VALE=(0,0,
+                          10,-2.E-5,
+                          30,2.E-5,
+                          50,-2.E-5,),PROL_DROITE='CONSTANT',);
+
+U3=SIMU_POINT_MAT(COMPORTEMENT=_F(RELATION='Iwan',
+                               RESI_INTE_RELA=1E-12,
+                               #ITER_INTE_MAXI=200,
+                                ),
+                  MATER=MATE,
+                  INCREMENT=_F(LIST_INST=DEFLIST2,
+                               NUME_INST_INIT=0,
+                               INST_FIN=50.,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 10),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS2,),
+                  SIGM_IMPOSE=_F(SIXX=COEF2,
+                                 SIYY=COEF2,
+                                 SIZZ=COEF2,),
+                  EPSI_IMPOSE=_F(EPXY=COEF5,),
+                  SIGM_INIT=_F(SIXX=P0,
+                               SIYY=P0,
+                               SIZZ=P0,),
+                  EPSI_INIT=_F(EPXX=P0/(3*K),
+                               EPYY=P0/(3*K),
+                               EPZZ=P0/(3*K),
+                               EPXY=0,
+                               EPXZ=0,
+                               EPYZ=0,),);
+
+IMPR_TABLE(TABLE=U3,UNITE=31);
+
+
+################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.2% DE DEFORMATIONS IMPOSEES#
+################################################################
+# TEST DE DE LA COMPOSANTE XY DES CONTRAINTES PAR RAPPORT A HUJEUX
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-19277.0089365,
+           VALE_REFE=-19488.466443205,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=5.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-23319.3757074,
+           VALE_REFE=-24272.532994658,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=10.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC= 15234.6421655,
+           VALE_REFE= 14771.427020076,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=20.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC= 23319.3757074,
+           VALE_REFE= 24346.990829393,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=30.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-15234.6421655,
+           VALE_REFE=-14787.939443998,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=40.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-23319.3757074,
+           VALE_REFE=-24381.246915809,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=50.0,),
+           )
+
+
+#################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.02% DE DEFORMATIONS IMPOSEES#
+#################################################################
+# TEST DE DE LA COMPOSANTE XY DES CONTRAINTES PAR RAPPORT A HUJEUX
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-7538.26657423,
+           VALE_REFE=-7176.9064750495,
+           PRECISION=6.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0000000000000006E-05,
+                     NOM_PARA='INST',
+                     VALE=5.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-10857.8105579,
+           VALE_REFE=-10145.337714444,
+           PRECISION=8.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=10.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC= 4218.72259055,
+           VALE_REFE= 4211.6280455068,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=20.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC= 10857.8105579,
+           VALE_REFE= 10168.207641876,
+           PRECISION=8.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=30.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-4218.72259055,
+           VALE_REFE=-4187.8912522105,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=40.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-10857.8105579,
+           VALE_REFE=-10123.83079066,
+           PRECISION=8.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=50.0,),
+           )
+
+
+##################################################################
+#ESSAI DE CISAILLEMENT CYCLIQUE A 0.002% DE DEFORMATIONS IMPOSEES#
+##################################################################
+# TEST DE DE LA COMPOSANTE XY DES CONTRAINTES PAR RAPPORT A HUJEUX
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-1298.64364426,
+           VALE_REFE=-1259.3243448744,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U3,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=5.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-2345.43266465,
+           VALE_REFE=-2462.7975417813,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U3,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=10.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC= 2345.43266465,
+           VALE_REFE=2466.8646345014,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U3,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=30.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           VALE_CALC=-2345.43266465,
+           VALE_REFE=-2459.6074144164,
+           PRECISION=5.E-2,
+           NOM_PARA='SIXY',
+           TABLE=U3,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST',
+                     VALE=50.0,),
+           )
+
+
+FIN();

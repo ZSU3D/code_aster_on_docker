@@ -1,0 +1,366 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+M=LIRE_MAILLAGE(FORMAT='MED')
+
+MO=AFFE_MODELE(MAILLAGE=M,
+               AFFE=_F(GROUP_MA = 'MAIL',
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = '3D'))
+
+M=MODI_MAILLAGE(reuse=M,
+                MAILLAGE=M,
+                ORIE_PEAU_3D=_F(GROUP_MA=('SINF_2','SINF_4'))
+                )
+
+#Barsoum
+M=MODI_MAILLAGE( reuse=M,   MAILLAGE=M,
+                 MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                                GROUP_MA_FOND='LFF'), )
+
+MA=DEFI_MATERIAU(            ELAS=_F(  E = 2.E11,
+                                        NU = 0.3,          ) )
+
+CM=AFFE_MATERIAU(        MAILLAGE=M,
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        MATER = MA,
+                                        ))
+
+M=DEFI_GROUP(reuse=M,   MAILLAGE=M,CREA_GROUP_NO=(
+                _F(  GROUP_MA = 'SSUP_F',  ),
+                _F(  GROUP_MA = 'SINF_F',   )) )
+
+CH=AFFE_CHAR_MECA(       MODELE=MO,DDL_IMPO=(
+                         _F(  NOEUD = 'N9957',         DX = 0.,    ),
+                         _F(  NOEUD = 'N10021',        DX = 0.,    ),
+                         _F(  NOEUD = 'N9966',         DY = 0.,    ),
+                         _F(  NOEUD = 'N10094',        DY = 0.,    ),
+                         _F(  GROUP_NO = 'SSUP_F',     DZ = 0.,    )),PRES_REP=(
+                         _F(  GROUP_MA = 'SINF_1',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_2',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_3',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_4',   PRES = -1.E6, ))
+                   )
+
+RESU=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CM,
+                   EXCIT=_F(  CHARGE = CH,   ) )
+
+
+FF1=DEFI_FOND_FISS(MAILLAGE=M,
+                   FOND_FISS=_F(TYPE_FOND='FERME',
+                                GROUP_MA = 'LFF',
+                                NOEUD_ORIG = 'N49',
+                                MAILLE_ORIG = 'M3233',),
+                   SYME='OUI',
+                   LEVRE_SUP=_F(GROUP_MA = 'LEVINF',)
+                  )
+
+FF=DEFI_FOND_FISS(MAILLAGE=M,
+                  FOND_FISS=_F(TYPE_FOND='FERME',
+                               GROUP_MA = 'LFF',
+                               NOEUD_ORIG = 'N49',
+                               MAILLE_ORIG = 'M3233',),
+                   SYME='OUI',
+                   LEVRE_SUP=_F(GROUP_MA = 'LEVINF',)
+                 )
+
+GLOC0=CALC_G(        RESULTAT=RESU,
+                     INFO=2,
+                     THETA=_F(
+                              FOND_FISS=FF,
+                              R_INF=0.24,
+                              R_SUP=0.53),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=11.8542596908,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC0,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N403',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.6621462176,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC0,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N2862',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=11.8492887582 ,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC0,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N375',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.024,
+           VALE_CALC=11.8578282927,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC0,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N292',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.025,
+           VALE_CALC=11.8650385698,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TYPE_TEST='MAX',
+           TABLE=GLOC0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.6621415957,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TYPE_TEST='MIN',
+           TABLE=GLOC0,)
+
+GLOC1=CALC_G(        RESULTAT=RESU,
+                     INFO=2,
+                     THETA=_F(FOND_FISS=FF,
+                              ),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.025,
+           VALE_CALC=11.8736272549,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TYPE_TEST='MAX',
+           TABLE=GLOC1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.6611459882,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TYPE_TEST='MIN',
+           TABLE=GLOC1,)
+
+GLOC2=CALC_G(        RESULTAT=RESU,
+                     THETA=_F(
+                              FOND_FISS=FF,
+                              R_INF=0.24,
+                              R_SUP=0.53),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE_NO_NO',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7787482054,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N403',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.69993667,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N2862',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7736827877,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N375',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=11.7822719118,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC2,
+           FILTRE=_F(NOM_PARA='NOEUD',
+                     VALE_K='N292',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.010999999999999999,
+           VALE_CALC=11.7896033722,
+           VALE_REFE=11.714999753978001,
+           NOM_PARA='G',
+           TYPE_TEST='MAX',
+           TABLE=GLOC2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.1000000000000001E-2,
+           VALE_CALC=11.69993667,
+           VALE_REFE=11.575479415610999,
+           NOM_PARA='G',
+           TYPE_TEST='MIN',
+           TABLE=GLOC2,)
+
+GLOC3=CALC_G(        RESULTAT=RESU,
+                     THETA=_F(
+                              FOND_FISS=FF,
+                              R_INF=0.24,
+                              R_SUP=0.53,
+                              NB_POINT_FOND=33,),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+
+# on s'assure que la valeur de non regression reste identique
+# au premier (VALE_I=1) et dernier (VALE_I=33) point du fond
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=11.6918322698,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC3,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=1,),
+           )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=11.6918322698,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC3,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=33,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=11.6837361665,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC3,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=13,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=11.6837381482,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GLOC3,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=21,),
+           )
+
+TEST_TABLE(VALE_CALC=11.701071255,
+           NOM_PARA='G',
+           TYPE_TEST='MAX',
+           TABLE=GLOC3,
+           )
+
+TEST_TABLE(VALE_CALC=11.6836726693,
+           NOM_PARA='G',
+           TYPE_TEST='MIN',
+           TABLE=GLOC3,
+           )
+
+#
+#Calcul de K avec POST_K1_K2_K3
+#
+TABL_K=POST_K1_K2_K3(TOUT = 'OUI',
+                     INFO = 1,
+                     FOND_FISS = FF1,
+                     RESULTAT  = RESU,
+                     PREC_VIS_A_VIS = 0.05,
+                    )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=11.6976304465,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K,
+           FILTRE=(_F(NOM_PARA='NOEUD_FOND',
+                      VALE_K='N403',),
+                   _F(NOM_PARA='INST',
+                      VALE=0.0,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.13,
+           VALE_CALC=11.6843111989,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K,
+           FILTRE=(_F(NOM_PARA='NOEUD_FOND',
+                      VALE_K='N2862',),
+                   _F(NOM_PARA='INST',
+                      VALE=0.0,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=11.696832621,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K,
+           FILTRE=(_F(NOM_PARA='NOEUD_FOND',
+                      VALE_K='N375',),
+                   _F(NOM_PARA='INST',
+                      VALE=0.0,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=11.6954423167,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K,
+           FILTRE=(_F(NOM_PARA='NOEUD_FOND',
+                      VALE_K='N292',),
+                   _F(NOM_PARA='INST',
+                      VALE=0.0,),
+                   ),
+           )
+
+FIN( )
+#
+#

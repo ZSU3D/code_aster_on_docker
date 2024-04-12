@@ -1,0 +1,123 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: marina.bottoni at edf.fr
+#
+# CAS-TEST DE REFERENCE : HSNV129A
+#
+#=====================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+TREF = 20.
+
+Tmax = 500.
+
+NCAL = 20
+
+ZERO =DEFI_CONSTANTE(VALE=0.0);
+
+YOUN=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(  0., 3.2E10,
+                                         500., 1.6e10,
+                                           ),);
+
+NU0=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(   0., 0.2,
+                                         500., 0.18,
+                                           ),);
+
+ALPH=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(  0., 1.2e-05,
+                                         500., 2.0e-05,
+                                           ),);
+
+EPSD0=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(  0., 0.0001,
+                                          500., 0.00005,
+                                           ),);
+
+AC=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(     0., 1.4,
+                                          500., 1.0,
+                                           ),);
+
+AT=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(     0., 1,
+                                          500., 0.8,
+                                           ),);
+
+BC=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(  0., 2000.,
+                                       500., 1000.
+                                       ),)
+
+BT=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(     0., 10000,
+                                          500., 20000,
+                                           ),);
+
+K=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(     0., 0.7,
+                                          500., 0.7,
+                                           ),);
+
+MATERI=DEFI_MATERIAU(ELAS_FO=_F(E=YOUN,
+                               NU=NU0 ,
+                               TEMP_DEF_ALPHA=TREF,
+                               ALPHA=ALPH,),
+                  MAZARS_FO  =_F(K=K,
+                                 EPSD0= EPSD0,
+                                 AC   = AC,
+                                 AT   = AT,
+                                 BC   = BC,
+                                 BT   = BT),
+                 );
+
+
+LMAT2  = [None]*(NCAL)
+time=0.
+tfin=1.
+for i in range(NCAL):
+    timem = time
+    time = timem + tfin/NCAL
+    Ti = TREF + time/tfin * (Tmax - TREF)
+    Tm = TREF + timem/tfin * (Tmax - TREF)
+    LMAT2[i]=DEFI_MATERIAU(ELAS =_F(E=YOUN(Ti),
+                                        NU=NU0(Ti),
+                                        ALPHA=0.,),
+                          MAZARS   =_F(K  = K(Ti),
+                                       EPSD0 = EPSD0(Ti),
+                                       AC    = AC(Ti),
+                                       AT    = AT(Ti),
+                                       BC    = BC(Ti),
+                                       BT    = BT(Ti)),
+                                );
+
+
+############################################################################
+# MACRO pour test thermoplastique
+
+compor='MAZARS'
+
+
+tabresu=TEST_COMPOR(
+              MATER=MATERI,COMPORTEMENT=_F(RELATION=compor),
+              LIST_MATER=LMAT2,ALPHA=ALPH,YOUNG=YOUN,TEMP_INIT=TREF,TEMP_FIN=Tmax,
+              NEWTON=_F(REAC_ITER=1),
+              NB_VARI=4,
+              VARI_TEST=('V1','V2','V4'),
+              )
+
+IMPR_TABLE(TABLE=tabresu)
+
+
+FIN()

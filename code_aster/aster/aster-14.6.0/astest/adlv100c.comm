@@ -1,0 +1,119 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#      PISTON COUPLE A UNE COLONNE DE FLUIDE
+#                CAS AXIS
+#              CAS TEST ADLV100C
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+MAYA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                     UNITE=19,
+                     )
+
+EAU=DEFI_MATERIAU( FLUIDE=_F( RHO = 1000.,  CELE_R = 1400.))
+
+AIR=DEFI_MATERIAU( FLUIDE=_F( RHO = 1.2,    CELE_R = 340.))
+
+ACIER=DEFI_MATERIAU( ELAS=_F( RHO = 7800.,  NU = 0.3,  E = 2.E+11))
+
+CHAMPMAT=AFFE_MATERIAU(  MAILLAGE=MAYA,AFFE=(
+                       _F( GROUP_MA = ('EAU',  'COUPLEAU',),  MATER = EAU),
+                       _F( GROUP_MA = ('AIR',  'COUPLAIR',),  MATER = AIR),
+                       _F( GROUP_MA = 'PISTON',             MATER = ACIER))
+                            )
+
+COLONNE=AFFE_MODELE( MAILLAGE=MAYA,AFFE=(
+                  _F( GROUP_MA = ('EAU',  'AIR',),
+                  MODELISATION = 'AXIS_FLUIDE',  PHENOMENE = 'MECANIQUE'),
+                  _F( GROUP_MA = ('COUPLAIR',  'COUPLEAU',),
+                  MODELISATION = 'AXIS_FLUI_STRU', PHENOMENE = 'MECANIQUE'),
+                  _F( GROUP_MA = 'PISTON',
+                  MODELISATION = 'AXIS',     PHENOMENE = 'MECANIQUE'))
+                          )
+
+SURFLIBR=AFFE_CHAR_MECA( MODELE=COLONNE,
+#             DDL_IMPO:(GROUP_NO:NOEUSURF  PRES:0.  PHI:0.));
+#  -- POUR TESTER LIAISON_UNIF :
+              DDL_IMPO=_F( NOEUD = 'N19',  PRES = 0.,  PHI = 0.),
+              LIAISON_UNIF=_F( GROUP_NO = 'NOEUSURF', DDL = ('PRES','PHI',)))
+
+GUIDAGE=AFFE_CHAR_MECA( MODELE=COLONNE,
+                    DDL_IMPO=_F( GROUP_NO = 'NOEUPIST',  DX = 0.))
+
+MATELE_K=CALC_MATR_ELEM( MODELE=COLONNE,
+                              CHAM_MATER=CHAMPMAT,  OPTION='RIGI_MECA',
+                              CHARGE=(SURFLIBR,  GUIDAGE,))
+
+MATELE_M=CALC_MATR_ELEM( MODELE=COLONNE,
+                              CHAM_MATER=CHAMPMAT,  OPTION='MASS_MECA',
+                              CHARGE=(SURFLIBR, GUIDAGE,))
+
+NUM=NUME_DDL( MATR_RIGI=MATELE_K)
+
+MATASK=ASSE_MATRICE( MATR_ELEM=MATELE_K,  NUME_DDL=NUM)
+
+MATASM=ASSE_MATRICE( MATR_ELEM=MATELE_M,  NUME_DDL=NUM)
+
+MODES=CALC_MODES( OPTION='BANDE',
+                  MATR_RIGI=MATASK,
+                  MATR_MASS=MATASM,
+                  CALC_FREQ=_F( FREQ = (5., 100.) ),
+                 )
+
+
+MASSES=POST_ELEM(
+                             MODELE=COLONNE,
+                         CHAM_MATER=CHAMPMAT,
+                          MASS_INER=_F(
+                                      TOUT = 'OUI')
+                     )
+
+TEST_TABLE(
+           VALE_CALC=1.9249323599999999,
+           NOM_PARA='MASSE',
+           TABLE=MASSES,)
+
+TEST_TABLE(
+           VALE_CALC=0.095131889999999997,
+           
+           NOM_PARA='CDG_Z',
+           TABLE=MASSES,)
+
+TEST_TABLE(
+           VALE_CALC=2.406165E-3,
+           
+           NOM_PARA='IZ_G',
+           TABLE=MASSES,)
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODES,
+                  VALE_CALC=13.827701314,
+                  VALE_REFE=13.82,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+FIN()
+#

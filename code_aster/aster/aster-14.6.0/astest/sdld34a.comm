@@ -1,0 +1,322 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+# MISE EN DONNEES
+tfin = 3.0;
+
+pdt = 0.01;
+
+k = (((0.5 * pi) * 2.0) ** 2);
+
+m = 1.0;
+
+dinit = 1.0;
+
+ainit = (-(k) / m);
+
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA='GROUP_MA_N',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='DIS_T',),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.0E11,
+                            NU=0.3,
+                            RHO=7800.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='GROUP_MA_N',
+                            MATER=ACIER,),);
+
+CARELEM=AFFE_CARA_ELEM(MODELE=MODELE,
+                       DISCRET=(_F(CARA='K_T_D_N',
+                                   GROUP_MA='GROUP_MA_N',
+                                   VALE=(k,0.,0.,),),
+                                _F(CARA='M_T_D_N',
+                                   GROUP_MA='GROUP_MA_N',
+                                   VALE=m,),),);
+
+# CONDITIONS AUX LIMITES
+
+BLOQUAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                        DDL_IMPO=_F(GROUP_NO='GROUP_NO_N',
+                                    DY=0.,
+                                    DZ=0.,),);
+
+#MATRICES ASSEMBLEES K, M
+
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARELEM,
+                CHARGE=BLOQUAGE,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('RIGIDITE'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('MASSE'),
+                              OPTION='MASS_MECA',),
+                           _F(MATRICE=CO('MASDIAG'),
+                              OPTION='MASS_MECA_DIAG',),),);
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=tfin,
+                                   PAS=pdt,),);
+
+DEPLINI=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                   NUME_DDL=NUMEDDL,
+                   OPERATION='AFFE', PROL_ZERO='OUI',
+                   MODELE=MODELE,
+                   AFFE=_F(GROUP_NO='GROUP_NO_N',
+                           NOM_CMP='DX',
+                           VALE=dinit,),);
+
+TRANSI=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                      MODELE=MODELE,
+                      MATR_MASS=MASSE,
+                      MATR_RIGI=RIGIDITE,
+                      SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                      ETAT_INIT=_F(DEPL=DEPLINI,),
+                      SOLVEUR=_F(METHODE='LDLT',),
+#                      INCREMENT=_F(LIST_INST=LINST,),);
+                      INCREMENT=_F(PAS=pdt,
+                                   INST_FIN=tfin,),);
+
+DX_DIS2=RECU_FONCTION(RESULTAT=TRANSI,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='GROUP_NO_N',);
+
+TRANSIV=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                      MODELE=MODELE,
+                      MATR_MASS=MASSE,
+                      MATR_RIGI=RIGIDITE,
+                      TITRE='VITESSE DE LA MASSE A T = 1.5S',
+                      SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                      ETAT_INIT=_F(DEPL=DEPLINI,),
+                      SOLVEUR=_F(METHODE='LDLT',),
+                      INCREMENT=_F(PAS=pdt,
+                                   INST_FIN=tfin,),
+                      ARCHIVAGE=_F(INST=1.5,
+                                   CHAM_EXCLU=('DEPL','ACCE'),
+                                   CRITERE='ABSOLU',
+                                   PRECISION=1E-6,),
+                      INFO=1,);
+
+VX_DIS2=RECU_FONCTION(RESULTAT=TRANSIV,
+                      NOM_CHAM='VITE',
+                      NOM_CMP='DX',
+                      GROUP_NO='GROUP_NO_N',);
+
+TRANSX=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                      MODELE=MODELE,
+                      MATR_MASS=MASDIAG,
+                      MATR_RIGI=RIGIDITE,
+                      SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                      ETAT_INIT=_F(DEPL=DEPLINI,),
+                      SOLVEUR=_F(METHODE='LDLT',),
+                      INCREMENT=_F(PAS=pdt,
+                                   INST_FIN=tfin,),
+                      INFO=2,);
+
+DXXDIS2=RECU_FONCTION(RESULTAT=TRANSX,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='GROUP_NO_N',);
+
+MODES=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 OPTION='TOUT',
+                 MATR_MASS=MASSE,
+                 SOLVEUR_MODAL=_F(METHODE='QZ',
+                                  ),
+                 )
+
+MODES_G=CALC_MODES(TYPE_RESU='GENERAL',
+                   OPTION='TOUT',
+                   MATR_B=MASSE,
+                   MATR_A=RIGIDITE,
+                   SOLVEUR_MODAL=_F(METHODE='QZ',
+                                    ),
+                   )
+
+MODES_G2=CALC_MODES(TYPE_RESU='GENERAL',
+                   OPTION='TOUT',
+                   MATR_B=MASSE,
+                   MATR_A=RIGIDITE,
+                   SOLVEUR_MODAL=_F(METHODE='QZ',
+                                    ),
+                   NORM_MODE=_F(INFO=1,NORME='TRAN',),
+                   )
+
+# FREQUENCE PROPRE
+f0 = sqrt( k/m ) / (2*pi)
+# VALEUR PROPRE CORRESPONDANTE
+vp0 = (2*pi * f0)**2
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=f0,
+                   CRITERE='RELATIF',
+                  ),
+                _F(NUME_ORDRE=1,
+                   PARA='CHAR_CRIT',
+                   RESULTAT=MODES_G,
+                   VALE_CALC=-vp0,
+                   CRITERE='RELATIF',
+                  ),
+               ),
+          )
+
+
+PROJ_BASE(BASE=MODES,
+                STOCKAGE='DIAG',
+                MATR_ASSE_GENE=(_F(MATRICE=CO('MAGE'),
+                                   MATR_ASSE=MASSE,),
+                                _F(MATRICE=CO('RIGE'),
+                                   MATR_ASSE=RIGIDITE,),),
+                VECT_ASSE_GENE=_F(VECTEUR=CO('DIGE'),
+                                  TYPE_VECT='DEPL',
+                                  VECT_ASSE=DEPLINI,),);
+
+### A TITRE D'EXEMPLE, ON PEUT EGALEMENT DONNER UN ETAT INITIAL SUR LA BASE D'UN RESULTAT GENE
+
+RESUINI=CREA_RESU(OPERATION='AFFE',
+                  TYPE_RESU='DYNA_TRANS',
+                  MATR_RIGI=RIGIDITE,
+                  MATR_MASS=MASSE,
+                  NOM_CHAM='DEPL',
+                  AFFE=(_F(CHAM_GD=DEPLINI,INST=0.0,),),);
+
+PROJ_BASE(BASE=MODES,
+          STOCKAGE='DIAG',
+          RESU_GENE=_F(RESULTAT=CO('INIGEN'), 
+                       RESU=RESUINI,
+                       TYPE_VECT='DEPL',),);
+
+###
+
+TRANSMO=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                        SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                        MATR_MASS=MAGE,
+                        MATR_RIGI=RIGE,
+                        # ETAT_INIT=_F(DEPL=DIGE,),
+                        ETAT_INIT=_F(RESULTAT=INIGEN,INST_INIT=0.0),
+
+                        INCREMENT=_F(INST_FIN=tfin,
+                                     PAS=pdt,),);
+
+DXGEDIS2=RECU_FONCTION(RESU_GENE=TRANSMO,
+                       NOM_CHAM='DEPL',
+                       NOM_CMP='DX',
+                       GROUP_NO='GROUP_NO_N',);
+
+DXGEMO=RECU_FONCTION(RESU_GENE=TRANSMO,
+                     NOM_CHAM='DEPL',
+                     NUME_CMP_GENE=1,)
+
+
+DXGEM2=RECU_FONCTION(RESU_GENE=TRANSMO,
+                     NOM_CHAM='DEPL',
+                     INST=2.0, 
+                     INTERP_NUME='LIN',
+                     NUME_CMP_GENE=1,)
+
+TRANSMOV=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                        SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                        MATR_MASS=MAGE,
+                        MATR_RIGI=RIGE,
+                        ETAT_INIT=_F(DEPL=DIGE,),
+                        INCREMENT=_F(LIST_INST=LINST,
+                                     NUME_FIN=300,),
+                        ARCHIVAGE=_F(INST=1.5),);
+
+# IMPR_GENE(GENE=_F(RESU_GENE=TRANSMOV,
+#                   NOM_CHAM='VITE',
+#                   NUME_CMP_GENE=1,
+#                   TOUT_INST=('OUI'),),);
+
+VXGEDIS2=RECU_FONCTION(RESU_GENE=TRANSMOV,
+                       NOM_CHAM='VITE',
+                       NOM_CMP='DX',
+                       GROUP_NO='GROUP_NO_N',);
+
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.999999866513,
+                         VALE_REFE=1,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=9.9999999999999995E-07,
+                         FONCTION=DX_DIS2,),
+                      _F(VALE_CALC=0.999999966611,
+                         VALE_REFE=1,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=9.9999999999999995E-07,
+                         FONCTION=DXXDIS2,),
+                      _F(VALE_CALC=1.000004026275,
+                         VALE_REFE=1,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         FONCTION=DXGEDIS2,),
+                      _F(VALE_CALC=1.000004026275,
+                         VALE_REFE=1,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         FONCTION=DXGEMO,),
+                      _F(VALE_CALC=1.000004026275,
+                         VALE_REFE=1,
+                         VALE_PARA=2,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-4,
+                         FONCTION=DXGEM2,),
+                      _F(VALE_CALC=3.1415924177,
+                         VALE_REFE=pi,
+                         VALE_PARA=1.5,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-6,
+                         FONCTION=VX_DIS2,),
+                      _F(VALE_CALC=3.141592417698,
+                         VALE_REFE=pi,
+                         VALE_PARA=1.5,
+                         REFERENCE='ANALYTIQUE',
+                         PRECISION=1.E-6,
+                         FONCTION=VXGEDIS2,),
+                      ),
+              )
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=29,
+              COURBE=(_F(FONCTION=DX_DIS2,
+                         MARQUEUR=0,),
+                      _F(FONCTION=DXXDIS2,
+                         MARQUEUR=0,),
+                      _F(FONCTION=DXGEDIS2,
+                         MARQUEUR=0,),
+                      _F(FONCTION=DXGEMO,
+                         MARQUEUR=0,),),);
+
+FIN();

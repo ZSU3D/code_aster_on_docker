@@ -1,0 +1,282 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+# person_in_charge: mickael.abbas at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+# Read the mesh
+mesh=LIRE_MAILLAGE(FORMAT='MED',);
+
+mesh=MODI_MAILLAGE(reuse =mesh,
+                   MAILLAGE=mesh,
+                   ORIE_PEAU_3D=_F(GROUP_MA='S_e',),);
+
+# Define the material
+steel=DEFI_MATERIAU(
+          ELAS=     _F(E= 210000., NU = 0.3),
+          ECRO_LINE=_F(D_SIGM_EPSI=100., SY=100.,),
+          )
+
+chmat=AFFE_MATERIAU(MAILLAGE=mesh,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=steel,),);
+# Mechanic model
+model=AFFE_MODELE(MAILLAGE=mesh,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+# Boundary condition
+chg_b=AFFE_CHAR_CINE(MODELE=model,
+                      MECA_IMPO=_F(GROUP_MA='S_inf',
+                                 DX=0,DY=0.0,DZ=0),
+                     );
+
+chg_p=AFFE_CHAR_MECA(MODELE=model,
+                     PRES_REP=_F(GROUP_MA='S_e',
+                                 PRES = 1000,),
+                    )
+
+# Time discretization
+list_t=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=10.0,
+                                    PAS=1.0,),);
+
+list_i=DEFI_LIST_INST(METHODE='MANUEL', DEFI_LIST=_F(LIST_INST=list_t,),);
+
+rampe=DEFI_FONCTION(NOM_PARA='INST',VALE=(0.0,0.0,
+                                          10.,1.,
+                   ),);
+
+####################################################################################################
+#
+# Calcul complet de référence
+#
+####################################################################################################
+
+stnl=STAT_NON_LINE(MODELE=model,
+                   CHAM_MATER=chmat,
+                   EXCIT=(_F(CHARGE=chg_b,),
+                          _F(CHARGE=chg_p,FONC_MULT=rampe),
+                         ),
+                   INCREMENT=_F(LIST_INST=list_i,),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),)
+
+stnl=CALC_CHAMP(reuse=stnl,
+                RESULTAT=stnl,
+                CONTRAINTE='SIEF_NOEU',);
+
+####################################################################################################
+#
+# Lecture des bases et préparation des données (troncature,...)
+#
+####################################################################################################
+
+# Récupère base primale
+base_p=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model,
+                 UNITE      = 70,
+                 FORMAT_MED =_F(NOM_CHAM_MED = 'base_p__DEPL',
+                                NOM_CHAM     = 'DEPL',),
+                 NUME_ORDRE=(1,2,3),);
+
+# Récupère base duale
+base_d=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model,
+                 UNITE      = 71,
+                 FORMAT_MED = _F(NOM_CHAM_MED = 'base_d__SIEF_NOEU',
+                                 NOM_CHAM     = 'SIEF_NOEU',),
+                 NUME_ORDRE=(1,2,3),);
+
+# Define HROM
+mesh=DEFI_GROUP(reuse=mesh,
+                MAILLAGE=mesh,
+                CREA_GROUP_MA=_F(NOM='S_e_rid',
+                               INTERSEC=('RID','S_e',),),);
+
+mesh=DEFI_GROUP(reuse=mesh,
+                MAILLAGE=mesh,
+                CREA_GROUP_MA=_F(NOM='S_inf_rid',
+                                 INTERSEC=('RID','S_inf',),),);
+
+# Mechanic model
+model_r=AFFE_MODELE(MAILLAGE=mesh,
+               AFFE=_F(GROUP_MA='RID',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+# Truncation of base
+base_t=DEFI_BASE_REDUITE(OPERATION='TRONCATURE',
+                         MODELE_REDUIT = model_r, 
+                         BASE = base_p,
+                         INFO=2)
+
+# Boundary condition
+chg_b_r=AFFE_CHAR_CINE(MODELE=model_r,
+                      MECA_IMPO=_F(GROUP_MA='S_inf_rid',
+                                 DX=0,DY=0.0,DZ=0),
+                     );
+
+chg_p_r=AFFE_CHAR_MECA(MODELE=model_r,
+                     PRES_REP=_F(GROUP_MA='S_e_rid',
+                                 PRES = 1000,),
+                    )
+
+####################################################################################################
+#
+# Calcul hyper-réduit (prédiction standard)
+#
+####################################################################################################
+redu=STAT_NON_LINE(MODELE=model_r,
+                   CHAM_MATER=chmat,
+                   EXCIT=(_F(CHARGE=chg_b_r,),
+                          _F(CHARGE=chg_p_r,FONC_MULT=rampe),
+                         ),
+                   INCREMENT=_F(LIST_INST=list_i,),
+                    METHODE='MODELE_REDUIT',
+                   MODELE_REDUIT=_F(PREDICTION='TANGENTE',
+                    REAC_ITER=1,
+                    BASE_PRIMAL     = base_t,
+                    DOMAINE_REDUIT  = 'OUI',
+                    GROUP_NO_INTERF = 'INF',
+                    ),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),)
+
+redu=CALC_CHAMP(reuse=redu,
+                RESULTAT=redu,
+                CONTRAINTE='SIEF_NOEU',);
+
+coor_red=RECU_TABLE(CO=redu,NOM_TABLE='COOR_REDUIT',);
+
+IMPR_TABLE(TABLE=coor_red, UNITE=6)
+
+####################################################################################################
+#
+# Calcul hyper-réduit (prédiction EXTRAPOLE)
+#
+####################################################################################################
+reduX=STAT_NON_LINE(MODELE=model_r,
+                   CHAM_MATER=chmat,
+                   EXCIT=(_F(CHARGE=chg_b_r,),
+                          _F(CHARGE=chg_p_r,FONC_MULT=rampe),
+                         ),
+                   INCREMENT=_F(LIST_INST=list_i,),
+                    METHODE='MODELE_REDUIT',
+                   MODELE_REDUIT=_F(PREDICTION='EXTRAPOLE',
+                    REAC_ITER=1,
+                    BASE_PRIMAL     = base_t,
+                    DOMAINE_REDUIT  = 'OUI',
+                    GROUP_NO_INTERF = 'INF',
+                    ),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),)
+
+coor_rex=RECU_TABLE(CO=reduX,NOM_TABLE='COOR_REDUIT',);
+
+IMPR_TABLE(TABLE=coor_rex, UNITE=6)
+
+####################################################################################################
+#
+# Calcul hyper-réduit (prédiction DEPL_CALCULE)
+#
+####################################################################################################
+reduD=STAT_NON_LINE(MODELE=model_r,
+                   CHAM_MATER=chmat,
+                   EXCIT=(_F(CHARGE=chg_b_r,),
+                          _F(CHARGE=chg_p_r,FONC_MULT=rampe),
+                         ),
+                   INCREMENT=_F(LIST_INST=list_t,),
+                    METHODE='MODELE_REDUIT',
+                   MODELE_REDUIT=_F(PREDICTION='DEPL_CALCULE',
+                    EVOL_NOLI=reduX,
+                    REAC_ITER=1,
+                    BASE_PRIMAL     = base_t,
+                    DOMAINE_REDUIT  = 'OUI',
+                    GROUP_NO_INTERF = 'INF',
+                    ),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),)
+
+coor_rec=RECU_TABLE(CO=reduD,NOM_TABLE='COOR_REDUIT',);
+
+IMPR_TABLE(TABLE=coor_rec, UNITE=6)
+
+####################################################################################################
+#
+# Reconstruction des déplacements "à la main"
+#
+####################################################################################################
+
+
+# Reconstruction du champ de déplacements "à la main"
+MODE1 = CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R', OPERATION='EXTR', RESULTAT=base_p, NOM_CHAM='DEPL',NUME_ORDRE=1);
+MODE2 = CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R', OPERATION='EXTR', RESULTAT=base_p, NOM_CHAM='DEPL',NUME_ORDRE=2);
+
+# Valeurs extraites de la table COOR_REDUIT
+reduD1 = -2.70377286222
+reduD2 = -0.00603094832961
+
+U=CREA_CHAMP( OPERATION='COMB',
+                   TYPE_CHAM='NOEU_DEPL_R',
+                   COMB=(_F(CHAM_GD=MODE1,COEF_R=reduD1),
+                         _F(CHAM_GD=MODE2,COEF_R=reduD2),),)
+
+####################################################################################################
+#
+# Reconstruction des contraintes "à la main"
+#
+####################################################################################################
+
+
+# Reconstruction du champ de déplacements "à la main"
+MODE1s = CREA_CHAMP(TYPE_CHAM='NOEU_SIEF_R', OPERATION='EXTR', RESULTAT=base_d, NOM_CHAM='SIEF_NOEU',NUME_ORDRE=1);
+MODE2s = CREA_CHAMP(TYPE_CHAM='NOEU_SIEF_R', OPERATION='EXTR', RESULTAT=base_d, NOM_CHAM='SIEF_NOEU',NUME_ORDRE=2);
+MODE3s = CREA_CHAMP(TYPE_CHAM='NOEU_SIEF_R', OPERATION='EXTR', RESULTAT=base_d, NOM_CHAM='SIEF_NOEU',NUME_ORDRE=3);
+
+# Valeurs extraites de la table COOR_REDUIT
+comb1 = -108950.59263472102  
+comb2 = -15280.860912969722  
+comb3 =   20485.486855804837
+
+SIEF=CREA_CHAMP( OPERATION='COMB',
+                   TYPE_CHAM='NOEU_SIEF_R',
+                   COMB=(_F(CHAM_GD=MODE1s,COEF_R=comb1),
+                         _F(CHAM_GD=MODE2s,COEF_R=comb2),
+                         _F(CHAM_GD=MODE3s,COEF_R=comb3),
+),)
+
+####################################################################################################
+#
+# Reconstruction du résultat complet par Gappy-POD
+#
+####################################################################################################
+
+
+# Gappy-POD (reconstruction tout le domaine)
+reduR = REST_REDUIT_COMPLET(
+    MODELE           = model,
+    RESULTAT_REDUIT  = redu, 
+    BASE_PRIMAL      = base_p,
+    REST_DUAL        = 'OUI',
+    BASE_DUAL        = base_d,
+    INFO             = 2,
+    GROUP_NO_INTERF  = 'INF',
+)
+
+FIN()

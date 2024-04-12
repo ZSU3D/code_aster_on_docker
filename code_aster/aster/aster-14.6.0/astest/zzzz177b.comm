@@ -1,0 +1,89 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+# Test operations on tables
+
+DEBUT (CODE=_F(
+       NIV_PUB_WEB='INTERNET'),
+       DEBUG=_F(SDVERI='OUI'))
+
+tab1 = CREA_TABLE(LISTE=(_F(PARA='NUME_ORDRE',
+                            LISTE_I=list(range(1, 7))),
+                         _F(PARA='FREQ',
+                            LISTE_R=(1.35889E+01, 1.35889E+01,
+                                     1.98058E+01, 1.9805801E+01,
+                                     2.39561E+01, 2.39561E+01)),
+                         _F(PARA='PARA',
+                            LISTE_K=('P1', 'P1', 'P3', 'P3', 'P5', 'P6'))))
+
+tab1s = CALC_TABLE(TABLE=tab1,
+                   ACTION=_F(OPERATION='STATISTIQUES'))
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           FILTRE=_F(NOM_PARA='STAT_NOM',
+                     VALE_K='NB_LIGNES',),
+           VALE_CALC_I=6,
+           VALE_REFE_I=6,
+           NOM_PARA='STAT_VALE',
+           TABLE=tab1s)
+
+IMPR_TABLE(UNITE=6,
+           TABLE=tab1)
+
+# Remove identical values of FREQ. Rounded using FORMAT_R, only 3 lines should remain
+tab2 = CALC_TABLE(TABLE=tab1,
+                  ACTION=_F(OPERATION='UNIQUE',
+                            NOM_PARA='FREQ',
+                            FORMAT_R='E12.5'))
+
+tab2s = CALC_TABLE(TABLE=tab2,
+                   ACTION=_F(OPERATION='STATISTIQUES'))
+
+IMPR_TABLE(UNITE=6,
+           TABLE=tab2)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           FILTRE=_F(NOM_PARA='STAT_NOM',
+                     VALE_K='NB_LIGNES',),
+           VALE_CALC_I=3,
+           VALE_REFE_I=3,
+           NOM_PARA='STAT_VALE',
+           TABLE=tab2s)
+
+# Remove identical values of FREQ (not rounded) + PARA, 5 lines should remain
+tab3 = CALC_TABLE(TABLE=tab1,
+                  ACTION=_F(OPERATION='UNIQUE',
+                            NOM_PARA=('FREQ', 'PARA')))
+
+tab3s = CALC_TABLE(TABLE=tab3,
+                   ACTION=_F(OPERATION='STATISTIQUES'))
+
+IMPR_TABLE(UNITE=6,
+           TABLE=tab3)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           FILTRE=_F(NOM_PARA='STAT_NOM',
+                     VALE_K='NB_LIGNES',),
+           VALE_CALC_I=5,
+           VALE_REFE_I=5,
+           NOM_PARA='STAT_VALE',
+           TABLE=tab3s)
+
+FIN()

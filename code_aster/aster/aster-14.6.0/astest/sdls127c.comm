@@ -1,0 +1,184 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Calcul par projection sur une base modale
+# Modes propres réels améliorés ("beta-modes")
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),);
+
+
+# LECTURE DU MAILLAGE AU FORMAT MED
+
+MAIL=LIRE_MAILLAGE(UNITE=20,
+                   FORMAT='MED',);
+
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.1E11,
+                            NU=0.3,
+                            RHO=7800,
+                            AMOR_HYST=0.002,),);
+
+# DEFINITION DE LA MODELISATION PLAQUE
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=(_F(GROUP_MA=('DESSUS','DESSOUS'),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DKT'),
+                         _F(GROUP_MA=('VOLUME'),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='3D'),),);
+
+
+# DEFINITION ET AFFECTATION DES PROPRIETES DES PLAQUES
+
+CARAPLAQ=AFFE_CARA_ELEM(MODELE=MODELE,
+                        COQUE=(_F(GROUP_MA='DESSOUS',
+                                  EPAIS=1E-3,
+                                  EXCENTREMENT=0.5E-3,
+                                  INER_ROTA='OUI',),
+                               _F(GROUP_MA='DESSUS',
+                                  EPAIS=0.5E-3,
+                                  EXCENTREMENT=0.25E-3,
+                                  INER_ROTA='OUI',),),);
+
+# DEFINITION DES CONDITIONS D'ENCASTREMENT
+
+CONDLIM=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(GROUP_MA='ENCAS',
+                                   LIAISON='ENCASTRE',
+                                   ),);
+
+# DEFINITION DU CHARGEMENT
+
+FORCE=AFFE_CHAR_MECA(MODELE=MODELE,
+                     FORCE_NODALE=_F(GROUP_NO='A',
+                                     FZ=1.,
+                                     ),);
+
+
+# DEFINITION DE LA DEPENDANCE EN FREQUENCE DES PROPRIETES DES MATERIAUX VISCOELASTIQUES
+
+list_f=DEFI_LIST_REEL(VALE=(1.,10.,50.,100.,500.,1000.,1500.),);
+
+list_E=DEFI_LIST_REEL(VALE=(23.2E6,58.E6,145.E6,203.E6,348.E6,435.E6,464.E6),);
+
+list_eta=DEFI_LIST_REEL(VALE=(1.1,0.85,0.7,0.6,0.4,0.35,0.34),);                            
+
+fonc_E=DEFI_FONCTION(NOM_PARA='FREQ',
+                     VALE_PARA=list_f,
+                     VALE_FONC=list_E,
+                     INTERPOL=('LOG','LOG',),
+                     PROL_DROITE='LINEAIRE',
+                     PROL_GAUCHE='CONSTANT',);
+
+fonc_eta=DEFI_FONCTION(NOM_PARA='FREQ',
+                       VALE_PARA=list_f,
+                       VALE_FONC=list_eta,
+                       INTERPOL=('LOG','LOG',),
+                       PROL_DROITE='LINEAIRE',
+                       PROL_GAUCHE='CONSTANT',);
+
+# DEFINITION DES FREQUENCES DE CALCUL DE LA REPONSE HARMONIQUE
+
+listfr=DEFI_LIST_REEL(DEBUT=1.,
+                      INTERVALLE=(_F(JUSQU_A=500.,
+                                     PAS=1.,),),);
+
+
+# CALCUL DE LA REPONSE HARMONIQUE
+
+visco=DYNA_VISCO(MODELE=MODELE,
+                 CARA_ELEM=CARAPLAQ,
+                 MATER_ELAS=(_F(MATER=ACIER,
+                                GROUP_MA='DESSOUS'),
+                             _F(E=7.0E10,
+                                NU=0.3,
+                                RHO=2700.,
+                                AMOR_HYST=0.001,
+                                GROUP_MA='DESSUS'),),
+                 MATER_ELAS_FO=(_F(E=fonc_E,
+                                   AMOR_HYST=fonc_eta,
+                                   RHO=1200.,
+                                   NU=0.45, 
+                                   GROUP_MA='VOLUME',),),
+                 EXCIT=_F(CHARGE=(CONDLIM, FORCE),),
+                 LIST_FREQ=listfr,
+                 TYPE_RESU='HARM',
+                 TYPE_MODE='BETA_REEL',
+                 COEF_FREQ_MAX=2.,
+                 # MODE_MECA=CO('modes'), # décommenter si on veut récuperer les modes propres
+                 );
+
+
+TEST_RESU(RESU=(_F(RESULTAT=visco,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='A',
+                   NOM_CMP='DZ',
+                   VALE_CALC_C=3.82850629105e-04 - 9.1453597617e-05j,
+                   VALE_REFE_C=3.84063122275e-04 - 8.77803614739e-05j,
+                   REFERENCE='AUTRE_ASTER',
+                   PRECISION=2.e-2),
+                _F(RESULTAT=visco,
+                   NUME_ORDRE=100,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='A',
+                   NOM_CMP='DZ',
+                   VALE_CALC_C=-1.15683305383e-04 - 9.69646901309e-06j,
+                   VALE_REFE_C=-1.1663671537e-04 - 9.6134604316e-06j,
+                   REFERENCE='AUTRE_ASTER',
+                   PRECISION=2.e-2),
+                _F(RESULTAT=visco,
+                   NUME_ORDRE=500,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='A',
+                   NOM_CMP='DZ',
+                   VALE_CALC_C=-1.33785489093e-05 - 1.59895370002e-06j,
+                   VALE_REFE_C=-1.302768494e-05 - 1.65977932083e-06j,
+                   REFERENCE='AUTRE_ASTER',
+                   PRECISION=4.e-2),
+               ),);
+
+
+# SI ON VEUT VISUALISER LES MODES PROPRES CALCULES
+# IMPR_RESU(FORMAT='MED',
+#           UNITE=80, 
+#           RESU=_F(MAILLAGE=MAIL,
+#                   RESULTAT=modes),);
+
+
+# POST-TRAITEMENTS POUR VISUALISER
+# L'AMPLITUDE DE LA REPONSE HARMONIQUE EN UN POINT
+dz_a=RECU_FONCTION(RESULTAT=visco,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   GROUP_NO='A')
+
+dz_a_abs=CALC_FONCTION(EXTRACTION=_F(FONCTION=dz_a,
+                                     PARTIE='MODULE'),);
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=29,
+              COURBE=(
+                      _F(FONCTION=dz_a_abs),
+                      ),);
+
+FIN();

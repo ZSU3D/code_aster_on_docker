@@ -1,0 +1,257 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: samuel.geniaut at edf.fr
+
+# MODELISATION D: METHODE GEOMETRIQUE
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+              DEBUG=_F(SDVERI='OUI'),
+              IGNORE_ALARM=('TEST0_12'))
+
+
+#----------------------------------------------
+#                 MAILLAGE
+#----------------------------------------------
+
+MAILLAG1=LIRE_MAILLAGE(FORMAT='MED');
+
+MAILLAG2=LIRE_MAILLAGE(UNITE=21, FORMAT='MED');
+
+#Largeur de la plaque
+W = 10.
+
+#Nb de pas de propagation
+NPAS = 15
+
+#Pas de propagation
+DA = 0.25
+
+#Rayons inferieur et superieur des couronnes d'integration pour CALC_G
+RI = 0.5
+RS = 2.
+
+#RP
+RP = 4.
+
+#longueur de fissure initiale
+xinit = 2.5
+yinit = 15.
+
+# Chargement de traction
+PRES = -1.E6
+
+#----------------------------------------------
+#                   MODELE
+#----------------------------------------------
+
+MODEL = [None]*(NPAS+1)
+
+
+MODEL[0]=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                      AFFE=(_F(GROUP_MA=('Surface',),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='D_PLAN',),
+                            _F(GROUP_MA=('LIG2','LIG4'),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='D_PLAN',),),);
+
+grille=DEFI_GRILLE(MAILLAGE=MAILLAG2);
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO=_F(GROUP_MA='Surface',),);
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=205000.0E6
+nu=0.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,),);
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODEL[0],
+                       AFFE=_F(TOUT = 'OUI',
+                                MATER=ACIER,
+                                ),
+                             );
+
+#----------------------------------------------
+#                   FISSURE
+#----------------------------------------------
+
+# PARAMETRES DE LA FISSURE
+
+X0 = xinit
+Y0 = yinit
+
+LN = FORMULE(VALE='Y-Y0',
+             Y0=Y0,
+             NOM_PARA=['X', 'Y'],)
+LT = FORMULE(VALE='X-X0',
+             X0=X0,
+             NOM_PARA=['X', 'Y'],)
+
+FISS = [None]*(NPAS+1)
+
+FISS[0]=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                       MAILLAGE_GRILLE=grille,
+                       DEFI_FISS=_F(FONC_LT=LT,FONC_LN=LN,),
+                       );
+
+#----------------------------------------------
+#         PROPAGATION SUR 3 PAS DE TEMPS
+#----------------------------------------------
+afiss=[None]*(NPAS+1)
+faW = [None]*(NPAS+1)
+CHXFE = [None]*(NPAS+1)
+K1REF = [None]*(NPAS+1)
+CHRIG = [None]*(NPAS+1)
+RESU = [None]*(NPAS+1)
+SIF = [None]*(NPAS+1)
+LSN = [None]*(NPAS+1)
+LST = [None]*(NPAS+1)
+TAB = [None]*(NPAS+1)
+afiss[0]=xinit
+
+
+FOND1 = FORMULE(VALE='0*NUME_ORDRE+1',
+                NOM_PARA='NUME_ORDRE',)
+
+VALE_CALC=[
+4193126.49584,
+4623165.70023,
+5090976.57837,
+5602658.3795,
+6165138.0115,
+6786427.8648,
+7475930.56231,
+8244816.15139,
+9106501.70303,
+10077274.0159,
+11177112.2688,
+12430792.3749,
+13869393.2914,
+15532386.0273,
+17470583.0527,]
+
+for i in range(1,NPAS+1) :
+
+    afiss[i]=xinit+i*DA
+
+    MODEL[i]=MODI_MODELE_XFEM(MODELE_IN=MODEL[0],FISSURE=FISS[i-1],);
+
+    CHRIG[i]=AFFE_CHAR_MECA(MODELE=MODEL[i],
+                            DDL_IMPO=( _F(GROUP_NO='P1', DY=0.0,),_F(GROUP_NO=('P4',), DX=0.0, DY=0.0)),
+                            PRES_REP=_F(GROUP_MA=('LIG2','LIG4',),PRES=PRES,),
+                                          );
+
+    RESU[i]=MECA_STATIQUE(MODELE=MODEL[i],
+                         CHAM_MATER=CHAMPMA1,
+                         EXCIT=(
+                                _F(CHARGE=CHRIG[i],),),
+                         INST=1.0,
+                         SOLVEUR=_F(METHODE='MULT_FRONT',),
+                         );
+
+    SIF[i]=CALC_G(RESULTAT=RESU[i],
+                         OPTION='CALC_K_G',
+                         THETA=_F( FISSURE=FISS[i-1],),
+                         );
+
+    IMPR_TABLE(TABLE=SIF[i],);
+
+#Formule de KI (ref. Tada Irwin)
+    faW[0]=1.12-0.231*((afiss[0]/W))+10.55*((afiss[0]/W)**2)-21.72*((afiss[0]/W)**3)+30.35*((afiss[0]/W)**4)
+    K1REF[0]=-PRES*sqrt(pi*afiss[0])*faW[0]
+    faW[i]=1.12-0.231*((afiss[i]/W))+10.55*((afiss[i]/W)**2)-21.72*((afiss[i]/W)**3)+30.35*((afiss[i]/W)**4)
+    K1REF[i]=-PRES*sqrt(pi*afiss[i])*faW[i]
+
+#Test de KI par rapport a KI theorique
+    TEST_TABLE(CRITERE='RELATIF',
+               REFERENCE='ANALYTIQUE',
+               PRECISION=0.02,
+               VALE_CALC=VALE_CALC[i-1],
+               VALE_REFE=K1REF[i-1],
+               NOM_PARA='K1',
+               TYPE_TEST='MAX',
+               TABLE=SIF[i],)
+    IMPR_TABLE(TABLE=SIF[i],FORMAT_R='E20.13',NOM_PARA='K1');
+
+# Test de KII en pourcentage de KI theorique
+    # TEST DE REFERENCE SUR K2
+    TEST_TABLE(CRITERE='ABSOLU',
+               REFERENCE='AUTRE_ASTER',
+               PRECISION=(5*(10**(-3)))*K1REF[i-1],
+               VALE_CALC=0,
+               VALE_REFE=0,
+               NOM_PARA='K2',
+               TYPE_TEST='MAX',
+               TABLE=SIF[i],)
+
+    FISS[i] = CO('FISS_%d'%(i))
+    if ( i != NPAS+1 ) :
+      PROPA_FISS(MODELE=MODEL[i],
+                 FISSURE=_F(FISS_ACTUELLE=FISS[i-1],
+                            FISS_PROPAGEE=FISS[i],
+                            TABLE=SIF[i],),
+                 METHODE_PROPA='GEOMETRIQUE',
+                 LOI_PROPA=_F(LOI='PARIS',
+                                   C=1.,
+                                   M=1.,
+                                   MATER=ACIER,),
+                 DA_MAX=DA,
+                 RAYON=RP,
+                 COMP_LINE =_F(COEF_MULT_MINI=0.,
+                               COEF_MULT_MAXI=1.,),
+                 );
+
+#Test des coordonnees du fond de fissure y proche de yinit
+#en developpement
+
+#----------------------------------------------
+#         EDITION DE FICHIERS MED
+#----------------------------------------------
+#
+MAXFE = [None]*(NPAS+1)
+MOVIS = [None]*(NPAS+1)
+DEPL = [None]*(NPAS+1)
+
+
+for i in range(1,NPAS+1) :
+   MAXFE[i]=POST_MAIL_XFEM(MODELE=MODEL[i]);
+
+   MOVIS[i]=AFFE_MODELE(MAILLAGE=MAXFE[i],
+                         AFFE=_F(TOUT='OUI',
+                                 PHENOMENE='MECANIQUE',
+                                 MODELISATION='D_PLAN',),)
+
+   DEPL[i]=POST_CHAM_XFEM(
+                          MODELE_VISU   = MOVIS[i],
+                          RESULTAT=RESU[i],
+                          );
+
+#   DEFI_FICHIER(UNITE=30+i,);
+#   IMPR_RESU(FORMAT="RESULTAT",
+#             FORMAT='MED',
+#             UNITE=30+i,
+#             RESU=_F(RESULTAT=DEPL[i],),);
+
+FIN();

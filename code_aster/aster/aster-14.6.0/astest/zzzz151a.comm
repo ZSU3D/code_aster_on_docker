@@ -1,0 +1,90 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# Attention les différents logiciels appelés doivent être accessibles
+# depuis le répertoire "outils"
+#
+# Les TOLE_MACHINE sont là car entre les différentes versions des mailleurs
+# (Gmsh 2.5/2.8) les résultats sont très différents !
+# On n'a pas pour objectif de tester la non régression des mailleurs donc
+# on prend une marge confortable.
+# aslint: disable=W2005
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),
+      IMPR_MACRO='NON',)
+
+EXEC_LOGICIEL(LOGICIEL='ls -la', SHELL='OUI')
+
+EXEC_LOGICIEL(LOGICIEL='pwd', SHELL='NON')
+
+magmsh = EXEC_LOGICIEL(MAILLAGE=_F(FORMAT='GMSH',
+                                   UNITE_GEOM=16,),
+                       INFO=1)
+
+# pour éviter la variabilité aux différentes versions du mailleur,
+# on impose simplement un minimum de mailles/noeuds produits
+TEST_RESU(MAILLAGE=(
+    _F(MAILLAGE=magmsh,
+       CARA='NB_MAILLE',
+       REFERENCE='ANALYTIQUE',
+       CRITERE='ABSOLU',
+       VALE_REFE_I=458,     # entre 458 (2.5) et 605 (2.8) mailles
+       PRECISION=200,
+       VALE_CALC_I=605,
+       TOLE_MACHINE=200,
+      ),
+    _F(MAILLAGE=magmsh,
+       CARA='NB_NOEUD',
+       REFERENCE='ANALYTIQUE',
+       CRITERE='ABSOLU',
+       VALE_REFE_I=96,     # entre 96 (2.5) et 130 (2.8) noeuds
+       PRECISION=50,
+       VALE_CALC_I=131,
+       TOLE_MACHINE=50,
+      ),
+))
+
+masalom = EXEC_LOGICIEL(MAILLAGE=_F(FORMAT='SALOME',
+                                    UNITE_GEOM=17,),
+                        ARGUMENT='plaque.med',
+                        INFO=1)
+
+# marge de 10 %
+TEST_RESU(MAILLAGE=(
+    _F(MAILLAGE=masalom,
+       CARA='NB_MAILLE',
+       REFERENCE='ANALYTIQUE',
+       VALE_REFE_I=1508,
+       PRECISION=0.10,
+       VALE_CALC_I=1508,
+       TOLE_MACHINE=0.10,
+      ),
+    _F(MAILLAGE=masalom,
+       CARA='NB_NOEUD',
+       REFERENCE='ANALYTIQUE',
+       VALE_REFE_I=2917,
+       PRECISION=0.10,
+       VALE_CALC_I=2917,
+       TOLE_MACHINE=0.10,
+      ),
+))
+
+FIN()

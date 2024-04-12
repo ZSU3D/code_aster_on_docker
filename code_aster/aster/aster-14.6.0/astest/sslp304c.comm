@@ -1,0 +1,316 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+# MODELISATION COQUE_3D
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET') )
+
+MAINI=LIRE_MAILLAGE(FORMAT='MED',)
+
+DEFI_GROUP( reuse=MAINI,   MAILLAGE=MAINI,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'),
+  CREA_GROUP_NO=_F(  GROUP_MA = 'TOUT')
+  )
+
+MAIL=CREA_MAILLAGE(   MAILLAGE=MAINI,
+                     MODI_MAILLE=(_F( OPTION = 'QUAD8_9',TOUT='OUI'),
+                                 _F( OPTION = 'TRIA6_7',TOUT='OUI'),),)
+
+#
+# DEFINITION DES GROUPES DE NOEUDS
+DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,CREA_GROUP_NO=(
+                       _F(  GROUP_MA = 'BORD_CH1'),
+                       _F(  GROUP_MA = 'BORD_CH2'),
+                       _F(  NOM = 'RESULT',
+                                       NOEUD = ('N171', 'N336', 'N345',)))
+                   )
+
+#
+# DEFINITION DU MODELE
+MODELE=AFFE_MODELE(    MAILLAGE=MAIL,
+                         AFFE=_F(  TOUT = 'OUI',
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = 'COQUE_3D')  )
+
+#
+# DEFINITION DU MATERIAU
+ACIER=DEFI_MATERIAU(     ELAS_ORTH=_F(  E_L = 4.E10,
+                                       E_T = 1.E10,
+                                       G_LT = 0.45E10,
+                                       G_TN = 0.35E10,
+                                       NU_LT = 0.3)
+                      )
+
+#
+CARA=AFFE_CARA_ELEM(    MODELE=MODELE,
+                   COQUE=_F(  GROUP_MA = 'TOUT',
+                               EPAIS    = 1.0,
+                               ANGL_REP = (30.,0.,)) )
+
+#
+# ATTRIBUTION DU MATERIAU
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MAIL,
+                          AFFE=_F(  TOUT = 'OUI',
+                                 MATER = ACIER)  )
+
+#
+# DEFINITION DES CONDITIONS AUX LIMITES ET CHARGEMENTS
+CHARGT=AFFE_CHAR_MECA(    MODELE=MODELE,
+                 DDL_IMPO=(_F(  GROUP_NO = 'A',  DX = 0.,   DY = 0.),
+                           _F(  GROUP_NO = 'TOUT',  DRZ = 0.,   DZ = 0., DRX=0.,DRY=0.),
+                           _F(  GROUP_NO = 'B',  DX = 0.)),
+             FORCE_ARETE=( _F(  GROUP_MA = 'BORD_CH2',FX = 1.E4),
+                           _F(  GROUP_MA = 'BORD_CH1',FX = -1.E4))
+                        )
+
+#
+# RESOLUTION
+
+DEF=MECA_STATIQUE(    MODELE=MODELE,
+                         CHAM_MATER=CHMAT,
+                         CARA_ELEM=CARA,
+                         EXCIT=_F(  CHARGE = CHARGT)  )
+
+CALC_CHAMP(reuse=DEF,RESULTAT=DEF,CONTRAINTE=('SIGM_ELNO'))
+
+
+#
+# RECUPERATION DU CHAMP DE DEPLACEMENTS
+U=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+                 NOM_CHAM='DEPL', RESULTAT=DEF,
+                 NUME_ORDRE=1
+                  )
+
+#
+
+#
+# TEST_RESU DU DEPLACEMENT
+#
+TEST_RESU(CHAM_NO=(_F(NOEUD='N171',
+                      CRITERE='ABSOLU',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=0.,
+                      VALE_REFE=0.0,),
+                   _F(NOEUD='N171',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=2.0000000000000001E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=-2.29166666667E-07,
+                      VALE_REFE=-2.2919999999999999E-07,),
+                   _F(NOEUD='N336',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=5.91666666667E-07,
+                      VALE_REFE=5.9169999999999998E-07,),
+                   _F(NOEUD='N336',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=-5.02775859419E-07,
+                      VALE_REFE=-5.0279999999999998E-07,),
+                   _F(NOEUD='N345',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=5.91666666667E-07,
+                      VALE_REFE=5.9169999999999998E-07,),
+                   _F(NOEUD='N345',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-4,
+                      CHAM_GD=U,
+                      VALE_CALC=-7.31942526086E-07,
+                      VALE_REFE=-7.3190000000000004E-07,),
+                   ),
+          )
+
+# TEST_RESU DES CONTRAINTE DANS LE REPERE D'ORTHOPRTIE
+# IDENTIQUE AU REPERE UTILISATEUR DES COQUES
+
+SIG=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELNO_SIEF_R',
+NOM_CHAM='SIGM_ELNO', RESULTAT=DEF,
+                 NUME_ORDRE=1
+                  )
+
+TEST_RESU(CHAM_ELEM=(_F(NOEUD='N171',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXX',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M46',
+                        CHAM_GD=SIG,
+                        VALE_CALC=7500.0,
+                        VALE_REFE=7500.0,),
+                     _F(NOEUD='N171',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIYY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M46',
+                        CHAM_GD=SIG,
+                        VALE_CALC=2500.0,
+                        VALE_REFE=2500.0,),
+                     _F(NOEUD='N171',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M46',
+                        CHAM_GD=SIG,
+                        VALE_CALC=-4330.12701892,
+                        VALE_REFE=-4330.0,),
+                     _F(NOEUD='N336',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXX',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M59',
+                        CHAM_GD=SIG,
+                        VALE_CALC=7500.0,
+                        VALE_REFE=7500.0,),
+                     _F(NOEUD='N336',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIYY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M59',
+                        CHAM_GD=SIG,
+                        VALE_CALC=2500.0,
+                        VALE_REFE=2500.0,),
+                     _F(NOEUD='N336',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M59',
+                        CHAM_GD=SIG,
+                        VALE_CALC=-4330.12701892,
+                        VALE_REFE=-4330.0,),
+                     _F(NOEUD='N345',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXX',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M150',
+                        CHAM_GD=SIG,
+                        VALE_CALC=7500.0,
+                        VALE_REFE=7500.0,),
+                     _F(NOEUD='N345',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIYY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M150',
+                        CHAM_GD=SIG,
+                        VALE_CALC=2500.0,
+                        VALE_REFE=2500.0,),
+                     _F(NOEUD='N345',
+                        REFERENCE='ANALYTIQUE',
+                        NOM_CMP='SIXY',
+                        PRECISION=1.E-4,
+                        SOUS_POINT=1,
+                        MAILLE='M150',
+                        CHAM_GD=SIG,
+                        VALE_CALC=-4330.12701892,
+                        VALE_REFE=-4330.0,),
+                     ),
+          )
+
+#-----------------------------------------------------------------------------------------
+# validation de POST_CHAMP / MIN_MAX_SP pour les coques 3D :
+#-------------------------------------------------------------
+DEF2=POST_CHAMP(  RESULTAT=DEF, MAILLE='M46', NUME_ORDRE=(1,),
+              MIN_MAX_SP=(
+                _F( NOM_CHAM='SIEF_ELGA', NOM_CMP='SIYY', TYPE_MAXI='MAXI', NUME_CHAM_RESU=1),
+                _F( NOM_CHAM='SIEF_ELGA', NOM_CMP='SIYY', TYPE_MAXI='MINI', NUME_CHAM_RESU=2),
+             ))
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=DEF, NOM_CHAM='SIEF_ELGA', MAILLE='M46',NUME_ORDRE=(1,), ))
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=DEF2))
+
+# TEST_RESU pour le max de SIYY (UT01_ELGA):
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=DEF2,
+                   NOM_CHAM='UT01_ELGA',
+                   NOM_CMP='VAL',
+                   VALE_CALC=2500.00002545,
+                   VALE_REFE=2499.9999887845,
+                   PRECISION=1.E-07,
+                   MAILLE='M46',),
+                _F(NUME_ORDRE=1,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=DEF2,
+                   NOM_CHAM='UT01_ELGA',
+                   NOM_CMP='NUCOU',
+                   VALE_CALC=1.0,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-10,
+                   MAILLE='M46',),
+                _F(NUME_ORDRE=1,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=DEF2,
+                   NOM_CHAM='UT01_ELGA',
+                   NOM_CMP='NUFIBR',
+                   VALE_CALC=-999.0,
+                   VALE_REFE=-999.0,
+                   PRECISION=1.E-10,
+                   MAILLE='M46',),
+                ),
+          )
+
+# TEST_RESU pour le min de SIYY (UT02_ELGA) :
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=DEF2,
+                   NOM_CHAM='UT02_ELGA',
+                   NOM_CMP='VAL',
+                   VALE_CALC=2500.00002545,
+                   VALE_REFE=2499.9999887845001,
+                   PRECISION=1.E-07,
+                   MAILLE='M46',),
+                _F(NUME_ORDRE=1,
+                   REFERENCE='AUTRE_ASTER',
+                   POINT=1,
+                   RESULTAT=DEF2,
+                   NOM_CHAM='UT02_ELGA',
+                   NOM_CMP='NUCOU',
+                   VALE_CALC=1.0,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-10,
+                   MAILLE='M46',),
+                ),
+          )
+
+#-----------------------------------------------------------------------------------------
+
+
+FIN()
+#

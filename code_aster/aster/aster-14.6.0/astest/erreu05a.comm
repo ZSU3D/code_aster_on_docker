@@ -1,0 +1,105 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+
+import aster
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+      ERREUR=_F(ERREUR_F='EXCEPTION'),
+PAR_LOT='NON',IGNORE_ALARM='SUPERVIS_1',DEBUG=_F(SDVERI='OUI'))
+# ALARME 'SUPERVIS_1' : PAR_LOT necessaire pour intercepter l'exception
+
+
+# fonctions valides sur l'intervalle t=[0 C, 5 C]
+f_young=DEFI_FONCTION(NOM_PARA='TEMP',
+                      VALE=(0., 200.e9, 5., 200.e9),)
+
+f_nu=DEFI_FONCTION(NOM_PARA='TEMP',
+                   VALE=(0., 0.3, 5., 0.3),)
+
+f_alpha=DEFI_FONCTION(NOM_PARA='TEMP',
+                      VALE=(0., 1.e-5, 5., 1.e-5),)
+
+mat=DEFI_MATERIAU(ELAS_FO=_F(E=f_young,
+                             NU=f_nu,
+                             ALPHA=f_alpha,
+                             TEMP_DEF_ALPHA=0.),)
+
+mail=LIRE_MAILLAGE(FORMAT='MED',)
+
+chtemp0=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                   OPERATION='AFFE',
+                   MAILLAGE=mail,
+                   AFFE=_F(TOUT='OUI',
+                   NOM_CMP='TEMP',
+                   VALE=0.),)
+
+chtemp5=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                   OPERATION='AFFE',
+                   MAILLAGE=mail,
+                   AFFE=_F(TOUT='OUI',
+                   NOM_CMP='TEMP',
+                   VALE=10.),)
+
+# evolution de temperature : T(0s)=0 C, T(10s)=10 C
+evolT=CREA_RESU(OPERATION='AFFE',
+                TYPE_RESU='EVOL_VARC',
+                NOM_CHAM='TEMP',
+                AFFE=(_F(CHAM_GD=chtemp0, INST=0.),
+                      _F(CHAM_GD=chtemp5, INST=10.),),)
+
+model=AFFE_MODELE(MAILLAGE=mail,
+                  AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='C_PLAN',),)
+
+chmat=AFFE_MATERIAU(MAILLAGE=mail,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=mat,),
+                    AFFE_VARC=_F(NOM_VARC='TEMP',
+                                 EVOL=evolT,
+                                 VALE_REF=0.),)
+
+char=AFFE_CHAR_MECA(MODELE=model,
+                    DDL_IMPO=(_F(GROUP_MA='bas',
+                                 DY=0.0,),
+                              _F(GROUP_MA='gauche',
+                                 DX=0.0,),),)
+
+# le calcul sera donc possible ) t=0s et t=3s mais pas t=6s
+l_inst=DEFI_LIST_REEL(VALE=(0., 3., 6.),)
+
+inst=DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST=l_inst,),)
+
+try:
+   resu=STAT_NON_LINE(MODELE=model,
+                      CHAM_MATER=chmat,
+                      EXCIT=_F(CHARGE=char,),
+                      COMPORTEMENT=_F(RELATION='ELAS',),
+                      INCREMENT=_F(LIST_INST=inst),)
+except aster.error:
+   # on verifiera l'etat de 'resu' dans la POURSUITE
+   pass
+
+resu = EXTR_RESU(RESULTAT=resu,ARCHIVAGE=_F(NUME_ORDRE=1))
+
+FIN()

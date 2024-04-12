@@ -1,0 +1,406 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#        TUYAUTERIE COMPORTANT UN COUDE
+#     MODELISATION PAR DES ELEMENTS POUTRES
+#     -------------------------------------
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+# 1 - MISE EN DONNEES : LECTURE DU MAILLAGE
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(MAILLAGE = MAIL))
+
+#
+# DEFINITION DES ELEMENTS FINIS UTILISES
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=(_F(GROUP_MA=('TUY1','TUY2','COUDE'),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='POU_D_T',),
+                         ),);
+
+#
+# DEFINITION DU MATERIAU UTILISE
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.04E11,
+                            NU=0.3,
+                            RHO=7800.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='TUYAU',
+                            MATER=ACIER,),);
+
+#
+# CARACTERISTIQUES DES POUTRES
+
+CARA_POU=AFFE_CARA_ELEM(MODELE=MODELE,
+                        POUTRE=_F(GROUP_MA='TUYAU',
+                                  SECTION='CERCLE',
+                                  CARA=('R','EP',),
+                                  VALE=(0.2,0.02,),),
+                        );
+
+#
+# DEFINITION DES CONDITIONS AUX LIMITES
+#   AU POINT A : ENCASTREMENT
+
+BLOQUAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                        DDL_IMPO=_F(GROUP_NO='BASE',
+                                    DX=0.0,
+                                    DY=0.0,
+                                    DZ=0.0,
+                                    DRX=0.0,
+                                    DRY=0.0,
+                                    DRZ=0.0,),);
+
+# 2 - CALCUL DES CINQ PREMIERS MODES PROPRES
+#
+# CALCUL DES MATRICES ASSEMBLEES K ET M
+
+ASSEMBLAGE(MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARA_POU,
+                CHARGE=BLOQUAGE,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('RIGIDITE'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('MASSE'),
+                              OPTION='MASS_MECA',),),
+                VECT_ASSE=(_F(VECTEUR=CO("F_0"),OPTION='CHAR_MECA')),
+                );
+
+#
+
+MODES=CALC_MODES(MATR_RIGI=RIGIDITE,
+                 OPTION='PLUS_PETITE',
+                 CALC_FREQ=_F(NMAX_FREQ=5,
+                              ),
+                 MATR_MASS=MASSE,
+                 )
+
+#
+# ECRITURE DES MODES AU FORMAT MED
+
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(MAILLAGE=MAIL,
+                  RESULTAT=MODES,
+                  NOM_CHAM='DEPL',),);
+
+# 3 - ANALYSE TRANSITOIRE :
+# FORCE APPLIQUEE AU POINT B
+CHARGT=AFFE_CHAR_MECA(MODELE=MODELE,
+                      FORCE_NODALE=_F(GROUP_NO='EFOND',
+                                      FY=1.E7,),);
+
+ASSEMBLAGE(     MODELE=MODELE,
+                CARA_ELEM=CARA_POU,
+                CHARGE=BLOQUAGE,
+                NUME_DDL=NUMEDDL,
+                VECT_ASSE=(_F(VECTEUR=CO("FY"),OPTION='CHAR_MECA',CHARGE=CHARGT),),
+                );
+#
+#
+# PROJECTION DES MATRICES M ET K SUR LA BASE MODALE
+
+PROJ_BASE(BASE=MODES,
+                MATR_ASSE_GENE=(_F(MATRICE=CO('MASS_GEN'),
+                                   MATR_ASSE=MASSE,),
+                                _F(MATRICE=CO('RIGI_GEN'),
+                                   MATR_ASSE=RIGIDITE,),),
+                VECT_ASSE_GENE=_F(VECTEUR=CO('VGEN_FY'),
+                                  VECT_ASSE=FY,
+                                  TYPE_VECT='FORC'),);
+
+#
+OMEGA = 121.0;
+
+
+#
+# DEFINITION DE LA FONCTION D'EVOLUTION DE FY
+
+EVOL_FY = FORMULE(VALE='cos(OMEGA*INST)',
+                  OMEGA=OMEGA,
+                  NOM_PARA='INST',)
+
+#
+
+L_INTERP=DEFI_LIST_REEL(DEBUT=0.0,
+                        INTERVALLE=_F(JUSQU_A=2.0,
+                                      PAS=1.E-4,),);
+
+EVINT_FY=CALC_FONC_INTERP(FONCTION=EVOL_FY,
+                          LIST_PARA=L_INTERP,
+                          NOM_RESU='EVOL_FY',
+                          NOM_PARA='INST',);
+
+#
+
+LISTER=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=2.0,
+                                    NOMBRE=1001,),);
+
+#
+#
+#-----------------------------------------------------------------------
+
+TRANGEN1=DYNA_VIBRA (TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                     MATR_MASS=MASS_GEN,
+                     MATR_RIGI=RIGI_GEN,
+                     AMOR_MODAL=_F(AMOR_REDUIT=0.05),
+                     INCREMENT=_F(PAS=1.E-4,
+                                  INST_INIT=0.0,
+                                  INST_FIN=2.0,),
+                     SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE'),
+                     EXCIT=_F(VECT_ASSE_GENE=VGEN_FY,
+                              FONC_MULT=EVINT_FY,),);
+
+#
+# RECUPERATION DES DEPLACEMENTS ET VITESSES CALCULES EN B, C, D
+# --------------------------------------------------------------
+
+DY_B=RECU_FONCTION(RESU_GENE=TRANGEN1,
+                   LIST_INST=LISTER,
+                   INTERP_NUME='LIN',
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   GROUP_NO='EFOND',
+                   INTERPOL='LIN',);
+
+# IMPRESSION DES DEPLACEMENTS TRANSITOIRES
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              COURBE=_F(FONCTION=DY_B,
+                        LEGENDE='DY_B',
+                        FREQ_MARQUEUR=0,),
+              TITRE='DEPLACEMENT DU TUYAU EN B',);
+
+#
+#
+# VALEURS MIN ET MAX DES CONTRAINTES DUES AUX EFFORTS GENERALISES
+
+DYNATRAN=REST_GENE_PHYS(RESU_GENE=TRANGEN1,
+                        LIST_INST=LISTER,
+                        INTERPOL='LIN',
+                        TOUT_CHAM='OUI',);
+
+#
+# CALCUL DES CONTRAINTES DUES AUX EFFORTS GENERALISES
+
+DYNATRA=CALC_CHAMP(MODELE=MODELE,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM=CARA_POU,
+                   RESULTAT=DYNATRAN,
+                   CONTRAINTE=('SIPO_ELNO','SIPO_NOEU',),);
+
+# INSTANT DES MAX :
+
+EXTR_T=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                  OPERATION='EXTR',
+                  RESULTAT=DYNATRA,
+                  NOM_CHAM='SIPO_ELNO',
+                  TYPE_MAXI='MAXI',
+                  TYPE_RESU='INST',
+                  LIST_INST=LISTER,
+                  PRECISION=1.0E-6,);
+
+# VALEUR DES MAX :
+
+EXTR_V=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                  OPERATION='EXTR',
+                  RESULTAT=DYNATRA,
+                  NOM_CHAM='SIPO_ELNO',
+                  TYPE_MAXI='MAXI',
+                  TYPE_RESU='VALE',
+                  LIST_INST=LISTER,
+                  PRECISION=1.0E-6,);
+
+IMPR_RESU(MODELE=MODELE,
+          FORMAT='RESULTAT',
+          RESU=(_F(CHAM_GD=EXTR_T,),
+                _F(CHAM_GD=EXTR_V,),),);
+
+# INSTANT DES MIN :
+
+EXTR_TMI=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MINI',
+                    TYPE_RESU='INST',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+# VALEUR DES MAX :
+
+EXTR_VMI=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MINI',
+                    TYPE_RESU='VALE',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+IMPR_RESU(MODELE=MODELE,
+          FORMAT='RESULTAT',
+          RESU=(_F(CHAM_GD=EXTR_TMI,),
+                _F(CHAM_GD=EXTR_VMI,),),);
+
+
+MAXABS=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MAXI_ABS',
+                    TYPE_RESU='VALE',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+MINABS=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MINI_ABS',
+                    TYPE_RESU='VALE',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+MAXABSAB=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MAXI_ABS',
+                    TYPE_RESU='VALE_ABS',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+MINABSAB=CREA_CHAMP(TYPE_CHAM='ELNO_SIEF_R',
+                    OPERATION='EXTR',
+                    RESULTAT=DYNATRA,
+                    NOM_CHAM='SIPO_ELNO',
+                    TYPE_MAXI='MINI_ABS',
+                    TYPE_RESU='VALE_ABS',
+                    LIST_INST=LISTER,
+                    PRECISION=1.0E-6,);
+
+IMPR_RESU(MODELE=MODELE,
+          FORMAT='RESULTAT',
+          RESU=(_F(CHAM_GD=MAXABS,),
+                _F(CHAM_GD=MINABS,),
+                _F(CHAM_GD=MAXABSAB,),
+                _F(CHAM_GD=MINABSAB,),),);
+
+
+TEST_RESU(RESU=(_F(GROUP_NO='BASE',
+                   INST=2.0,
+                   RESULTAT=DYNATRA,
+                   NOM_CHAM='SIPO_NOEU',
+                   NOM_CMP='SN',
+                   VALE_CALC=-485268450.783,
+                   ),
+                _F(GROUP_NO='BASE',
+                   INST=2.0,
+                   RESULTAT=DYNATRA,
+                   NOM_CHAM='SIPO_NOEU',
+                   NOM_CMP='SVY',
+                   VALE_CALC=2254071472.91,
+                   ),
+                _F(GROUP_NO='BASE',
+                   INST=2.0,
+                   RESULTAT=DYNATRA,
+                   NOM_CHAM='SIPO_NOEU',
+                   NOM_CMP='SMFZ',
+                   VALE_CALC=-25778733306.6,
+                   ),
+                ),
+          )
+
+# VALIDATION DE TYPE_RESU='VALE_ABS'
+
+TEST_RESU (CHAM_ELEM=(_F(CHAM_GD        = MAXABS,
+                         MAILLE         ='M1',
+                         NOEUD          ='N1',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = -8.20094496775807E+08,
+                         ),
+                        _F(CHAM_GD        = MAXABS,
+                         MAILLE         ='M9',
+                         NOEUD          ='N12',
+                         NOM_CMP        = 'SMFZ',
+                         VALE_CALC      = 1.93299612798964E+10,
+                         ),
+                         ),)
+
+TEST_RESU (CHAM_ELEM=(_F(CHAM_GD        = MAXABSAB,
+                         MAILLE         ='M1',
+                         NOEUD          ='N1',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = 8.20094496775807E+08,
+                         VALE_REFE      = 8.20094496775807E+08,
+                         REFERENCE      = 'AUTRE_ASTER',
+                         ),
+                        _F(CHAM_GD        = MAXABSAB,
+                         MAILLE         ='M9',
+                         NOEUD          ='N12',
+                         NOM_CMP        = 'SMFZ',
+                         VALE_CALC      = 1.93299612798964E+10,
+                         VALE_REFE      = 1.93299612798964E+10,
+                         REFERENCE      = 'AUTRE_ASTER',
+                         ),
+                         ),)
+
+TEST_RESU (CHAM_ELEM=(_F(CHAM_GD        = MINABS,
+                         MAILLE         ='M1',
+                         NOEUD          ='N1',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = -2.65282777575495E+04,
+                         ),
+                        _F(CHAM_GD        = MINABS,
+                         MAILLE         ='M1',
+                         NOEUD          ='N5',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = 4.44886809226435E+04,
+                         ),
+                         ),)
+
+TEST_RESU (CHAM_ELEM=(_F(CHAM_GD        = MINABSAB,
+                         MAILLE         ='M1',
+                         NOEUD          ='N1',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = 2.65282777575495E+04,
+                         VALE_REFE      = 2.65282777575495E+04,
+                         REFERENCE      = 'AUTRE_ASTER',
+                         ),
+                        _F(CHAM_GD        = MINABSAB,
+                         MAILLE         ='M1',
+                         NOEUD          ='N5',
+                         NOM_CMP        = 'SN',
+                         VALE_CALC      = 4.44886809226435E+04,
+                         VALE_REFE      = 4.44886809226435E+04,
+                         REFERENCE      = 'AUTRE_ASTER',
+                         ),
+                         ),)
+
+
+FIN();

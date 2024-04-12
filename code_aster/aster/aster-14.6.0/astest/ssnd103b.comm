@@ -1,0 +1,167 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MaMeca=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MOMEQ=AFFE_MODELE(
+   MAILLAGE=MaMeca,
+   AFFE=_F(GROUP_MA='DISC',PHENOMENE='MECANIQUE', MODELISATION='DIS_T'),
+)
+
+Kinit= 1.0E+02
+CAREL= AFFE_CARA_ELEM(
+   MODELE= MOMEQ,
+   DISCRET= _F(GROUP_MA= 'DISC',CARA='K_T_D_L',REPERE='LOCAL',
+               VALE = (Kinit, Kinit, Kinit,),),
+)
+
+ACIER=DEFI_MATERIAU(
+   ELAS=_F(E=2.0E+11, NU=0.3, ALPHA=0.0),)
+
+# Liste de temperature pour la definition des nappes
+LTEM=DEFI_LIST_REEL(DEBUT=0.0  , INTERVALLE=_F(JUSQU_A= 450.0, PAS=10.0,),)
+def RaideurK1L(TEMP):
+   xxx = 4.0E+06*(50 - TEMP)
+   return xxx
+def RaideurK2L(TEMP):
+   xxx = 2.0E+06*(50 - TEMP)
+   return xxx
+#
+FRK1L = FORMULE(VALE='RaideurK1L(TEMP)',
+                RaideurK1L=RaideurK1L,
+                NOM_PARA='TEMP',)
+FRK2L = FORMULE(VALE='RaideurK2L(TEMP)',
+                RaideurK2L=RaideurK2L,
+                NOM_PARA='TEMP',)
+#
+RK1L = CALC_FONC_INTERP(FONCTION = FRK1L, NOM_RESU ='RK1L', NOM_PARA = 'TEMP',
+   LIST_PARA = LTEM, PROL_DROITE ='LINEAIRE', PROL_GAUCHE ='LINEAIRE',)
+RK2L = CALC_FONC_INTERP(FONCTION = FRK2L, NOM_RESU ='RK2L', NOM_PARA = 'TEMP',
+   LIST_PARA = LTEM, PROL_DROITE ='LINEAIRE', PROL_GAUCHE ='LINEAIRE',)
+
+
+chth00 = CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',OPERATION='AFFE',MAILLAGE=MaMeca,
+      AFFE=_F(TOUT='OUI', NOM_CMP = 'TEMP', VALE = 25.0, ),)
+# Definition du champ thermique
+TEMPER=CREA_RESU(OPERATION='AFFE',TYPE_RESU='EVOL_THER',NOM_CHAM ='TEMP',
+   AFFE=(
+      _F(CHAM_GD=chth00,INST=  0.0 ),
+      _F(CHAM_GD=chth00,INST= 10.0 ),
+   ),
+)
+
+DISCR=DEFI_MATERIAU(
+   ELAS=_F(E=2.0E+11, NU=0.3, ALPHA=0.0),
+   DIS_BILI_ELAS= _F(KDEB_DX=RK1L,
+                     KFIN_DX=RK2L,
+                     FPRE_DX=5E+04),
+)
+
+CHMAT=AFFE_MATERIAU(
+   MAILLAGE=MaMeca,
+   AFFE_VARC=_F(TOUT='OUI',EVOL=TEMPER,NOM_VARC='TEMP',VALE_REF=0.0),
+   AFFE=_F(TOUT='OUI',MATER=DISCR),
+)
+
+ZERO=DEFI_CONSTANTE(VALE=0.0,);
+
+FSerraXY=DEFI_FONCTION(
+   NOM_PARA='INST',
+   VALE=(    0.0,  0.0,
+            10.0,  0.001,),
+   PROL_DROITE='CONSTANT',
+   PROL_GAUCHE='CONSTANT',
+)
+
+CLIM=AFFE_CHAR_MECA_F(
+   MODELE=MOMEQ,
+   DDL_IMPO=(
+      _F(GROUP_NO='PT1',DX=ZERO,DY=ZERO,DZ=ZERO,),
+      _F(GROUP_NO='PT2',DX=FSerraXY,),
+   ),
+)
+
+linst=DEFI_LIST_REEL(
+   DEBUT= 0.0,
+   INTERVALLE=_F(JUSQU_A= 10.0, NOMBRE= 10,),
+)
+
+
+CALCULG=STAT_NON_LINE(
+   MODELE    = MOMEQ,
+   CHAM_MATER= CHMAT,
+   CARA_ELEM= CAREL,
+   EXCIT=_F(CHARGE=CLIM),
+   INCREMENT=_F(LIST_INST=linst),
+   ARCHIVAGE=_F(LIST_INST=linst),
+   COMPORTEMENT=_F(RELATION='DIS_BILI_ELAS',TOUT='OUI',),
+)
+
+
+CALCULG = CALC_CHAMP(
+   reuse         = CALCULG,
+
+   RESULTAT      = CALCULG,
+
+   FORCE='REAC_NODA',
+)
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=CALCULG))
+TEST_RESU(RESU=(_F(INST=2.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=CALCULG,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='N1',
+                   NOM_CMP='DX',
+                   VALE_CALC=-2.00000000E+04,
+                   VALE_REFE=-2.E4,
+                   PRECISION=1.E-08,),
+                _F(INST=2.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=CALCULG,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='N2',
+                   NOM_CMP='DX',
+                   VALE_CALC= 2.00000000E+04,
+                   VALE_REFE=2.E4,
+                   PRECISION=1.E-08,),
+                _F(INST=8.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=CALCULG,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='N1',
+                   NOM_CMP='DX',
+                   VALE_CALC=-6.50000000E+04,
+                   VALE_REFE=-6.5000E4,
+                   PRECISION=1.E-08,),
+                _F(INST=8.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=CALCULG,
+                   NOM_CHAM='REAC_NODA',
+                   NOEUD='N2',
+                   NOM_CMP='DX',
+                   VALE_CALC= 6.50000000E+04,
+                   VALE_REFE=6.5000E4,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+FIN()

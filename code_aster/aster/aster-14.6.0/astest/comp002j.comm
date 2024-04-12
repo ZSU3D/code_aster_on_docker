@@ -1,0 +1,153 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: david.haboussa at edf.fr
+
+import os
+os.rename('fort.91', 'comp002j.py')
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'),
+);
+
+# donnee materiau et fonction
+
+
+# def des materiaux
+ACIER = [None]*2
+# pour MONOCRISTAL
+COMP1 = [None]*2
+#parametres elastiques
+EL=2.1E5
+ET=4.E5
+EN=2.1E5
+GLT=0.45E5
+GTN=0.45E5
+GLN=0.35E5
+NULT=0.075
+NULN=0.075
+NUTN=0.0142857143
+# monocristal
+N=10.0
+K=40.0
+C=10.0
+R_0=75.5
+Q=9.77
+B=19.34
+H=0.0
+D=36.68
+
+#unite en Pa
+C_Pa = 1.E+6
+
+ACIER[0]=DEFI_MATERIAU(
+ELAS_ORTH=_F(   E_L   = EL*C_Pa  ,
+                E_T   = ET*C_Pa  ,
+                E_N   = EN*C_Pa  ,
+                G_LT  = GLT*C_Pa ,
+                G_TN  = GTN*C_Pa ,
+                G_LN  = GLN*C_Pa ,
+                NU_LT = NULT,
+                NU_LN = NULN,
+                NU_TN = NUTN,),
+                MONO_VISC1=_F(N=N,
+                              K=K*C_Pa,
+                              C=C*C_Pa),
+                MONO_ISOT1=_F(R_0=R_0*C_Pa,
+                              Q=Q*C_Pa,
+                              B=B,
+                              H=H),
+                MONO_CINE1=_F(D=D),
+                                 );
+
+#unite en MPa
+ACIER[1]=DEFI_MATERIAU(
+ELAS_ORTH=_F(   E_L   = EL,
+                E_T   = ET,
+                E_N   = EN,
+                G_LT  = GLT,
+                G_TN  = GTN,
+                G_LN  = GLN,
+                NU_LT = NULT,
+                NU_LN = NULN,
+                NU_TN = NUTN,
+                ),
+                MONO_VISC1=_F(N=N,
+                              K=K,
+                              C=C),
+                MONO_ISOT1=_F(R_0=R_0,
+                              Q=Q,
+                              B=B,
+                              H=H),
+                MONO_CINE1=_F(D=D),
+                                 )
+
+compor='MONOCRISTAL'
+COMP1[0]=DEFI_COMPOR(MONOCRISTAL=(_F(MATER=ACIER[0],
+                                    ECOULEMENT='MONO_VISC1',
+                                    ECRO_ISOT='MONO_ISOT1',
+                                    ECRO_CINE='MONO_CINE1',
+                                    ELAS='ELAS_ORTH',
+                                    FAMI_SYST_GLIS='OCTAEDRIQUE',),),);
+
+COMP1[1]=DEFI_COMPOR(MONOCRISTAL=(_F(MATER=ACIER[1],
+                                    ECOULEMENT='MONO_VISC1',
+                                    ECRO_ISOT='MONO_ISOT1',
+                                    ECRO_CINE='MONO_CINE1',
+                                    ELAS='ELAS_ORTH',
+                                    FAMI_SYST_GLIS='OCTAEDRIQUE',),),);
+
+
+##################################################################################
+#Discretisation du calcul. nbequi = nombre de calculs "equivalents" : Pa, Rot
+Ncal = 5
+N_pas = 2*[1] + [1, 5, 25]
+nbequi=2
+# les differents calculs effectues
+label_cal=['_Pa_','_rot_'] + 3* ['_N']
+#pointeur materiau
+P_imat = [0] + [1] + (Ncal-2)*[1]
+
+#parametres vitesse de sollicitation
+vitesse = 1.e-2
+t_0 = 5.e-2/(8.0*vitesse)
+# calibrage des deformations maximum (dans  .93)
+calibrage = 3.5;
+CALIB_E=EL
+CALIB_NU=NULT
+
+# liste d'archivage
+temps_ar=DEFI_LIST_REEL( VALE =[t_0*i for i in range(9)],)
+
+# angles utilises pour la rotation
+angle2=30.
+angle0=0.
+angles=[angle0,angle2] + (Ncal-2)*[angle0]
+
+# les precisions sur chaque TEST_RESU
+prec_ecart=[3.E-2]+[2.E-8] + [50.E-2] + [11.E-2] + [1.E-10]
+prec_tgt=2.e-2
+prec_zero=[1.E-10, 0.01, 0.01]
+
+# les quantites (invariants...) sur lequels portent les calculs d'erreur et les test_resu
+ch_param2=['V56','VMIS','TRACE']
+# coefficients pour ch_param2 pour calculer l'erreur sur le cas "Pa"
+coef_para=[1.,C_Pa,C_Pa]
+
+FIN()

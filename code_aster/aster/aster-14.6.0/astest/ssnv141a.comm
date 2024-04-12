@@ -1,0 +1,194 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# HEMISPHERE DOUBLEMENT PINCE
+# MAILLAGE 1/4 DE L'HEMISPHERE
+#
+# MODELISATION MEC3QU9H: 100 MAILLES QUAD9
+#
+#
+
+MATERI_1=DEFI_MATERIAU( ELAS=_F(  E = 6.825E+7,     NU = 0.3) )
+
+#
+
+MAILLA_1=LIRE_MAILLAGE(FORMAT='MED',   )
+
+MAILLA_1=DEFI_GROUP( reuse=MAILLA_1,   MAILLAGE=MAILLA_1,
+                           CREA_GROUP_MA=_F(  NOM = 'TOUT',  TOUT = 'OUI') )
+
+#
+
+CH_MAT_1=AFFE_MATERIAU(  MAILLAGE=MAILLA_1,
+                            AFFE=_F(  TOUT = 'OUI',   MATER = MATERI_1) )
+
+#
+
+MODELE_1=AFFE_MODELE(  MAILLAGE=MAILLA_1, 
+                     AFFE=_F(  TOUT = 'OUI', MODELISATION = 'COQUE_3D',
+                            PHENOMENE = 'MECANIQUE') )
+
+#
+#
+#
+
+CHARGE_1=AFFE_CHAR_MECA(   MODELE=MODELE_1,DDL_IMPO=(
+                  _F( GROUP_NO = 'G_41',  DY = 0.,
+                                              DRX = 0., DRZ = 0.),
+                           _F( GROUP_NO = 'G_23',  DX = 0.,
+                                              DRY = 0., DRZ = 0.),
+                           _F( GROUP_NO = 'G_10',  DZ = 0.)),FORCE_NODALE=(
+                  _F(  GROUP_NO = 'G_1',  FX = 1.E0),
+                  _F(  GROUP_NO = 'G_2',  FY = -1.E0))
+                           )
+
+#
+
+CARAC_1=AFFE_CARA_ELEM(    MODELE=MODELE_1,
+                                COQUE=_F(  GROUP_MA = 'TOUT',
+                                        EPAIS = 0.040,
+                                        COEF_RIGI_DRZ = 1.E-3)
+                           )
+
+#
+#
+
+L_INST=DEFI_LIST_REEL(
+                            DEBUT=0.0,
+                       INTERVALLE=_F(  JUSQU_A = 100., NOMBRE = 10)
+
+                                       )
+
+#
+
+D_FONC=DEFI_FONCTION(    NOM_PARA='INST',
+                                VALE=(   0.,   0.,
+                                       500., 500.,
+                                     )
+                         )
+
+#
+#
+
+NONLIN=STAT_NON_LINE(
+                            MODELE=MODELE_1,
+                        CHAM_MATER=CH_MAT_1,
+                         CARA_ELEM=CARAC_1,
+                             EXCIT=_F(
+                CHARGE = CHARGE_1,
+                FONC_MULT = D_FONC),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                DEFORMATION = 'GROT_GDEP'),
+                         INCREMENT=_F(
+                LIST_INST = L_INST),
+                       CONVERGENCE=_F(
+                ITER_GLOB_MAXI = 50,
+                RESI_GLOB_RELA = 1.E-6),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1)
+              )
+
+#
+#
+################## DEPLACEMENT X POSITIF
+
+
+TEST_RESU(RESU=_F(GROUP_NO='G_1',
+                  INST=20.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.486157037,
+                  VALE_REFE=1.4845999999999999,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=2.E-3,),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_1',
+                  INST=50.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=2.5717455731281,
+                  VALE_REFE=2.5785,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_1',
+                  INST=100.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=3.3622831119805,
+                  VALE_REFE=3.3902999999999999,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+#
+###########################   DEPLACEMENT Y NEGATIF
+
+
+TEST_RESU(RESU=_F(GROUP_NO='G_2',
+                  INST=20.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-1.816833270,
+                  VALE_REFE=-1.7997000000000001,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_2',
+                  INST=50.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-3.7790171633533,
+                  VALE_REFE=-3.7585999999999999,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='G_2',
+                  INST=100.0,
+                  RESULTAT=NONLIN,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=-5.7847302671233,
+                  VALE_REFE=-5.8021000000000003,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-2,),
+          )
+
+#
+FIN( )
+#

@@ -1,0 +1,130 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION C : POU_D_TG
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+POUTRE=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MODELE=AFFE_MODELE(   MAILLAGE=POUTRE,
+                         AFFE=_F( TOUT = 'OUI',   PHENOMENE = 'MECANIQUE',
+                    MODELISATION = 'POU_D_TG', ))
+
+MATER1=DEFI_MATERIAU(  ELAS=_F( E = 71240.,   NU = 0.3,  ) )
+
+CHAMPMAT=AFFE_MATERIAU(  MAILLAGE=POUTRE,
+              AFFE=_F( GROUP_MA = ('POUTRE',),MATER = MATER1, ))
+
+CHAMPCAR=AFFE_CARA_ELEM(  MODELE=MODELE,
+         POUTRE=_F(  GROUP_MA = ('POUTRE',),  SECTION = 'GENERALE',
+            CARA = ('A','IY','IZ','JX','AY','AZ','EY','EZ','JG',),
+            VALE = (18.,0.54,1350.,2.16,1.2,1.2,  0.,  0.,  40.5,), ))
+
+CHADDL=AFFE_CHAR_MECA(  MODELE=MODELE,
+         DDL_IMPO=_F( GROUP_NO = ('PA',),DX = 0.0,   DY = 0.0, DZ = 0.0,
+                                 DRX = 0.0,  DRY = 0., DRZ = 0.0, ))
+
+RIGIELE=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='RIGI_MECA',
+              CARA_ELEM=CHAMPCAR,  CHARGE=CHADDL,
+              CHAM_MATER=CHAMPMAT )
+
+NUMEDDL=NUME_DDL(  MATR_RIGI=RIGIELE)
+
+RIGI=ASSE_MATRICE(  MATR_ELEM=RIGIELE,  NUME_DDL=NUMEDDL )
+
+# CAS DE CHARGE 1 : FX = -1
+
+CHARGE1=AFFE_CHAR_MECA(  MODELE=MODELE,
+            FORCE_NODALE=_F( GROUP_NO = ( 'PC', ),  FX = -1.E0,   ))
+
+STAT1=MECA_STATIQUE(MODELE=MODELE,
+                   CHAM_MATER=CHAMPMAT,
+                   CARA_ELEM=CHAMPCAR,
+                   EXCIT=(_F(CHARGE=CHADDL,),
+                          _F(CHARGE=CHARGE1,),),);
+
+SIGM1=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT1, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' )
+
+RGEOEL1=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='RIGI_GEOM',
+              CARA_ELEM=CHAMPCAR,  SIEF_ELGA=SIGM1 )
+
+RGEO1=ASSE_MATRICE(  MATR_ELEM=RGEOEL1,  NUME_DDL=NUMEDDL )
+
+MODE1=CALC_MODES(MATR_RIGI=RIGI, SOLVEUR=_F(METHODE='LDLT'),
+                 OPTION='BANDE',
+                 MATR_RIGI_GEOM=RGEO1,
+                 CALC_CHAR_CRIT=_F(CHAR_CRIT=(-2.47, -0.063),
+                                   ),
+                 TYPE_RESU='MODE_FLAMB',
+                 )
+
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=1,
+                  RESULTAT=MODE1,
+                  VALE_CALC=-1.091845839,
+                  VALE_REFE=-1.0880000000000001,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=1.E-2,),
+          )
+
+# CAS DE CHARGE 2 : FX = +1
+
+CHARGE2=AFFE_CHAR_MECA(  MODELE=MODELE,
+            FORCE_NODALE=_F( GROUP_NO = ( 'PC', ),  FX = +1.E0,   ))
+
+STAT2=MECA_STATIQUE(MODELE=MODELE,
+                   CHAM_MATER=CHAMPMAT,
+                   CARA_ELEM=CHAMPCAR,
+                   EXCIT=(_F(CHARGE=CHADDL,),
+                          _F(CHARGE=CHARGE2,),),);
+
+SIGM2=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT2, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' )
+
+RGEOEL2=CALC_MATR_ELEM(  MODELE=MODELE,  OPTION='RIGI_GEOM',
+              CARA_ELEM=CHAMPCAR,  SIEF_ELGA=SIGM2 )
+
+RGEO2=ASSE_MATRICE(  MATR_ELEM=RGEOEL2,  NUME_DDL=NUMEDDL )
+
+MODE2=CALC_MODES(MATR_RIGI=RIGI,
+                 OPTION='BANDE',
+                 MATR_RIGI_GEOM=RGEO2,
+                 CALC_CHAR_CRIT=_F(CHAR_CRIT=(-2.47, -0.063),
+                                   ),
+                 TYPE_RESU='MODE_FLAMB',
+                 )
+
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=1,
+                  RESULTAT=MODE2,
+                  VALE_CALC=-0.688264675,
+                  VALE_REFE=-0.68000000000000005,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=0.02,),
+          )
+
+FIN( )
+#

@@ -1,0 +1,196 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',  )
+DEFI_GROUP(reuse = MA, MAILLAGE=MA, CREA_GROUP_NO=_F(NOM='GN3', NOEUD='N3'))
+
+MO=AFFE_MODELE(     MAILLAGE=MA,
+                         AFFE=_F(  TOUT = 'OUI',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'D_PLAN'))
+
+MAT=DEFI_MATERIAU(     ELAS=_F(  E = 20000.,
+                                NU = 0.3,
+                                RHO = 1.,
+                                ALPHA = 0.000005) )
+
+CM=AFFE_MATERIAU(    MAILLAGE=MA,
+                           AFFE=_F(  TOUT = 'OUI',
+                                  MATER = MAT) )
+
+#--------------------------------------------------------------------
+
+EPSINI=DEFI_FONCTION(   NOM_PARA='X',
+                         VALE=(-50., -0.0005,
+                                50.,  0.0005,),
+                            INTERPOL='LIN',
+                          PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE'
+                         )
+
+ZERO = FORMULE(VALE='0.',
+               NOM_PARA=['X', 'Y'],)
+
+CH=AFFE_CHAR_MECA_F(       MODELE=MO,DDL_IMPO=(
+                           _F(  GROUP_NO = 'GRNM2',      DY = ZERO),
+                           _F(  GROUP_NO = 'GRNM4',      DY = ZERO),
+                           _F(  NOEUD = 'N695',      DX = ZERO)),
+                          PRE_EPSI=_F(  TOUT = 'OUI', EPXX = EPSINI,
+                                                 EPYY = EPSINI,
+                                                 EPZZ = EPSINI)
+                        )
+
+#--------------------------------------------------------------------
+
+F=DEFI_FONCTION(      NOM_PARA='INST',
+                        PROL_DROITE='LINEAIRE',
+                       PROL_GAUCHE='LINEAIRE',
+                               VALE=( 0.0,  0.0,
+                                      1.0,  1.0,
+                                      )
+                     )
+
+L_INST=DEFI_LIST_REEL(          DEBUT=0.0,
+                              INTERVALLE=_F(  JUSQU_A = 1.0,
+                                            NOMBRE = 1)
+                           )
+
+RESU=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CM,
+                             EXCIT=_F(
+                CHARGE = CH,),
+                #FONC_MULT = F),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS'),
+                         INCREMENT=_F(
+                LIST_INST = L_INST),
+                            NEWTON=_F(
+                MATRICE = 'ELASTIQUE'),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6)
+              )
+
+RESU=CALC_CHAMP(reuse=RESU,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=RESU)
+
+
+DEPLA=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+NOM_CHAM='DEPL', RESULTAT=RESU,
+                     NUME_ORDRE=1)
+
+#--------------------------------------------------------------------
+
+
+
+
+
+#--------------------------------------------------------------------
+#  CALCUL DE G AVEC DEFORMATIONS INITIALES
+#--------------------------------------------------------------------
+
+FOND=DEFI_FOND_FISS( MAILLAGE=MA,
+                     FOND_FISS=_F( GROUP_NO = 'GN3'),
+                     SYME='OUI',
+                     LEVRE_SUP=_F(MAILLE='M388'))
+
+G1=CALC_G(        RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  THETA=_F(
+                           FOND_FISS=FOND,
+                           R_INF=1.,
+                           R_SUP=5.),
+                  COMPORTEMENT=_F(
+                           RELATION = 'ELAS'),
+                           );
+
+G2=CALC_G(        RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  THETA=_F(
+                           FOND_FISS=FOND,
+                           R_INF=5.,
+                           R_SUP=10.),
+                  COMPORTEMENT=_F(
+                           RELATION = 'ELAS'),);
+
+G3=CALC_G(        RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  THETA=_F(
+                           FOND_FISS=FOND,
+                           R_INF=10.,
+                           R_SUP=20.),
+                  COMPORTEMENT=_F(
+                           RELATION = 'ELAS'),);
+
+G4=CALC_G(        RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  THETA=_F(
+                           FOND_FISS=FOND,
+                           R_INF=20.,
+                           R_SUP=30.),
+                  COMPORTEMENT=_F(
+                           RELATION = 'ELAS'),);
+
+#--------------------------------------------------------------------
+#                TESTS DES RESULTATS                                #
+#--------------------------------------------------------------------
+
+
+TEST_TABLE(
+           VALE_CALC=0.360305947437,
+
+           NOM_PARA='G',
+           TABLE=G1,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.360240620579,
+
+           NOM_PARA='G',
+           TABLE=G2,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.360220873988,
+
+           NOM_PARA='G',
+           TABLE=G3,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.360218359425,
+
+           NOM_PARA='G',
+           TABLE=G4,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+FIN( )
+#

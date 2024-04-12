@@ -1,0 +1,313 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#******************************************************************************************
+#  MODELISATION THH2D 1D , LOI LIQU_AD_GAZ_VAPE
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+####################################
+#   OPERATIONS SUR LE MAILLAGE
+#
+####################################
+MAIL=LIRE_MAILLAGE(FORMAT='MED',)
+MAIL=DEFI_GROUP( reuse=MAIL,  MAILLAGE=MAIL,CREA_GROUP_NO=(
+                      _F( GROUP_MA = 'DROIT'),
+                      _F( GROUP_MA = 'GAUCHE'),
+                      _F( GROUP_MA = 'HAUT'),
+                      _F( GROUP_MA = 'BAS'),  ),
+                     )
+
+MODELE=AFFE_MODELE(   MAILLAGE=MAIL,
+                        AFFE=_F(  TOUT = 'OUI',
+                      PHENOMENE = 'MECANIQUE',
+                      MODELISATION = 'D_PLAN_THH2D')
+                     )
+MAIL=DEFI_GROUP( reuse=MAIL,
+               MAILLAGE=MAIL,
+               CREA_GROUP_MA=(_F(NOM='ROCHE',
+                                     TOUT='OUI'),),
+               CREA_GROUP_NO=(_F(NOM='ROCHES',
+                                 CRIT_NOEUD='SOMMET',
+                                 GROUP_MA='ROCHE'),
+                              _F(NOM='GAUCHES',
+                                 CRIT_NOEUD='SOMMET',
+                                 GROUP_MA='GAUCHE'),
+                              _F(NOM='DROITS',
+                                 CRIT_NOEUD='SOMMET',
+                                 GROUP_MA='DROIT'),
+                                 ),)
+####################################
+#  LISTE DES INSTANTS DE CALCUL
+####################################
+
+LI=DEFI_LIST_REEL(   DEBUT=0.,INTERVALLE=(
+                       _F(  JUSQU_A = 0.1,  NOMBRE = 5),
+                       _F(  JUSQU_A = 1.,  NOMBRE = 9),
+                       ),
+                     );
+
+############################################
+#
+# DEFINITION DES FONCTIONS DE COMPORTEMENT :
+#
+# On met tout a l unite
+####
+
+VISCOL=DEFI_CONSTANTE(VALE=1.,);
+
+VISCOG=DEFI_CONSTANTE(VALE=1.,);
+
+DVISCOL=DEFI_CONSTANTE(VALE=0.0,);
+
+DVISCOG=DEFI_CONSTANTE(VALE=0.0,);
+
+####
+UN=DEFI_CONSTANTE(    VALE=1.,);
+
+ZERO=DEFI_CONSTANTE(    VALE=0.,);
+
+PRCOX   = 1.    ;
+NCOX    = 1.5      ;
+MCOX    = 1.-1./NCOX  ;
+SRCOX   = 0.0      ;
+#
+# PRESSION CAPILLAIRE S(PC)
+#
+LIPC = DEFI_LIST_REEL ( DEBUT      = 0.0,
+                       INTERVALLE = (
+                         _F( JUSQU_A = 100. , PAS =  0.1 ,),
+                                    ),)
+SATC = FORMULE(VALE="""
+                   (((1.-SRCOX)/
+                     (((PCAP/PRCOX)**NCOX+1.)**MCOX) )+SRCOX) """,
+               SRCOX=SRCOX,
+               PRCOX=PRCOX,
+               NCOX=NCOX,
+               MCOX=MCOX,
+               NOM_PARA='PCAP',)
+
+SATCOX = CALC_FONC_INTERP ( FONCTION     =  SATC      ,
+                            LIST_PARA    =  LIPC       ,
+                            NOM_PARA     = 'PCAP'     ,
+                            PROL_GAUCHE  = 'CONSTANT' ,
+                            PROL_DROITE  = 'CONSTANT' ,
+                            INFO         = 2          , );
+
+DSATC = FORMULE(VALE="""
+                       ( (SRCOX-1.)*MCOX*NCOX*(1./PRCOX)
+                        *(((PCAP/PRCOX)**NCOX+1.)**(MCOX-1.))
+                       *((PCAP/PRCOX)**(NCOX-1.)) )/
+                        ( (((PCAP/PRCOX)**NCOX+1.)**MCOX)**2. )""",
+                SRCOX=SRCOX,
+                MCOX=MCOX,
+                NCOX=NCOX,
+                PRCOX=PRCOX,
+                NOM_PARA='PCAP',)
+
+DSATCOX  = CALC_FONC_INTERP ( FONCTION     =  DSATC      ,
+                              LIST_PARA    =  LIPC        ,
+                              NOM_PARA     = 'PCAP'      ,
+                              PROL_GAUCHE  = 'CONSTANT'  ,
+                              PROL_DROITE  = 'CONSTANT'  ,
+                              INFO         = 2           , );
+#
+# PERMEABILITE INTRINSEQUE, RELATIVE DU LIQUIDE, RELATIVE DU GAZ
+KINT=DEFI_CONSTANTE(    VALE=1.)
+
+KHENYNIF=DEFI_CONSTANTE(    VALE=1.E20)
+
+
+
+THMALP1 = DEFI_CONSTANTE(VALE=0.000100)
+
+MATERIAU=DEFI_MATERIAU(
+   THM_LIQU=_F(
+         RHO = 1.,
+         UN_SUR_K = 0.,
+         ALPHA = THMALP1,
+         CP=1.,
+         VISC = VISCOL,
+         D_VISC_TEMP = ZERO,),
+   COMP_THM = 'LIQU_AD_GAZ_VAPE',
+   THM_AIR_DISS=_F(
+                   CP=0.,
+                   COEF_HENRY=KHENYNIF,
+                   ),
+   THM_VAPE_GAZ    =_F(
+          MASS_MOL         = 1.    ,
+          CP               = 1.     ,
+          VISC             = VISCOG  ,
+          D_VISC_TEMP      = ZERO      ,
+                                     ),
+   THM_GAZ=_F(
+         MASS_MOL = 1.,
+         CP=1.,
+         VISC = VISCOG,
+         D_VISC_TEMP = ZERO,),
+   THM_DIFFU=_F(
+        R_GAZ=8.315,
+        RHO = 1.,
+        CP=1000.0,
+        BIOT_COEF = 1.,
+        SATU_PRES=SATCOX,
+        D_SATU_PRES=DSATCOX,
+        PESA_X = 9.81,
+        PESA_Y = 0.,
+        PESA_Z = 0.,
+        PERM_IN = UN,
+        PERM_LIQU=UN,
+        D_PERM_LIQU_SATU=ZERO,
+        PERM_GAZ=UN,
+        D_PERM_SATU_GAZ=ZERO,
+        D_PERM_PRES_GAZ=ZERO,
+        FICKV_T = ZERO,
+        FICKA_T =ZERO,
+        LAMB_T =ZERO
+        ),
+   THM_INIT=_F(
+         TEMP = 293.,
+         PRE1 = 0.,
+         PRE2 = 1.,
+         PORO = 0.5,
+         PRES_VAPE=0.0001,
+        ),
+   )
+
+CHMAT0=AFFE_MATERIAU(   MAILLAGE=MAIL,
+                          AFFE=_F( TOUT = 'OUI',
+                        MATER = MATERIAU),)
+
+CHAMNO=CREA_CHAMP(MAILLAGE=MAIL,
+                    OPERATION='AFFE',
+                    TYPE_CHAM='NOEU_DEPL_R',
+                    AFFE=(_F(TOUT='OUI',
+                             NOM_CMP=('PRE1','PRE2','TEMP',),
+                             VALE=(3.6,0.,0.),),
+                             ),);
+
+CALF0=AFFE_CHAR_MECA(MODELE=MODELE,
+                        FLUX_THM_REP = _F( GROUP_MA   = 'GAUCHE' ,
+                                          FLUN_HYDR2 =  0.      ,
+                                          FLUN_HYDR1 =  0.      ,
+                                          ),)
+CALTEMP=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(TOUT='OUI',
+                                   TEMP=0.,),);
+
+
+RESU0=STAT_NON_LINE(
+                MODELE=MODELE,
+                CHAM_MATER=CHMAT0,
+                EXCIT=(
+                        _F(CHARGE=CALTEMP,),
+                        _F(CHARGE=CALF0,),
+                     ),
+                 ETAT_INIT=_F(DEPL=CHAMNO,
+                              ),
+                COMPORTEMENT=_F(
+                RELATION = 'KIT_THH2',
+                RELATION_KIT = ('LIQU_AD_GAZ_VAPE','HYDR_UTIL')),
+                INCREMENT=_F(  LIST_INST = LI,
+                ),
+                      SOLVEUR=_F(RENUM='METIS',
+                                 STOP_SINGULIER='OUI',
+                                 METHODE='MULT_FRONT',),
+                NEWTON=_F(MATRICE='TANGENTE',
+                           REAC_ITER=1,),
+                CONVERGENCE=_F(
+                             ITER_GLOB_MAXI=15,
+                             RESI_GLOB_MAXI = 5.E-14 ),
+                  ARCHIVAGE=_F(PAS_ARCH=1,
+                              ),
+             );
+
+RESU0=CALC_CHAMP(reuse=RESU0,CONTRAINTE=('SIEF_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=RESU0)
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=13.937429619562,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=5,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=21.92010548044,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=14,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='N1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=22.78959240668,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+PR1=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL',
+                            GROUP_NO=('BAS'),
+                            RESULTAT=RESU0,
+                            NOM_CHAM='DEPL',
+                            INST=(0.,0.02,0.1, 0.5,1. ),
+                            NOM_CMP=('PRE1'),
+                            OPERATION='EXTRACTION',),);
+IMPR_TABLE(TABLE=PR1,
+             FORMAT   = 'TABLEAU_CROISE'    ,
+             NOM_PARA=('INST','COOR_X','PRE1'),
+             TRI   = (_F( NOM_PARA = ('COOR_X' ,),
+                          ORDRE    = 'CROISSANT',),),);
+
+PR2=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL',
+                            GROUP_NO=('BAS'),
+                            RESULTAT=RESU0,
+                            NOM_CHAM='DEPL',
+                            INST=(0.,0.02,0.1, 0.5,1. ),
+                            NOM_CMP=('PRE2'),
+                            OPERATION='EXTRACTION',),);
+IMPR_TABLE(TABLE=PR2,
+             FORMAT   = 'TABLEAU_CROISE'    ,
+             NOM_PARA=('INST','COOR_X','PRE2'),
+             TRI   = (_F( NOM_PARA = ('COOR_X' ,),
+                          ORDRE    = 'CROISSANT',),),);
+
+PV4=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL',
+                            GROUP_NO=('BAS'),
+                            RESULTAT=RESU0,
+                            NOM_CHAM='VARI_ELNO',
+                            INST=(0.02,0.1, 0.5,1. ),
+                            NOM_CMP=('V4'),
+                            OPERATION='EXTRACTION',),);
+IMPR_TABLE(TABLE=PV4,
+             FORMAT   = 'TABLEAU_CROISE'    ,
+             NOM_PARA=('INST','COOR_X','V4'),
+             TRI   = (_F( NOM_PARA = ('COOR_X' ,),
+                          ORDRE    = 'CROISSANT',),),);
+FIN()
+#

@@ -1,0 +1,212 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: samuel.geniaut at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+
+#***********************************
+# MAILLAGE ET MODELE
+#***********************************
+
+MAILLAG1=LIRE_MAILLAGE(INFO=1,FORMAT='MED',);
+
+
+MO=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                   AFFE=_F(GROUP_MA=('PLAQUE',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),);
+
+#***********************************
+# MATERIAU
+#***********************************
+NU=0.33
+E=2.06E11
+RHO=7800.
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,
+                            NU=NU,RHO=RHO,),);
+
+MAT=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                      AFFE=_F(TOUT='OUI',
+                              MATER=ACIER,),);
+
+#***********************************
+# DEFINITION DES FISSURES
+#***********************************
+
+# LONGUEUR DE LA FISSURE INITIALE
+a0 = 2
+R = 5.
+
+LN = FORMULE(VALE='X-R',
+             R=R,
+             NOM_PARA='X',)
+LT = FORMULE(VALE='Y-a0',
+             a0=a0,
+             NOM_PARA='Y',)
+
+# NOMBRE DE PROPAGATIONS
+NPS = 3
+NPS = NPS+2
+
+Fiss = [None]*NPS
+
+Fiss[1]=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                        DEFI_FISS=_F(FONC_LT=LT,
+                                     FONC_LN=LN,),);
+
+#****************************
+# PROPAGATION DES FISSURES
+#****************************
+
+ModX = [None]*NPS
+ChgX = [None]*NPS
+BLOC = [None]*NPS
+CHRX = [None]*NPS
+ResX = [None]*NPS
+ResU = [None]*NPS
+SIF = [None]*NPS
+PULSE = 10.
+
+RI = 0.25
+RS = 2*RI
+
+# AVANCE DE LA FISSURE A CHAQUE ITERATION
+da_fiss = 1.
+
+for i in range(1,NPS-1) :
+
+    ModX[i]=MODI_MODELE_XFEM(MODELE_IN=MO,
+                         FISSURE=Fiss[i],);
+
+    BLOC[i]=AFFE_CHAR_MECA(MODELE=ModX[i],
+                           DDL_IMPO=(_F(GROUP_NO=('AXE',),
+                                        DX=0,
+                                        DY=0,),
+                                        _F(GROUP_NO=('P_SUP',),
+                                        DX=0,),),
+                                        );
+
+    CHRX[i]=AFFE_CHAR_MECA(MODELE=ModX[i],
+                       ROTATION=_F(VITESSE = PULSE,
+                                   AXE = (0.,0.,1.,),
+                                   CENTRE=(R,R,0.,),),);
+
+
+    ResX[i]=MECA_STATIQUE(MODELE=ModX[i],
+                         CHAM_MATER=MAT,
+                         EXCIT=(_F(CHARGE=CHRX[i],),
+                                _F(CHARGE=BLOC[i],),
+                                ),
+                         INST=1,);
+
+    SIF[i]=CALC_G(THETA=_F(FISSURE=Fiss[i],),
+                   RESULTAT=ResX[i],
+                   OPTION='CALC_K_G',);
+
+
+    IMPR_TABLE(TABLE=SIF[i],);
+
+    if ( i != NPS ) :
+      Fiss[i+1]=CO('Fiss_%d'%(i+1))
+
+      PROPA_FISS(MODELE=ModX[i],
+                 FISSURE=_F(FISS_ACTUELLE=Fiss[i],
+                             FISS_PROPAGEE=Fiss[i+1],
+                             TABLE=SIF[i],),
+                 DA_MAX=da_fiss,
+                 METHODE_PROPA='GEOMETRIQUE',
+                 ZONE_MAJ='TOUT',
+                 LOI_PROPA=_F(LOI='PARIS',
+                              C=1.,
+                              M=1.,
+                              MATER=ACIER),
+                 COMP_LINE=_F(COEF_MULT_MINI=0.,
+                              COEF_MULT_MAXI=1.,
+                             ),
+                 RAYON=RS,
+                 INFO=0,);
+
+
+    ResX[i]=CALC_ERREUR(reuse =ResX[i],
+                 RESULTAT=ResX[i],
+                 OPTION=('ERME_ELEM'));
+
+    # IMPR_RESU=_F(RESULTAT=ResX[i],
+    #              FORMAT='RESULTAT',
+    #              NOM_CHAM='ERME_ELEM');
+
+#----------------------------------------------
+#         POST TRAITEMENT
+#----------------------------------------------
+#       SOLUTIONS ANALYTIQUES DE K1 :
+# STRESS ANALYSIS OF CRACKS HANDBOOK (TADA,PARIS,IRWIN) P.246
+D=2*R
+afiss=[a0 , a0+da_fiss, a0+2*da_fiss, a0+3*da_fiss]
+alpha = 0.5 / (1. - NU)
+F = [None]*5
+G = [None]*5
+K1REF = [None]*5
+
+VAL_CAL=[
+ 3.1746676312693E+07,
+ 3.1746676312693E+07,
+ 5.2058430827129E+07,
+ 5.2058430827129E+07,
+ 7.8631152764937E+07,
+ 7.8631152764937E+07,
+]
+
+for i in range(1,4) :
+   F[i]=(1.122+0.14*(afiss[i]/D)-0.545*(afiss[i]/D)**2+0.405*(afiss[i]/D)**3)/(1-afiss[i]/D)**1.5
+   G[i]=(0.187*(6-9*(afiss[i]/D)+5*(afiss[i]/D)**2)-7.35*(afiss[i]/D)**2*(1-afiss[i]/D)**4*(1-0.5*afiss[i]/D))/(1-afiss[i]/D)**1.5
+   K1REF[i]=((1+alpha)/16)*RHO*PULSE**2*D**2*sqrt(pi*afiss[i])*(F[i]-(3*alpha-1)*G[i]/(1+alpha))
+
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='K1',
+              TYPE_TEST='MAX',
+              VALE_CALC=VAL_CAL[2*(i-1)+0],
+              VALE_REFE=K1REF[i],
+              CRITERE='RELATIF',
+              PRECISION=0.05,
+              REFERENCE='ANALYTIQUE',);
+
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='K1',
+              TYPE_TEST='MIN',
+              VALE_CALC=VAL_CAL[2*(i-1)+1],
+              VALE_REFE=K1REF[i],
+              CRITERE='RELATIF',
+              PRECISION=0.05,
+              REFERENCE='ANALYTIQUE',);
+
+
+
+# test de ERME_ELEM en non regression uniquement.
+TEST_RESU(RESU=(_F(RESULTAT=ResX[2],
+                   NOM_CHAM='ERME_ELEM',
+                   NUME_ORDRE=1,
+                   NOM_CMP='NUEST',
+                   MAILLE='M1',
+                   VALE_CALC=6.37858941558E-05,
+                   CRITERE='ABSOLU',
+                   ),),)
+FIN();

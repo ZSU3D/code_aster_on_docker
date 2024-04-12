@@ -1,0 +1,226 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+#-----------------------------------------------------------------------
+# VALIDATION DES GRILLES EXCENTREE SUR POUTRE CONSOLE (TRIANGLE)
+# VERIFICATION DU POIDS PROPRE
+#-----------------------------------------------------------------------
+
+MAILL1=LIRE_MAILLAGE(FORMAT='MED'   )
+
+MAILL2=CREA_MAILLAGE(
+               MAILLAGE=MAILL1,
+               CREA_MAILLE=_F(
+                   NOM = 'ACPLUS',
+                   GROUP_MA = 'CONSOLE',
+                   PREF_MAILLE = 'B',
+                              )
+                           )
+
+
+MAILTOT=CREA_MAILLAGE(
+               MAILLAGE=MAILL2,
+               CREA_MAILLE=_F(
+                   NOM = 'ACMOINS',
+                   GROUP_MA = 'CONSOLE',
+                   PREF_MAILLE = 'C',
+                              )
+                           )
+MAILTOT = DEFI_GROUP(
+             reuse    = MAILTOT,
+             MAILLAGE = MAILTOT,
+             CREA_GROUP_NO = _F(
+                   TOUT_GROUP_MA = 'OUI'))
+
+#
+# -----------------------------------------------------
+# DEFINITION DES MATERIAUX
+# -----------------------------------------------------
+#
+
+E = DEFI_CONSTANTE(VALE = 2.E11)
+NU = DEFI_CONSTANTE(VALE = 0.)
+RHO = DEFI_CONSTANTE(VALE = 7800.)
+ACIER=DEFI_MATERIAU(
+            ELAS_FO=_F(  E = E,   NU = NU, RHO=RHO, K_DESSIC=0., B_ENDOGE=0.),
+                          )
+BETON=DEFI_MATERIAU(
+            ELAS=_F(  E = 3.E10,   NU = 0.0, RHO = 2500.),
+                          )
+
+#
+# -------------------------------------------------
+# AFFECTATION DES MATERIAUX
+# -------------------------------------------------
+#
+HYDR=CREA_CHAMP(OPERATION='AFFE',
+                 TYPE_CHAM='NOEU_HYDR_R',
+                 MAILLAGE=MAILTOT,
+                 AFFE=_F( TOUT = 'OUI',
+                          NOM_CMP = ('HYDR',),
+                          VALE = (0.,)
+                         )
+                )
+
+SECH=CREA_CHAMP(OPERATION='AFFE',
+                 TYPE_CHAM='NOEU_TEMP_R',
+                 MAILLAGE=MAILTOT,
+                 AFFE=_F( TOUT = 'OUI',
+                          NOM_CMP = ('TEMP',),
+                          VALE = (0.,)
+                         )
+                )
+
+MATAF=AFFE_MATERIAU(    MAILLAGE=MAILTOT,
+                          AFFE=(
+                          _F(  GROUP_MA = ('ACPLUS','ACMOINS'),
+                                 MATER = ACIER,
+                               ),
+                          _F(  GROUP_MA = ('CONSOLE'),
+                                 MATER = BETON,
+                               )
+                               ),
+                          AFFE_VARC = (_F( GROUP_MA = ('ACPLUS','ACMOINS'), NOM_VARC = 'HYDR', CHAM_GD=HYDR),
+                                       _F( GROUP_MA = ('ACPLUS','ACMOINS'), NOM_VARC = 'SECH', CHAM_GD=SECH, VALE_REF=0.),
+                                      )
+                      )
+
+#
+# -------------------------------------------------
+# AFFECTATION DES MODELES
+# -------------------------------------------------
+#
+LEMOD=AFFE_MODELE(    MAILLAGE=MAILTOT,     
+                        AFFE=(
+                              _F(  GROUP_MA = ('ACPLUS','ACMOINS'),
+                               PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'GRILLE_MEMBRANE',
+                             ),
+                              _F(  GROUP_MA = ('CONSOLE',),
+                               PHENOMENE = 'MECANIQUE',
+                               MODELISATION = 'DKT',
+                             )
+                          )
+                      )
+
+# -------------------------------------------------
+# AFFECTATION DES CARACTERISTIQUES
+# -------------------------------------------------
+#
+LACAR=AFFE_CARA_ELEM(    MODELE=LEMOD,
+                      COQUE=(
+                          _F( GROUP_MA = ('CONSOLE', 'B0X','B1X','B0Y','B1Y',),
+                                EPAIS = .2,
+                                ANGL_REP = (0.0, 0.0,),
+                             ),
+                             ),
+                       GRILLE=(
+                               _F( GROUP_MA = 'ACPLUS',
+                                SECTION = .2,
+                                ANGL_REP_1=(0,0),),
+                               _F( GROUP_MA = 'ACMOINS',
+                                SECTION = .2,
+                                ANGL_REP_1=(0,0),),
+                              )
+                        )
+
+# ----------------------------------------------
+# CHARGEMENT
+# ----------------------------------------------
+#
+ZCHM=AFFE_CHAR_MECA(
+             MODELE=LEMOD,
+            DDL_IMPO=(
+                   _F( GROUP_MA  = ('B0X','B1X'),
+                       DX = 0., DY=0., DZ = 0., DRX = 0., DRY = 0., DRZ = 0. ),
+                ),
+            PESANTEUR = _F(GRAVITE=9.81,
+                           DIRECTION=(0.,0.,-1.),),
+            # chargement nul pour tester le bon fonctionnement de l'option
+            PRES_REP = _F(
+                   GROUP_MA = ('ACPLUS','ACMOINS'),
+                   PRES     = 0.,),
+            )
+#
+# ----------------------------------------------
+# CALCUL
+# ----------------------------------------------
+#
+
+
+ZLIST=DEFI_LIST_REEL(   DEBUT=0.,
+             INTERVALLE=_F( JUSQU_A = 1.0,  NOMBRE = 1, )
+           )
+
+LEDEP=STAT_NON_LINE(
+                            MODELE=LEMOD,
+                        CHAM_MATER=MATAF,
+                         CARA_ELEM=LACAR,
+                             EXCIT=_F(
+                CHARGE = ZCHM,
+                ),
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                ),
+                         INCREMENT=_F(
+                LIST_INST = ZLIST,
+                NUME_INST_FIN = 1,
+                ),
+              )
+
+LEDEP=CALC_CHAMP(reuse =LEDEP,
+                 RESULTAT=LEDEP,
+                 CONTRAINTE=('EFGE_ELNO',),
+                 DEFORMATION=('EPSI_ELGA','EPSI_ELNO',),
+                 VARI_INTERNE=('VARI_ELNO',),
+                 FORCE=('FORC_NODA','REAC_NODA'),);
+
+#
+# -------------------------------------------------
+# POST TRAITEMENT DES RESULTATS
+# -------------------------------------------------
+#
+
+#IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=LEDEP))
+TAB = POST_RELEVE_T(
+        ACTION = _F(
+               OPERATION = 'EXTRACTION',
+               INTITULE = 'RESU',
+               GROUP_NO = ('B0X','B1X'),
+               RESULTAT = LEDEP,
+               NOM_CHAM = 'REAC_NODA',
+               TOUT_ORDRE = 'OUI',
+               RESULTANTE = 'DZ'))
+
+
+#IMPR_TABLE(TABLE = TAB)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.77561000E+07,
+           VALE_REFE=1.7756000E7,
+           NOM_PARA='DZ',
+           TABLE=TAB,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+FIN()
+#

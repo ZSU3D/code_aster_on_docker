@@ -1,0 +1,118 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='NON'))
+
+mail=LIRE_MAILLAGE(FORMAT='MED',);
+
+modele=AFFE_MODELE(MAILLAGE=mail,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+acier=DEFI_MATERIAU(ELAS=_F(E=210000000000.0,
+                            NU=0.,),
+                    ECRO_LINE=_F(D_SIGM_EPSI=70000000000.0,
+                                 SY=4000000.0,),);
+
+ch_mat=AFFE_MATERIAU(MAILLAGE=mail,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=acier,),);
+
+CL=AFFE_CHAR_MECA(MODELE=modele,
+                  DDL_IMPO=_F(GROUP_MA='ENCAST',
+                              DX=0.0,
+                              DY=0.0,
+                              DZ=0.0,),);
+
+CS=AFFE_CHAR_MECA(MODELE=modele,
+                  FORCE_FACE=_F(GROUP_MA='EFFORT',
+                                FX=-6500000.0,),);
+
+fonc=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,10.0,10.0,),);
+
+listinst=DEFI_LIST_REEL(DEBUT=0.0,
+                    INTERVALLE=_F(JUSQU_A=1.,
+                                  NOMBRE=10,),);
+
+res=STAT_NON_LINE(MODELE=modele,
+                  CHAM_MATER=ch_mat,
+                  EXCIT=(_F(CHARGE=CS,
+                            FONC_MULT=fonc,
+                            TYPE_CHARGE='FIXE_CSTE',),
+                         _F(CHARGE=CL,
+                            TYPE_CHARGE='FIXE_CSTE',),),
+                  COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                               DEFORMATION='PETIT',
+                               TOUT='OUI',),
+                  INCREMENT=_F(LIST_INST=listinst,),
+                  NEWTON=_F(REAC_INCR=1,
+                            PREDICTION='TANGENTE',
+                            MATRICE='TANGENTE',
+                            REAC_ITER=1,),
+                  CONVERGENCE=_F(ITER_GLOB_MAXI=300,),
+                  CRIT_STAB=_F(OPTION='BANDE',CHAR_CRIT=(-15,15),),
+                  );
+
+TABSPEC0=RECU_TABLE(CO=res,
+                   NOM_TABLE='ANALYSE_MODALE',);
+
+
+TEST_TABLE(
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=9.976366410,
+           VALE_REFE=9.9645,
+           PRECISION=2.E-3,
+           NOM_PARA='CHAR_CRIT',
+           TABLE=TABSPEC0,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_FLAMB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=1,),
+                   _F(NOM_PARA='INST',
+                      VALE=0.2,),
+                   ),
+           )
+
+
+TEST_TABLE(
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.675266654,
+                   VALE_REFE=0.6643,
+                   PRECISION=0.03,
+           NOM_PARA='CHAR_CRIT',
+           TABLE=TABSPEC0,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_FLAMB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=1,),
+                   _F(NOM_PARA='INST',
+                      VALE=1.0,),
+                   ),
+           )
+
+
+FIN();

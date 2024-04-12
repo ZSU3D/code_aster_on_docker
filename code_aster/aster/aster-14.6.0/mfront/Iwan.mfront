@@ -1,0 +1,217 @@
+/* -------------------------------------------------------------------- */
+/* Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org             */
+/* This file is part of code_aster.                                     */
+/*                                                                      */
+/* code_aster is free software: you can redistribute it and/or modify   */
+/* it under the terms of the GNU General Public License as published by */
+/* the Free Software Foundation, either version 3 of the License, or    */
+/* (at your option) any later version.                                  */
+/*                                                                      */
+/* code_aster is distributed in the hope that it will be useful,        */
+/* but WITHOUT ANY WARRANTY; without even the implied warranty of       */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        */
+/* GNU General Public License for more details.                         */
+/*                                                                      */
+/* You should have received a copy of the GNU General Public License    */
+/* along with code_aster.  If not, see <http://www.gnu.org/licenses/>.  */
+/* -------------------------------------------------------------------- */
+
+@Parser         Implicit;
+@Behaviour      Iwan; 
+@Author         Vinicius Alves Fernandes (EDF R&D AMA-T64);
+@Description{
+Iwan model for cyclic behaviour of soils;
+}
+
+@Algorithm NewtonRaphson;
+@Theta 1. ;
+@Epsilon 1.e-12 ;
+@IterMax 50 ;
+@Includes{
+#include"TFEL/Material/Lame.hxx"
+}
+
+// Number of hardening surfaces
+@IntegerConstant Ns = 12 ;
+
+// Material properties
+
+// Elasticity
+@MaterialProperty stress   young; 
+young.setGlossaryName("YoungModulus");
+@MaterialProperty real     nu;
+nu.setGlossaryName("PoissonRatio");
+// Parameters of hyperbolic model
+@MaterialProperty real     GammaRef;
+@MaterialProperty real     n;
+
+// State variables
+// Scalar as linear kinematic hardening
+@StateVariable real        pp[Ns];
+
+// Auxiliary state variable
+// Kinematic tensor hardening
+@AuxiliaryStateVariable Stensor X[Ns];
+// 
+@AuxiliaryStateVariable real    fn[Ns];
+
+// Local variables
+// Lame coefficients
+@LocalVariable real    lambda;
+@LocalVariable real    mu;
+// Size of kinematical surfaces
+@LocalVariable real    Y[Ns];
+// Norm of deviatoric stress tensor with elastic increment
+@LocalVariable real    qe[Ns]; // deviateur
+// Norm of deviatoric stress tensor
+@LocalVariable real    qn[Ns]; // deviateur
+// Mean stress
+@LocalVariable real    p; // pression moyenne
+// Plastic flow tensor
+@LocalVariable Stensor PSI[Ns];
+// Kinematical hardening coefficients
+@LocalVariable real    C[Ns+1];
+// Deviatoric stress
+@LocalVariable Stensor    S;
+// Stress and strain values from hyperbolic model
+@LocalVariable real    ltau[Ns+1]; // tau
+@LocalVariable real    leps[Ns+1]; // gamma
+
+/* Initialize Lame coefficients */
+@InitLocalVars{
+
+    using namespace tfel::material::lame;
+    lambda = computeLambda(young,nu);
+    mu = computeMu(young,nu);
+    real G=young/(2.*(1.+nu));
+
+// Gamma interpaolation values
+// Attention : elastic behavior until gamma < 10-5
+// Non convergence if gamma > 0.1
+    ltau[0]=0.;
+    leps[0]=0.;
+    leps[1]=1.00000000e-05;
+    leps[2]=2.15443469e-05;
+    leps[3]=4.64158883e-05;
+    leps[4]=1.00000000e-04;
+    leps[5]=2.15443469e-04;
+    leps[6]=4.64158883e-04;
+    leps[7]=1.00000000e-03;
+    leps[8]=2.15443469e-03;
+    leps[9]=4.64158883e-03;
+    leps[10]=1.00000000e-02;
+    leps[11]=2.00000000e-02;
+    leps[12]=2.00000000e-01;
+
+// Tau values obtained from hyperbolic model
+    for (unsigned short i=1;i<=Ns;i++){
+        ltau[i]=leps[i]*G/(1.+1.*pow(leps[i]/GammaRef,n));
+    }
+
+// Initial C value
+    C[0] = 2*G;
+// C values recursively obtained 
+    real aux=0.;
+    for (unsigned short i=1;i<Ns+1;i++){
+        aux = 1./(C[i-1])+aux;
+        C[i]=1./(0.5*(leps[i]-leps[i-1])/(ltau[i]-ltau[i-1])-aux);
+    }
+
+// Size of kinematical surfaces
+    for (unsigned short i=0;i<Ns;i++){   
+        Y[i]=ltau[i+1]/sqrt(2./3.);
+    }
+} 
+
+@TangentOperator{
+    using namespace tfel::material::lame;
+    StiffnessTensor De;
+    Stensor4 Je; 
+    computeElasticStiffness<N,Type>::exe(De,lambda,mu);
+    getPartialJacobianInvert(Je);
+    Dt = De*Je;
+}
+
+
+@ComputeStress{
+    sig = (lambda*trace(eel)*Stensor::Id()+2.*mu*(eel));
+} 
+
+@Integrator{
+    real eps=1.e-12;
+    p=trace(sig)/3.;
+    S=sig-p*Stensor::Id();
+    for (unsigned short i=0;i<Ns;i++){
+        qn[i]=sigmaeq(S-X[i]);
+        if (qn[i]<eps){
+            PSI[i]=Stensor(0.);
+        }
+        else{
+            PSI[i]=1.5*(S-X[i])/qn[i];
+        }
+        fn[i]=qn[i]-Y[i];
+        if (fn[i]<eps){
+            fpp[i]=dpp[i];
+        }       
+        else{
+            if(C[i+1]<eps*qn[i]){
+                fpp[i]=dpp[i]-(qn[i]-Y[i])/(1.5*(C[i]));
+            }
+            else{
+                fpp[i]=dpp[i]-(qn[i]-Y[i])/(1.5*(C[i+1]));
+            }
+        }
+    }
+
+    Stensor aux=Stensor(0.);
+    for (unsigned short i=0;i<Ns;i++){
+        aux = dpp[i]*PSI[i]+aux;
+    }
+    feel=deel-deto+aux;
+
+
+// calcul de la jacobienne analytique
+    const real crit = 1e-16;
+    for (unsigned short i=0;i<Ns;i++){
+        if (qn[i]<eps){
+            dfeel_ddeel    += 2*mu*dpp[i]*theta*(1/eps)*(Stensor4::M()-(PSI[i]^PSI[i]));
+        }
+        else{
+            dfeel_ddeel    += 2*mu*dpp[i]*theta*(1/qn[i])*(Stensor4::M()-(PSI[i]^PSI[i]));
+        }
+    }
+
+    for (unsigned short i=0;i<Ns;i++){
+        dfeel_ddpp(i) = PSI[i];
+        dfpp_ddpp(i,i) = 1.;
+        real fa=abs(fn[i]);
+        if (fn[i]<eps){
+            if (fa>crit){
+                dfpp_ddeel(i)=0.*Stensor::Id();}
+        }
+        if (fn[i]>eps){
+            if(C[i+1]<eps*qn[i]){
+                dfpp_ddeel(i) = -(2.*mu/(C[i]*qn[i]))*((S-X[i])|(Stensor4::Id()));
+            }
+            else{
+                dfpp_ddeel(i) = -(2.*mu/(C[i+1]*qn[i]))*((S-X[i])|(Stensor4::Id()));
+            }
+        }
+        if ((fa<crit)&&(fn[i]>-crit)){
+            if(C[i+1]<eps*qn[i]){
+                dfpp_ddeel(i) = -0.5*(2.*mu/(C[i]*qn[i]))*((S-X[i])|(Stensor4::Id()));
+            }
+            else{
+                dfpp_ddeel(i) = -0.5*(2.*mu/(C[i+1]*qn[i]))*((S-X[i])|(Stensor4::Id()));
+            }
+        }
+    }
+}
+
+@UpdateAuxiliaryStateVars{
+    for (unsigned short i=0;i<Ns;i++){
+        if (dpp[i]>0.){
+           X[i] = X[i]+C[i+1]*dpp[i]*PSI[i];
+        }    
+    }
+}

@@ -1,0 +1,136 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MAIL=DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,
+                 CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+MOD=AFFE_MODELE(  MAILLAGE=MAIL,
+                        AFFE=_F(  TOUT = 'OUI',
+                               PHENOMENE = 'MECANIQUE',
+                               MODELISATION = '2D_BARRE') )
+
+CARBA=AFFE_CARA_ELEM(   MODELE=MOD,
+                        BARRE=_F(  GROUP_MA = 'TOUT',
+                                   SECTION = 'GENERALE',
+                                   CARA = ('A',),
+                                   VALE = ( 1.,))
+                     )
+
+MATER2=DEFI_MATERIAU(     ELAS=_F(  E = 1.E11,  NU = 0.),
+                             ECRO_ASYM_LINE=_F(  DT_SIGM_EPSI = 0.E9,
+                                              SY_T = 0.5E8,
+                                              DC_SIGM_EPSI = 0.E9,
+                                              SY_C = 2.E8)
+                          )
+
+CHMAT2=AFFE_MATERIAU(  MAILLAGE=MAIL,
+                       AFFE=_F(  TOUT = 'OUI',    MATER = MATER2))
+
+CHAR=AFFE_CHAR_MECA(   MODELE=MOD,DDL_IMPO=(
+                           _F(  GROUP_NO = 'A',
+                                      DX = 0., DY = 0.),
+                           _F(  GROUP_NO = 'B',
+                                      DX = 0., DY = 1.))
+                            )
+
+# TRACTION-COMPRESSION PLASTIQUE PARFAIT PARFAIT
+
+
+FONC5=DEFI_FONCTION(   NOM_PARA='INST',
+                      VALE=( 0., 0.,
+                             1.,  0.01,
+                             2., -0.01,
+)
+                     )
+
+LINST4=DEFI_LIST_REEL(  DEBUT=0.,INTERVALLE=(
+           _F(  JUSQU_A = 1.,      NOMBRE = 10),
+           _F(  JUSQU_A = 2.,      NOMBRE = 10))
+                        )
+
+U5=STAT_NON_LINE(
+                            MODELE=MOD,
+                        CHAM_MATER=CHMAT2,
+                         CARA_ELEM=CARBA,
+                             EXCIT=_F(
+                CHARGE = CHAR,
+                FONC_MULT = FONC5),
+                         COMPORTEMENT=_F(
+                RELATION = 'VMIS_ASYM_LINE'),
+                         INCREMENT=_F(
+                LIST_INST = LINST4),
+                            NEWTON=_F(
+                PREDICTION = 'ELASTIQUE',
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 3)
+              )
+
+U5=CALC_CHAMP( reuse=U5,
+                             CONTRAINTE=('SIEF_ELNO'),
+                          RESULTAT=U5,
+              )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U5,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='N',
+                   VALE_CALC= 5.00000000E+07,
+                   VALE_REFE=5.E7,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=10,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U5,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='N',
+                   VALE_CALC= 5.00000000E+07,
+                   VALE_REFE=5.E7,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=12,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U5,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='N',
+                   VALE_CALC=-2.00000000E+08,
+                   VALE_REFE=-2.E8,
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=20,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U5,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOEUD='N1',
+                   NOM_CMP='N',
+                   VALE_CALC=-2.00000000E+08,
+                   VALE_REFE=-2.E8,
+                   MAILLE='M1',),
+                ),
+          )
+
+FIN()

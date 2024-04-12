@@ -1,0 +1,237 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ), DEBUG=_F(SDVERI='OUI'))
+
+
+MA_L  =  LIRE_MAILLAGE(FORMAT="ASTER",);
+
+
+MA_Q = CREA_MAILLAGE(
+  MAILLAGE = MA_L,
+  LINE_QUAD = _F(TOUT = 'OUI')
+  )
+
+
+L_INST = DEFI_LIST_REEL (
+              DEBUT=0.0,
+              INTERVALLE=(_F(JUSQU_A=2.00,NOMBRE=20),
+                          ));
+
+
+
+
+
+F_TEMP=DEFI_FONCTION(
+                NOM_PARA='INST',
+                NOM_RESU='TEMP',
+              PROL_DROITE='CONSTANT',
+                    VALE=(
+               0.,    20.,
+               1.,   120.,
+               2.,   220.,
+               )
+             )
+
+
+
+
+U_COMP=DEFI_FONCTION(NOM_PARA='INST',
+                     VALE=(0.,0.,2.,5.e-3),
+                     PROL_DROITE='CONSTANT');
+
+
+F_DIFF = FORMULE(VALE='(SIXX-SIXX_L)/SIXX',
+                 NOM_PARA=['SIXX', 'SIXX_L'],)
+
+MO=[None]*2
+C_RIG=[None]*2
+CHR_C=[None]*2
+CHP_T=[None]*2
+TEMP=[None]*2
+CHP_M=[None]*2
+
+MA=[MA_Q,MA_L];
+
+
+modelisation=['D_PLAN_GRAD_VARI','D_PLAN'];
+
+METAL2 = DEFI_MATERIAU(
+  ELAS       = _F(E = 1.E5,
+                  NU = 0.3,
+                  ALPHA=1.E-5
+                  ),
+  BETON_ECRO_LINE  = _F(SYT= 100., D_SIGM_EPSI = -1.E4),
+  NON_LOCAL  = _F(C_GRAD_VARI = 2.8e-02,PENA_LAGR=1000.*2.8e-02)
+  )
+
+for i in range(0,len(modelisation)):
+
+
+
+  CHP_T[i]=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_F',
+               MAILLAGE=MA[i],
+                   AFFE=_F(
+               TOUT = 'OUI',
+               NOM_CMP = 'TEMP',
+               VALE_F = F_TEMP)
+             )
+
+
+  TEMP[i]=CREA_RESU(
+               OPERATION='AFFE', TYPE_RESU='EVOL_THER',
+                NOM_CHAM='TEMP',
+                 AFFE=_F(
+               LIST_INST = L_INST,
+               CHAM_GD = CHP_T[i])
+             )
+
+
+  CHP_M[i]=AFFE_MATERIAU(MAILLAGE=MA[i],
+                    AFFE_VARC = (_F(TOUT='OUI',
+                                  EVOL =TEMP[i],
+                                  NOM_VARC='TEMP',
+                                  VALE_REF=20.0)),
+                     AFFE=_F(TOUT='OUI',
+                             MATER=METAL2));
+
+  MO[i]=AFFE_MODELE(MAILLAGE=MA[i],
+              AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION=modelisation[i],
+                       ),
+                       );
+
+  C_RIG[i] = AFFE_CHAR_MECA(
+                               MODELE = MO[i],
+                               DDL_IMPO = (
+               _F(GROUP_MA = 'BLOX',DX = 0),
+               _F(GROUP_MA = 'BLOY',DY = 0),
+               ),
+           );
+
+  CHR_C[i] = AFFE_CHAR_MECA( MODELE = MO[i],
+                        DDL_IMPO = _F(GROUP_MA='TIRX', DX= 1.),
+                       );
+
+U=[None]*2
+SIG=[None]*2
+TAB_E=[None]*2
+TAB_S=[None]*2
+TG_E=[None]*2
+
+for i in range(0,len(modelisation)):
+
+
+  U[i]=STAT_NON_LINE(MODELE=MO[i],
+            CHAM_MATER=CHP_M[i],
+            EXCIT=(_F(CHARGE=CHR_C[i],
+                     FONC_MULT=U_COMP),
+                   _F(CHARGE=C_RIG[i]),
+                   ),
+            COMPORTEMENT=_F(RELATION='ENDO_ISOT_BETON'),
+            INCREMENT=_F(LIST_INST=L_INST,
+                         INST_FIN=2.,
+                         ),
+            NEWTON=_F(MATRICE='TANGENTE',
+                      REAC_ITER=1,
+                      MATR_RIGI_SYME='OUI',
+                      ),
+            SOLVEUR = _F(METHODE='MUMPS'),
+            CONVERGENCE=_F(ITER_GLOB_MAXI=50,
+                           RESI_GLOB_RELA=1.e-7,
+                          ),
+       );
+
+
+
+  U[i]=CALC_CHAMP(reuse=U[i],RESULTAT=U[i],CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'))
+
+
+
+
+  U[i] = CALC_CHAMP(
+              reuse = U[i],
+
+              RESULTAT  =U[i],
+              CONTRAINTE='SIGM_NOEU',VARI_INTERNE='VARI_NOEU',FORCE='FORC_NODA',
+              );
+
+
+
+  SIG[i]=RECU_FONCTION(RESULTAT=U[i],
+                                 MAILLE='MJ',
+                                 NOM_CHAM='SIEF_ELGA',
+                                 NOM_CMP='SIXX',
+                              POINT=1,
+                       );
+
+
+  TAB_E[i]=POST_RELEVE_T(
+           ACTION=
+                _F(INTITULE='DEFO',
+                 GROUP_NO='NO_POST',
+                 RESULTAT=U[i],
+                 NOM_CHAM='DEPL',
+                 NOM_CMP=('DX'),
+                 OPERATION='EXTRACTION'));
+
+  TAB_S[i]=POST_RELEVE_T(
+           ACTION=
+                _F(INTITULE='DEFO',
+                 GROUP_NO='NO_POST',
+                 RESULTAT=U[i],
+                 NOM_CHAM='SIGM_NOEU',
+                 NOM_CMP=('SIXX'),
+                 OPERATION='EXTRACTION'));
+
+  TG_E[i]=RECU_FONCTION(TABLE=TAB_E[i],
+                  PARA_X='INST',
+                  PARA_Y='DX',
+                  PROL_DROITE='CONSTANT',
+                  PROL_GAUCHE='CONSTANT');
+
+  if i==1 :
+
+    DIFF=CALC_TABLE(TABLE=TAB_S[i],
+                    TITRE = ' ',
+                    ACTION=(
+                            _F(OPERATION='FILTRE',NOM_PARA='INST',CRIT_COMP='GT',VALE=0.),
+                            _F(OPERATION='RENOMME',NOM_PARA=('SIXX','SIXX_L')),
+                            _F(OPERATION='COMB',TABLE=TAB_S[i-1],NOM_PARA='INST'),
+                            _F(OPERATION='OPER',FORMULE=F_DIFF,NOM_PARA='DIFF'),
+                            ),
+                    );
+
+
+
+
+IMPR_TABLE(TABLE=DIFF);
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='NON_DEFINI',
+           VALE_REFE=0.0,
+           VALE_CALC=0.0,
+           NOM_PARA='DIFF',
+           TABLE=DIFF,
+           FILTRE=_F(CRIT_COMP='MAXI_ABS',
+                     NOM_PARA='DIFF',),
+           )
+
+FIN();

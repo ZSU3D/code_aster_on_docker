@@ -1,0 +1,422 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CORNIERE 120 X 120 X 8 D'UNE LONGUEUR DE 1200
+# MODELISATION POU_D_TG
+#=======================================================================
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MAT=DEFI_MATERIAU(ELAS=_F( E = 2.1E5,NU = 0.3,))
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA, AFFE=_F( TOUT = 'OUI',MATER = MAT,))
+
+MO=AFFE_MODELE( MAILLAGE=MA,   AFFE=_F( TOUT = 'OUI',
+       PHENOMENE = 'MECANIQUE',     MODELISATION = 'POU_D_TG',))
+
+CARAC=AFFE_CARA_ELEM( MODELE=MO,POUTRE=(
+         _F( MAILLE = ( 'S1', 'S2', 'S3', 'S4', ),  SECTION = 'GENERALE',
+        CARA = ('A',         'IY',           'IZ',
+                'AY',        'AZ',           'EY',
+                'EZ',        'JX',           'JG',
+                'IYR2',      'IZR2',                          ),
+        VALE = (1856.,       4167339.,       1045547.,
+                 1.,       1.,             41.012,
+                 0.,       39595.,         44398819.,
+              84948392.,   0.,                                ), ),
+         _F( MAILLE = ( 'S5', 'S6', 'S7', 'S8', ),
+             SECTION = 'GENERALE', VARI_SECT = 'HOMOTHETIQUE',
+        CARA = ('A1',        'IY1',          'IZ1',
+                'AY1',       'AZ1',          'EY1',
+                'EZ1',       'JX1',          'JG1',
+                'IYR21',     'IZR21',
+                'A2',        'IY2',          'IZ2',
+                'AY2',       'AZ2',          'EY2',
+                'EZ2',       'JX2',          'JG2',
+                'IYR22',     'IZR22',                         ),
+        VALE = (1856.,       4167339.,       1045547.,
+                 1.,       1.,             41.012,
+                 0.,       39595.,         44398819.,
+              84948392.,   0.,
+              1856.,       4167339.,       1045547.,
+                 1.,       1.,             41.012,
+                 0.,       39595.,         44398819.,
+              84948392.,   0.,                                ), ))
+      )
+
+BLOQ=AFFE_CHAR_MECA(   MODELE=MO,
+          DDL_IMPO=_F( NOEUD = 'A1',    DX = 0., DY = 0., DZ = 0., ),
+          LIAISON_DDL=(
+       _F(     NOEUD = ( 'A1',    'A1',    'A1',  ),
+                          DDL = ('DRX', 'DRY', 'DRZ',),
+                    COEF_MULT = (  1.,    1.,    1., ),
+                    COEF_IMPO = 0.,                  ),
+#
+       _F(     NOEUD = ( 'A2',   'A2', ),
+                          DDL = ('DX', 'DY',),
+                    COEF_MULT = ( 1.,   -1.,),
+                    COEF_IMPO = 0.,            ),
+#
+       _F(     NOEUD = ( 'A2',   'A2', ),
+                          DDL = ('DX', 'DZ',),
+                    COEF_MULT = ( 1.,   -1.,),
+                    COEF_IMPO = 0.,            ),
+#
+       _F(     NOEUD = ( 'A2',    'A2',    'A2',  ),
+                          DDL = ('DRX', 'DRY', 'DRZ',),
+                    COEF_MULT = (  1.,    1.,    1., ),
+                    COEF_IMPO = 0.,                  ))    )
+
+################################################################
+#
+
+RIGEL=CALC_MATR_ELEM(MODELE=MO,    OPTION='RIGI_MECA',
+          CHAM_MATER=CHMAT,  CARA_ELEM=CARAC, CHARGE=BLOQ )
+
+NU=NUME_DDL( MATR_RIGI=RIGEL )
+
+RIGAS=ASSE_MATRICE(MATR_ELEM=RIGEL,NUME_DDL=NU)
+
+
+# FLAMBEMENT CAS 1  (FORCE EN G)
+# ------------------------------
+
+CHFORC_1=AFFE_CHAR_MECA(MODELE=MO,
+                   FORCE_NODALE=_F( NOEUD = 'A2',   FX = -5.7735026919E-01,
+                                            FY = -5.7735026919E-01,
+                                            FZ = -5.7735026919E-01,  ))
+
+
+STAT1=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM=CARAC,
+                   EXCIT=(_F(CHARGE=BLOQ,),
+                          _F(CHARGE=CHFORC_1,),),);
+
+SIGMA_1=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT1, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' );
+
+
+RIGELG_1=CALC_MATR_ELEM( MODELE=MO, OPTION='RIGI_GEOM',
+                             CARA_ELEM=CARAC,  SIEF_ELGA=SIGMA_1 )
+
+RIGASG_1=ASSE_MATRICE(MATR_ELEM=RIGELG_1,NUME_DDL=NU)
+
+#
+
+MOD_1=CALC_MODES(MATR_RIGI=RIGAS,
+                 TYPE_RESU='MODE_FLAMB',
+                 MATR_RIGI_GEOM=RIGASG_1,
+                 CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=20,
+                                   ),
+                 SOLVEUR_MODAL=_F(COEF_DIM_ESPACE=4,
+                                  ),
+                 )
+
+#
+
+TEST_RESU(RESU=(_F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   RESULTAT=MOD_1,
+                   VALE_CALC=6.91154293E+05,
+                   VALE_REFE=6.9253170999999996E5,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=3.0000000000000001E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=8,
+                   RESULTAT=MOD_1,
+                   VALE_CALC=1.49004790E+06,
+                   VALE_REFE=1.5048738999999999E6,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=19,
+                   RESULTAT=MOD_1,
+                   VALE_CALC=9.69429478E+06,
+                   VALE_REFE=1.0058989E7,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.040000000000000001,),
+                ),
+          )
+
+#
+
+MOD_1_IM=CALC_MODES(MATR_RIGI=RIGAS,
+                    TYPE_RESU='MODE_FLAMB',
+                    MATR_RIGI_GEOM=RIGASG_1,
+                    CALC_CHAR_CRIT=_F(CHAR_CRIT=0.,
+                                      NMAX_CHAR_CRIT=20,
+                                      ),
+                    OPTION='CENTRE',
+                    SOLVEUR_MODAL=_F(COEF_DIM_ESPACE=4,
+                                     APPROCHE='IMAG',
+                                     ),
+                    )
+
+#
+
+TEST_RESU(RESU=(_F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   RESULTAT=MOD_1_IM,
+                   VALE_CALC=6.91154293E+05,
+                   VALE_REFE=6.9253170999999996E5,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=3.0000000000000001E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=8,
+                   RESULTAT=MOD_1_IM,
+                   VALE_CALC=1.49004790E+06,
+                   VALE_REFE=1.5048738999999999E6,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=19,
+                   RESULTAT=MOD_1_IM,
+                   VALE_CALC=9.69429478E+06,
+                   VALE_REFE=1.0058989E7,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.040000000000000001,),
+                ),
+          )
+
+# FLAMBEMENT CAS 2  (FORCE EN C)
+# ------------------------------
+
+CHFORC_2=AFFE_CHAR_MECA(MODELE=MO,FORCE_NODALE=(
+               _F( NOEUD = 'A1',     MX = -1.6743078889E+01,
+                                          MY = -1.6743078889E+01,
+                                          MZ = 3.3486157777E+01,  ),
+#
+               _F( NOEUD = 'A2',     FX = -5.7735026919E-01,
+                                          FY = -5.7735026919E-01,
+                                          FZ = -5.7735026919E-01,
+                                          MX = 1.6743078889E+01,
+                                          MY = 1.6743078889E+01,
+                                          MZ = -3.3486157777E+01, ))  )
+
+###############################################################
+STAT2=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM=CARAC,
+                   EXCIT=(_F(CHARGE=BLOQ,),
+                          _F(CHARGE=CHFORC_2,),),);
+
+SIGMA_2=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT2, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' );
+
+RIGELG_2=CALC_MATR_ELEM( MODELE=MO, OPTION='RIGI_GEOM',
+                             CARA_ELEM=CARAC,  SIEF_ELGA=SIGMA_2 )
+
+RIGASG_2=ASSE_MATRICE(MATR_ELEM=RIGELG_2,NUME_DDL=NU)
+
+#
+
+MOD_2=CALC_MODES(MATR_RIGI=RIGAS,
+                 TYPE_RESU='MODE_FLAMB',
+                 MATR_RIGI_GEOM=RIGASG_2,
+                 CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=20,
+                                   ),
+                 SOLVEUR_MODAL=_F(DIM_SOUS_ESPACE=40,
+                                  ),
+                 )
+
+#
+
+TEST_RESU(RESU=(_F(PARA='CHAR_CRIT',
+                   NUME_MODE=17,
+                   RESULTAT=MOD_2,
+                   VALE_CALC=1.49004790E+06,
+                   VALE_REFE=1.5048738999999999E6,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=18,
+                   RESULTAT=MOD_2,
+                   VALE_CALC=5.76745490E+06,
+                   VALE_REFE=5.9981232000000002E6,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.040000000000000001,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=16,
+                   RESULTAT=MOD_2,
+                   VALE_CALC=-1.4790446000000001E6,
+                   
+                   ),
+                ),
+          )
+
+# FLAMBEMENT CAS 3  (FORCE EN A)
+# ------------------------------
+
+CHFORC_3=AFFE_CHAR_MECA(MODELE=MO,FORCE_NODALE=(
+               _F( NOEUD = 'A1',     MX = 2.8999863310E+01,
+                                          MY = -2.8999863310E+01, ),
+#
+               _F( NOEUD = 'A2',     FX = -5.7735026919E-01,
+                                          FY = -5.7735026919E-01,
+                                          FZ = -5.7735026919E-01,
+                                          MX = -2.8999863310E+01,
+                                          MY = 2.8999863310E+01,  ))  )
+
+###############################################################
+
+STAT3=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM=CARAC,
+                   EXCIT=(_F(CHARGE=BLOQ,),
+                          _F(CHARGE=CHFORC_3,),),);
+
+SIGMA_3=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT3, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' );
+
+RIGELG_3=CALC_MATR_ELEM( MODELE=MO, OPTION='RIGI_GEOM',
+                             CARA_ELEM=CARAC,  SIEF_ELGA=SIGMA_3 )
+
+RIGASG_3=ASSE_MATRICE(MATR_ELEM=RIGELG_3,NUME_DDL=NU)
+
+#
+
+MOD_3=CALC_MODES(MATR_RIGI=RIGAS,
+                 TYPE_RESU='MODE_FLAMB',
+                 MATR_RIGI_GEOM=RIGASG_3,
+                 CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=20,
+                                   ),
+                 SOLVEUR_MODAL=_F(DIM_SOUS_ESPACE=40,
+                                  ),
+                 )
+
+#
+
+TEST_RESU(RESU=(_F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   RESULTAT=MOD_3,
+                   VALE_CALC=5.70424071E+05,
+                   VALE_REFE=5.7226081999999995E5,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=4.0000000000000001E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=10,
+                   RESULTAT=MOD_3,
+                   VALE_CALC=2.42431514E+06,
+                   VALE_REFE=2.4595077000000002E6,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.02,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=19,
+                   RESULTAT=MOD_3,
+                   VALE_CALC=1.78120631E+07,
+                   VALE_REFE=1.8567372E7,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.050000000000000003,),
+                ),
+          )
+
+# FLAMBEMENT CAS 4  (MOMENT SUIVANT OY)
+# -------------------------------------
+
+CHFORC_4=AFFE_CHAR_MECA(MODELE=MO,FORCE_NODALE=(
+               _F( NOEUD = 'A1',     MX = 7.0710678119E-01,
+                                          MY = -7.0710678119E-01, ),
+#
+               _F( NOEUD = 'A2',     MX = -7.0710678119E-01,
+                                          MY = 7.0710678119E-01,  ))  )
+
+###############################################################
+
+STAT4=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM=CARAC,
+                   SOLVEUR=_F(METHODE='MULT_FRONT'),
+                   EXCIT=(_F(CHARGE=BLOQ,),
+                          _F(CHARGE=CHFORC_4,),),);
+
+SIGMA_4=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                    RESULTAT=STAT4, NUME_ORDRE=1,
+                    NOM_CHAM='SIEF_ELGA' )
+
+RIGELG_4=CALC_MATR_ELEM( MODELE=MO, OPTION='RIGI_GEOM',
+                             CARA_ELEM=CARAC,  SIEF_ELGA=SIGMA_4 )
+
+RIGASG_4=ASSE_MATRICE(MATR_ELEM=RIGELG_4,NUME_DDL=NU)
+
+#
+
+MOD_4=CALC_MODES(MATR_RIGI=RIGAS,
+                 TYPE_RESU='MODE_FLAMB',
+                 MATR_RIGI_GEOM=RIGASG_4,
+                 CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=4,),
+# SEUIL ARTIFICIELLEMENT PETIT POUR RENDRE EFFECTIVE L'AMELIORATION
+                 VERI_MODE=_F(SEUIL=1.E-8),
+                 SOLVEUR_MODAL=_F(DIM_SOUS_ESPACE=20,),
+                 AMELIORATION='OUI',
+                 )
+
+MOD_5=CALC_MODES( MATR_RIGI=RIGAS,
+                  MATR_RIGI_GEOM=RIGASG_4,
+                  TYPE_RESU='MODE_FLAMB',
+                  OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                  CALC_CHAR_CRIT=_F( CHAR_CRIT = (-1.7E8, 1.5E8), )
+                 )
+
+#
+
+MOD_6=CALC_MODES( MATR_A=RIGAS,
+                  MATR_B=RIGASG_4,
+                  TYPE_RESU='GENERAL',
+                  OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                  CALC_CHAR_CRIT=_F( CHAR_CRIT = (-1.7E8, 1.5E8), )
+                 )
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=2,
+                  RESULTAT=MOD_4,
+                  VALE_CALC= -6.97177858E+07,
+                  VALE_REFE=-7.0063121E7,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+IMPR_RESU(FORMAT="RESULTAT",  RESU=_F(  RESULTAT = MOD_4,
+                      TOUT_PARA = 'OUI',    )  )
+
+MOD_4=NORM_MODE( reuse=MOD_4,    MODE=MOD_4,
+                         NORME='EUCL_TRAN'  )
+
+IMPR_RESU(FORMAT="RESULTAT",  RESU=_F(  RESULTAT = MOD_4,
+                      TOUT_PARA = 'OUI',    )  )
+
+#
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=2,
+                  RESULTAT=MOD_6,
+                  VALE_CALC= -6.97177858E+07,
+                  VALE_REFE=-7.0063121E7,
+                  REFERENCE='NON_DEFINI',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+# --------------------------------------------------------------------
+FIN()
+#

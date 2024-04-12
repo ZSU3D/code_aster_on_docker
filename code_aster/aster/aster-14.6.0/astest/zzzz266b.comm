@@ -1,0 +1,73 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),
+      IGNORE_ALARM=('MODELE1_63','MODELE1_64',),)
+
+mail=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+modeldp=AFFE_MODELE(MAILLAGE=mail,
+                    AFFE=_F(TOUT='OUI',
+                            PHENOMENE='MECANIQUE',MODELISATION='D_PLAN',), )
+
+modelcp=AFFE_MODELE(MAILLAGE=mail,
+                    AFFE=_F(TOUT='OUI',
+                            PHENOMENE='MECANIQUE',MODELISATION='C_PLAN',), )
+
+model3d=AFFE_MODELE(MAILLAGE=mail,
+                    AFFE=_F(MAILLE=('M5','M6',),
+                            PHENOMENE='MECANIQUE',MODELISATION='3D',), )
+
+bidon=DEFI_MATERIAU(ELAS=_F(E=1.0, NU=0.2,),)
+
+mater=AFFE_MATERIAU(MAILLAGE=mail, AFFE=_F(TOUT='OUI', MATER=bidon,), )
+
+
+coordp=CALC_CHAM_ELEM(MODELE=modeldp, OPTION='COOR_ELGA',)
+coorcp=CALC_CHAM_ELEM(MODELE=modelcp, OPTION='COOR_ELGA',)
+# Pour le 3D, on tourne le maillage de maniere a en faire un vrai maillage 3D
+mail=MODI_MAILLAGE(reuse=mail,
+                   MAILLAGE=mail,
+                   ROTATION=_F(POIN_1=(0,0,0,),
+                               DIR=(0,1,0,),
+                               ANGLE=30,),);
+coor3d=CALC_CHAM_ELEM(MODELE=model3d, OPTION='COOR_ELGA',)
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(CHAM_GD=coordp,),)
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(CHAM_GD=coorcp,),)
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(CHAM_GD=coor3d,),)
+
+# =============================================================================================
+#  On peut verifier que l'on obtient bien la bonne longueur de la maille M5
+#  qui est une branche de parabole a l'aide du module de calcul symbolique
+#  Sympy de Python.
+#  Determination des parametres de la parabole :
+#
+#  from sympy import *
+#  x, y, z = symbols('xyz')
+#  solve(( (-0.5)**2*x -0.5*y+z+0.05, (0.5**2)*x +0.5*y+z, (1.5**2)*x + 1.5*y +z+0.05),x,y,z)
+#  f= x*x* -0.0500000000000000 +x*0.0500000000000000 -0.0125000000000000
+#  e = Integral(sqrt(1 + diff(f,x)**2),(x,-0.5,1.5))
+#  e.n()
+# =============================================================================================
+
+# TEST_RESU dans .com1
+
+FIN()

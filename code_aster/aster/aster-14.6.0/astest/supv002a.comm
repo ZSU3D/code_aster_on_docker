@@ -1,0 +1,110 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+
+# Note: aspell and relevant dictionnaries are required to pass this testcase.
+#       If this message is emitted: No word lists can be found for the language "XX",
+#       you must also install the dictionnary for the language "XX" (*.per)
+#       from your package manager.
+#       Example: apt-get install aspell-fr
+
+from supv002a import SUPV002
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ))
+
+# Que faire en cas d'erreur avec ce test ?
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+# Le fichier contenant les mots-clés du catalogue de commandes doit être
+# installé dans <INSTALL_PREFIX>/share/aster/code_aster_cata.aspell.per
+#
+# Le dictionnaire des mots autorisés (en plus du dictionnaire français de aspell)
+# est cherché dans le dépôt 'devtools' qui doit donc être présent et à jour.
+#
+# Dans l'output de l'exécution, on trouvera des lignes d'impression lors de la vérification
+# de chaque catalogue de messages :
+#       <fr> checking jeveux1...
+# Puis, s'il y a des mots qui ne sont pas dans le dictionnaire, il y a deux alarmes :
+#
+# - Cette alarme liste les mots inconnus du dictionnaire pour chaque message.
+#   Dans cet exemple, c'est le message numéro 2 du catalogue cable0.py qui est en cause.
+#
+#   !--------------------------------------------------
+#   ! <A> <CATAMESS_1>
+#   !
+#   ! Erreur lors de la vérification des messages.
+#   ! Liste des alarmes et des erreurs par message
+#   !
+#   ! <fr> cable0: cable0_2: unknown words ('floating',)
+#   ! ...
+#
+# - Cette alarme fournit la liste des tous les mots inconnus :
+#
+#   !--------------------------------------------------
+#   ! <A> <CATAMESS_1>
+#   !
+#   ! Erreur lors de la vérification des messages.
+#   ! Liste des nouvelles erreurs introduites à corriger :
+#   !
+#   ! ['CELK', 'DRDY', 'DRDYB', 'LIGREL', 'LILI', 'dmax', ...
+#
+# Le test est alors NOOK de ces N mots inconnus.
+#
+#
+# Le dictionnaire contient les termes en français, ainsi que les mots-clés du catalogue
+# de commandes. Cependant, il y a quelques subtilités dans nos messages qui obligent à
+# découper les mots dès qu'il y a un caractère spécial (les signes de ponctuation,
+# les chiffres mais aussi le signe "-" ou "'"), ce qui n'est conforme aux règles.
+# Par exemple: "sous-jacent" sera vérifié en deux fois "sous" et "jacent" (qui n'existe
+# pas et a donc été ajouté). Contacter le responsable du test si vous êtes dans ce cas.
+#
+# Mots inconnus du dictionnaire malgré tout acceptés pour le moment.
+# L'objectif est bien sûr de réduire cette liste !
+# Vous ne devez pas ajouter de mots à cette liste. Il faut corriger le texte
+# du message incriminé ou bien mettre un ASSERT(condition) si cela concerne
+# uniquement le développeur.
+previous_errors = [
+    # LE fameux LIGREL !
+    'LIGREL',
+    # Solveur PETSc
+    'breakdown',
+    # Nom des fichiers de sortie d'Aster
+    'error', 'export',
+    # Pour paramètre mem_aster
+    'mem',
+    # Pour Edyos
+    'SSP',
+    # Pour PHYSICAL GMSH
+    'PHYSICAL',
+    # Pour LD_LIBRARY_PATH
+    'LIBRARY','PATH',
+    # Pour ASTER_ROOT (MACR_RECAL)
+    'ROOT',
+    # Pour Code_Saturne (coupleur IFS)
+    'USASTE',
+    ]
+
+# TEST_TABLE are included in the "macro-command"
+SUPV002(ERREUR=previous_errors,
+        # print all unknown words returns by aspell
+        INFO=1,
+        )
+
+FIN()

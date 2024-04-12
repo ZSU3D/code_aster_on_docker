@@ -1,0 +1,270 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='NON'))
+
+mail=LIRE_MAILLAGE(FORMAT='MED')
+# Pour eviter les "TOLE MACHINE", on perturbe legerement la geometrie du maillage :
+MODI_MAILLAGE(reuse =mail, MAILLAGE=mail, DEFORME=_F(OPTION='TRAN', ALEA=1.e-8,),)
+
+modele=AFFE_MODELE(MAILLAGE=mail,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+CC=AFFE_CHAR_MECA(MODELE=modele,
+                  DDL_IMPO=(_F(GROUP_MA='ENCAST',
+                               DX=0.0,
+                               DY=0.0,
+                               DZ=0.0,),),);
+
+CSEL=AFFE_CHAR_MECA(MODELE=modele,
+                  FORCE_FACE=_F(GROUP_MA='EFFORT',
+                                FX=-20000000.0,),);
+
+acier=DEFI_MATERIAU(ELAS=_F(E=210000000000.0,RHO=7800.,
+                            NU=0.3,),
+                    ECRO_LINE=_F(D_SIGM_EPSI=70000000000.0,
+                                 SY=4000000.0,),);
+
+ch_mat=AFFE_MATERIAU(MAILLAGE=mail,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=acier,),);
+
+fonc=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,1.0,),);
+#listinst=DEFI_LIST_REEL(DEBUT=0.0,
+#                    INTERVALLE=_F(JUSQU_A=1.0,
+#                                  NOMBRE=10,),);
+
+listinst=DEFI_LIST_REEL(DEBUT=0.0,
+                    INTERVALLE=_F(JUSQU_A=1,
+                                  NOMBRE=10,),);
+
+resuel=STAT_NON_LINE(MODELE=modele,
+                   CHAM_MATER=ch_mat,
+                   EXCIT=(_F(CHARGE=CC,),
+                          _F(CHARGE=CSEL,
+                             FONC_MULT=fonc,),),
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=listinst,INST_FIN=0.5,),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MDA'),
+                   NEWTON=_F(REAC_INCR=1,
+                             MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   CONVERGENCE=_F(RESI_GLOB_RELA=1e-06,
+                                  ITER_GLOB_MAXI=10,),
+                   CRIT_STAB=_F()
+                  );
+
+resuel=STAT_NON_LINE(reuse=resuel,
+                   MODELE=modele,
+                   CHAM_MATER=ch_mat,
+                   EXCIT=(_F(CHARGE=CC,),
+                          _F(CHARGE=CSEL,
+                             FONC_MULT=fonc,),),
+                   ETAT_INIT=_F(EVOL_NOLI=resuel),
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=listinst,INST_INIT=0.5,),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MDA'),
+                   NEWTON=_F(REAC_INCR=1,
+                             MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   CONVERGENCE=_F(RESI_GLOB_RELA=1e-06,
+                                  ITER_GLOB_MAXI=10,),
+                   CRIT_STAB=_F()
+                  );
+
+TABSPEC0=RECU_TABLE(CO=resuel,
+                   NOM_TABLE='ANALYSE_MODALE',);
+
+IMPR_TABLE(TABLE=TABSPEC0)
+
+TEST_TABLE(
+           VALE_CALC=19.0657129149,
+           NOM_PARA='CHAR_CRIT',
+           TABLE=TABSPEC0,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_FLAMB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=3,),
+                   _F(NOM_PARA='INST',
+                      VALE=1.0,),
+                   ),
+           )
+
+# ELASTOPLASTIQUE
+CS=AFFE_CHAR_MECA(MODELE=modele,
+                  FORCE_FACE=_F(GROUP_MA='EFFORT',
+                                FX=-10000000.0,),);
+resu=STAT_NON_LINE(MODELE=modele,
+                   CHAM_MATER=ch_mat,
+                   EXCIT=(_F(CHARGE=CC,),
+                          _F(CHARGE=CS,
+                             FONC_MULT=fonc,),),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                                DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=listinst,INST_FIN=0.5,),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MDA'),
+                   NEWTON=_F(REAC_INCR=1,
+                             MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   CONVERGENCE=_F(RESI_GLOB_RELA=1e-06,
+                                  ITER_GLOB_MAXI=10,),
+                   CRIT_STAB=_F()
+                  );
+
+resu=STAT_NON_LINE(reuse=resu,
+                   MODELE=modele,
+                   CHAM_MATER=ch_mat,
+                   EXCIT=(_F(CHARGE=CC,),
+                          _F(CHARGE=CS,
+                             FONC_MULT=fonc,),),
+                   ETAT_INIT=_F(EVOL_NOLI=resu),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                                DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=listinst,INST_INIT=0.5,),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',RENUM='MDA'),
+                   NEWTON=_F(REAC_INCR=1,
+                             MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   CONVERGENCE=_F(RESI_GLOB_RELA=1e-06,
+                                  ITER_GLOB_MAXI=10,),
+                   CRIT_STAB=_F()
+                  );
+
+TABSPEC1=RECU_TABLE(CO=resu,
+                   NOM_TABLE='ANALYSE_MODALE',);
+
+IMPR_TABLE(TABLE=TABSPEC1)
+
+TEST_TABLE(
+           VALE_CALC=-4.99168383871,
+           NOM_PARA='CHAR_CRIT',
+           TABLE=TABSPEC1,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_FLAMB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=3,),
+                   _F(NOM_PARA='INST',
+                      VALE=0.4,),
+                   ),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1.31860769704,
+           NOM_PARA='CHAR_CRIT',
+           TABLE=TABSPEC1,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_FLAMB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=2,),
+                   _F(NOM_PARA='INST',
+                      VALE=0.5,),
+                   ),
+           )
+
+M_FLAMB1=EXTR_TABLE(TYPE_RESU='CHAM_NO_SDASTER',
+                  TABLE=TABSPEC1,
+                  NOM_PARA='NOM_SD',
+                  FILTRE=(_F(NOM_PARA='TYPE_MODE',
+                           VALE_K='MODE_FLAMB'),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=1,),
+                         _F(NOM_PARA='INST',PRECISION=1.E-6,
+                           VALE=0.4),),)
+
+TEST_RESU(CHAM_NO=(_F(
+                      CHAM_GD=M_FLAMB1,
+                      REFERENCE='ANALYTIQUE',
+                      NOEUD='N1',
+                      NOM_CMP='DX',
+                      VALE_CALC=0.,
+                      VALE_REFE=0.0,
+                      CRITERE='RELATIF',
+                      PRECISION=1.E-4,
+                     ),
+                   ),)
+
+M_FLAMB2=EXTR_TABLE(TYPE_RESU='CHAM_NO_SDASTER',
+                  TABLE=TABSPEC1,
+                  NOM_PARA='NOM_SD',
+                  FILTRE=(_F(NOM_PARA='TYPE_MODE',
+                           VALE_K='MODE_FLAMB'),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=1,),
+                         _F(NOM_PARA='INST',PRECISION=1.E-6,
+                           VALE=1.0),),)
+
+TEST_RESU(CHAM_NO=(_F(
+                      CHAM_GD=M_FLAMB2,
+                      REFERENCE='ANALYTIQUE',
+                      NOEUD='N1',
+                      NOM_CMP='DX',
+                      VALE_CALC=0.,
+                      VALE_REFE=0.0,
+                      CRITERE='RELATIF',
+                      PRECISION=1.E-4,
+                     ),
+                   ),)
+# Création d'une SD MODE_MECA
+MODES = CREA_RESU(OPERATION='AFFE',
+                  TYPE_RESU='MODE_MECA',
+                  AFFE=(_F(CHAM_GD=M_FLAMB1,NUME_MODE=1),
+                        _F(CHAM_GD=M_FLAMB2,NUME_MODE=2),),
+                  NOM_CHAM='DEPL',)
+
+
+RIGIELEM=CALC_MATR_ELEM(MODELE=modele,
+                        CHAM_MATER=ch_mat,
+                        OPTION='RIGI_MECA',
+                        CHARGE=CC        )
+
+MASSELEM=CALC_MATR_ELEM(MODELE=modele,
+                        CHAM_MATER=ch_mat,
+                        OPTION='MASS_MECA',
+                        CHARGE=CC        )
+
+
+NUMEROTA=NUME_DDL(  MATR_RIGI=RIGIELEM )
+
+MATRRIGI=ASSE_MATRICE(  MATR_ELEM=RIGIELEM,  NUME_DDL=NUMEROTA )
+
+MATRMASS=ASSE_MATRICE(  MATR_ELEM=MASSELEM,  NUME_DDL=NUMEROTA )
+
+MODES = NORM_MODE(reuse =MODES,
+                  MODE=MODES,
+                  NORME='EUCL',MASSE=MATRMASS,RAIDE=MATRRIGI)
+
+
+
+FIN();

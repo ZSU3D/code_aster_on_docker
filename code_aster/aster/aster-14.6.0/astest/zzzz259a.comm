@@ -1,0 +1,300 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: gerald.nicolas at edf.fr
+# On fait une suite d'adaptations pilotees par les groupes.
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+#
+# 1. Lecture des maillages
+#
+# 1.1. L'intersection des deux tuyaux
+
+MA_ARCS=LIRE_MAILLAGE(UNITE=19,
+                      FORMAT='MED');
+#
+# 1.2. Le volume
+
+M_0=LIRE_MAILLAGE(FORMAT='MED');
+#
+M_0=MODI_MAILLAGE( reuse=M_0,   MAILLAGE=M_0,
+                   ORIE_PEAU_3D=_F(
+           GROUP_MA = ('T1_INT_I', 'T1_INT_O', 'T1_EXT_I', 'T1_EXT_O','T2_INT', 'T2_EXT','IN1','IN2','OUT',),  )
+                 )
+#
+# 2. Adaptation du maillage de 0 vers 1
+#    On decoupe tous les triangles des faces internes des deux tuyaux
+#    On voit l'arrondi se maintenir sur les faces internes.
+
+MACR_ADAP_MAIL(MAILLAGE_N=M_0,
+               MAILLAGE_NP1=CO('M_1'),
+               ADAPTATION='RAFFINEMENT_UNIFORME',
+               GROUP_MA=('T1_INT_I','T1_INT_O','T2_INT',),
+               FRONTIERE_ANALYTIQUE=(
+                    _F(NOM='TUYAU_PRINCIPAL_INTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 75.,
+                       GROUP_MA=('T1_INT_I','T1_INT_O',),),
+                    _F(NOM='TUYAU_PRINCIPAL_EXTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 100.,
+                       GROUP_MA=('T1_EXT_I','T1_EXT_O',),),
+                    _F(NOM='tuyau_secondaire_interieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 25.,
+                       GROUP_MA='T2_INT',),
+                    _F(NOM='tuyau_secondaire_exterieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 50.,
+                       GROUP_MA='T2_EXT',),),
+               MAILLAGE_FRONTIERE=MA_ARCS,
+               GROUP_MA_FRONT=('INT_EA','INT_EB','INT_IA','INT_IB','IN2_EA','IN2_EB','IN2_IA','IN2_IB',),
+               NOMBRE='OUI',
+               PROP_CALCUL='OUI',);
+
+#IMPR_RESU(FORMAT='MED',RESU=_F(MAILLAGE=M_1,),);
+
+#
+# 3. Adaptation du maillage de 1 vers 2
+#    On decoupe tous les triangles des faces externes des deux tuyaux
+#    On voit l'arrondi se maintenir sur les faces externes.
+
+MACR_ADAP_MAIL(MAILLAGE_N=M_1,
+               MAILLAGE_NP1=CO('M_2'),
+               ADAPTATION='RAFFINEMENT_UNIFORME',
+               GROUP_MA=('T1_EXT_I','T1_EXT_O','T2_EXT',),
+               FRONTIERE_ANALYTIQUE=(
+                    _F(NOM='TUYAU_PRINCIPAL_INTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 75.,
+                       GROUP_MA=('T1_INT_I','T1_INT_O',),),
+                    _F(NOM='TUYAU_PRINCIPAL_EXTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 100.,
+                       GROUP_MA=('T1_EXT_I','T1_EXT_O',),),
+                    _F(NOM='tuyau_secondaire_interieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 25.,
+                       GROUP_MA='T2_INT',),
+                    _F(NOM='tuyau_secondaire_exterieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 50.,
+                       GROUP_MA='T2_EXT',),),
+               MAILLAGE_FRONTIERE=MA_ARCS,
+               GROUP_MA_FRONT=('INT_EA','INT_EB','INT_IA','INT_IB','IN2_EA','IN2_EB','IN2_IA','IN2_IB',),);
+
+#IMPR_RESU(FORMAT='MED',RESU=_F(MAILLAGE=M_2,),);
+
+#
+# 4. Adaptation du maillage de 2 vers 3
+#    On decoupe tous les segments de l'intersection des deux tuyaux et les deux faces d'entree
+#    On voit la finesse de la description de l'intersection.
+
+MACR_ADAP_MAIL(MAILLAGE_N=M_2,
+               MAILLAGE_NP1=CO('M_3'),
+               ADAPTATION='RAFFINEMENT_UNIFORME',
+               GROUP_MA=('INT_EA','INT_EB','INT_IA','INT_IB','IN2','IN1',),
+               FRONTIERE_ANALYTIQUE=(
+                    _F(NOM='TUYAU_PRINCIPAL_INTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 75.,
+                       GROUP_MA=('T1_INT_I','T1_INT_O',),),
+                    _F(NOM='TUYAU_PRINCIPAL_EXTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 100.,
+                       GROUP_MA=('T1_EXT_I','T1_EXT_O',),),
+                    _F(NOM='tuyau_secondaire_interieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 25.,
+                       GROUP_MA='T2_INT',),
+                    _F(NOM='tuyau_secondaire_exterieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 50.,
+                       GROUP_MA='T2_EXT',),),
+               MAILLAGE_FRONTIERE=MA_ARCS,
+               GROUP_MA_FRONT=('INT_EA','INT_EB','INT_IA','INT_IB','IN2_EA','IN2_EB','IN2_IA','IN2_IB',),);
+
+#IMPR_RESU(FORMAT='MED',RESU=_F(MAILLAGE=M_3,),);
+
+#
+# 5. Adaptation du maillage de 3 vers 4
+#    On decoupe tous les segments de l'intersection des deux tuyaux et l'entree du piquage
+#    On voit la finesse de la description de l'intersection.
+
+MACR_ADAP_MAIL(MAILLAGE_N=M_3,
+               MAILLAGE_NP1=CO('M_4'),
+               ADAPTATION='RAFFINEMENT_UNIFORME',
+               GROUP_MA=('INT_EA','INT_EB','INT_IA','INT_IB','IN2',),
+               FRONTIERE_ANALYTIQUE=(
+                    _F(NOM='TUYAU_PRINCIPAL_INTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 75.,
+                       GROUP_MA=('T1_INT_I','T1_INT_O',),),
+                    _F(NOM='TUYAU_PRINCIPAL_EXTERIEUR',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=   0.,
+                       Y_CENTRE=  25.,
+                       Z_CENTRE= -25.,
+                       X_AXE=  25.,
+                       Y_AXE=  50.,
+                       Z_AXE=  75.,
+                       RAYON= 100.,
+                       GROUP_MA=('T1_EXT_I','T1_EXT_O',),),
+                    _F(NOM='tuyau_secondaire_interieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 25.,
+                       GROUP_MA='T2_INT',),
+                    _F(NOM='tuyau_secondaire_exterieur',
+                       TYPE='CYLINDRE',
+                       X_CENTRE=  17.5,
+                       Y_CENTRE=  -2.5,
+                       Z_CENTRE= -12.5,
+                       X_AXE= -100.,
+                       Y_AXE=  -75.,
+                       Z_AXE=  -25.,
+                       RAYON= 50.,
+                       GROUP_MA='T2_EXT',),),
+               MAILLAGE_FRONTIERE=MA_ARCS,
+               GROUP_MA_FRONT=('INT_EA','INT_EB','INT_IA','INT_IB','IN2_EA','IN2_EB','IN2_IA','IN2_IB',),);
+
+#IMPR_RESU(FORMAT='MED',RESU=_F(MAILLAGE=M_4,),);
+#
+# 6. Un p'tit calcul pour un TEST_RESU
+#
+MAI=CREA_MAILLAGE(MAILLAGE=M_4,
+                  LINE_QUAD=_F(TOUT='OUI',),);
+MATERIO=DEFI_MATERIAU( THER=_F(  LAMBDA = 40., RHO_CP = 1., ), )
+#
+MATPIQ=AFFE_MATERIAU( MAILLAGE=MAI,AFFE=_F( TOUT='OUI', MATER = MATERIO, ),)
+#
+MOTHPIQ=AFFE_MODELE( MAILLAGE=MAI,
+  AFFE=_F( TOUT = 'OUI',   PHENOMENE = 'THERMIQUE',   MODELISATION = '3D',  ))
+#
+
+CHTHPIQ=AFFE_CHAR_THER(    MODELE=MOTHPIQ,
+    TEMP_IMPO=(_F(  GROUP_MA=('T1_INT_I','T1_INT_O',), TEMP = 600.0,),
+               _F(  GROUP_MA = 'T2_INT', TEMP = 400.0,),),
+    ECHANGE=_F( GROUP_MA = ('T1_EXT_I','T1_EXT_O','T2_EXT',),  COEF_H = 5.,  TEMP_EXT = 300.,),
+    FLUX_REP=_F( GROUP_MA = ('IN1','IN2','OUT',),  FLUN = 0.,),);
+#
+THPIQ=THER_LINEAIRE( MODELE=MOTHPIQ,
+                        CHAM_MATER=MATPIQ,
+                        EXCIT=_F(  CHARGE = CHTHPIQ,   ),
+                   )
+#IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=THPIQ,),);
+#
+TEST_RESU(RESU=_F(NUME_ORDRE=0,
+                  GROUP_NO='POINT',
+                  RESULTAT=THPIQ,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=357.19305400000002,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+#
+FIN();

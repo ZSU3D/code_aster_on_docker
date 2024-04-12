@@ -1,0 +1,404 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),PAR_LOT='OUI',DEBUG=_F(SDVERI='OUI'))
+
+######## PARAMETRES #############
+tfin=4.
+
+# PARAMETRES MECANIQUES DU BARRAGE DE LA TERRE ET DE L'EAU (VALEURS TESTS)
+young=3.E12
+poiss=0.25
+rho_b=2400.
+rho_t=0.
+rho_e=1000.
+ap=9.81
+h=10.
+longueur=5.
+
+# NIVEAU D'EAU
+niv_am=DEFI_FONCTION(NOM_PARA='INST',NOM_RESU='NRT_AM',VALE=(0,0, 1,3, 2,6, 3,8, 4,9));
+niv_av=DEFI_FONCTION(NOM_PARA='INST',NOM_RESU='NRT_AV',VALE=(0,0, 1,0, 2,0, 3,0, 4,0));
+
+# PARAMETRES MECANIQUES DES JOINTS
+k_n=1E12
+k_t=2*k_n
+
+# JOINT FROTTEMENT
+ecrouissage=k_t*0.1
+mu=0.35
+adhe=1000
+
+# RESISTANCE A LA TRACTION (VALEUR EFFECTIVE, CAR IL N'Y PAS DE RUPTURE)
+sigma_trac = adhe/mu
+press_max  = rho_e*10*h
+sigma_max = max(sigma_trac,press_max) # valeur pour RESI_REFE_RELA
+# PARA HYDRO
+visc_fluide=1.E-3 #Pa.s
+ouv_min=1.E-7     #m
+# FLUX_MIN (FLUX DU JOINT FERME) 
+# flux_min = rho_fluide/12/visc_fluide*ouv_min**3*grad(p)
+flux_min =  rho_e/12/visc_fluide*ouv_min**3*rho_e*10*h/longueur
+# FLUX_MAX (JOINT_OUVERT)
+flux_max =  rho_e/12/visc_fluide*(sigma_max/k_n)**3*rho_e*10*h/longueur
+
+
+##################################
+
+MA0=LIRE_MAILLAGE(FORMAT='MED');
+
+MA=CREA_MAILLAGE(MAILLAGE  = MA0, LINE_QUAD = _F(TOUT='OUI'));
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+
+  CREA_GROUP_MA = (
+
+# VOLUMES
+    _F(NOM = 'BARRAGE',    GROUP_MA = 'G_3D_122'),
+    _F(NOM = 'TERRE'  ,    GROUP_MA = 'G_3D_124'),
+    _F(NOM = 'JOINT'  ,    GROUP_MA = 'G_3D_121'),
+
+# SURFACES
+    _F(NOM = 'TER_BORD', UNION = ('G_2D_130','G_2D_131','G_2D_132')),
+    _F(NOM = 'BAR_AM',   GROUP_MA = 'G_2D_127'),
+    _F(NOM = 'BAR_AV',   GROUP_MA = 'G_2D_128'),
+    _F(NOM = 'SYMM',     GROUP_MA = 'G_2D_150'), 
+# LIGNES
+    _F(NOM = 'JOINT_H'  ,  GROUP_MA = 'G_1D_133'),
+    _F(NOM = 'JOINT_B'  ,  GROUP_MA = 'G_1D_134')),
+
+   CREA_GROUP_NO = (
+# LIGNES
+    _F(NOM = 'JOINT_H'  ,  GROUP_MA = 'JOINT_H',OPTION='NOEUD_ORDO'),
+    _F(NOM = 'JOINT_B'  ,  GROUP_MA = 'JOINT_B',OPTION='NOEUD_ORDO'),
+    _F(NOM = 'JOINT'    ,  GROUP_MA = 'JOINT'),
+
+    _F(NOM = 'TMP_AM' ,   OPTION='PLAN',POINT=(0.0,0.0 ,0.0),VECT_NORMALE=(1.,0.,0.),PRECISION=1.0E-06),
+    _F(NOM = 'TMP_AV' ,   OPTION='PLAN',POINT=(5.0,0.0 ,0.0),VECT_NORMALE=(1.,0.,0.),PRECISION=1.0E-06),
+    _F(NOM = 'TMP_CURV' , OPTION='PLAN',POINT=(0.0,0.0 ,0.0),VECT_NORMALE=(0.,0.,1.),PRECISION=1.0E-06),
+    _F(NOM = 'TMP_POST'   ,  OPTION='PLAN',POINT=(0.0,-5.0E-04 ,0.0),VECT_NORMALE=(0.,1.,0.),PRECISION=1.0E-06),
+
+    _F(NOM = 'J_AMONT'  ,  INTERSEC=('JOINT','TMP_AM')),
+    _F(NOM = 'J_AVAL'  ,   INTERSEC=('JOINT','TMP_AV')),
+    _F(NOM = 'J_CURV'  ,   INTERSEC=('TMP_POST','TMP_CURV')),
+
+                               ));
+
+# ORIENTATION DES MAILLES SURFACIQUES
+MA=MODI_MAILLAGE(reuse =MA,
+                   MAILLAGE=MA,
+                   ORIE_PEAU_3D=_F(GROUP_MA=('BAR_AM','BAR_AV')),
+                   INFO=1)
+
+# ORIENTATION DES MAILLES DE JOINT
+MA=MODI_MAILLAGE(reuse =MA,
+                   MAILLAGE=MA,
+                   ORIE_FISSURE=_F(GROUP_MA='JOINT'),
+                   INFO=1)
+
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               
+               AFFE=(_F(GROUP_MA=('BARRAGE','TERRE','BAR_AM','BAR_AV'),
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D'),
+                     _F(GROUP_MA='JOINT',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D_JOINT_HYME')));
+
+
+# MATERIAU BETON ET TERRE
+MAT_B=DEFI_MATERIAU(ELAS=_F(
+                              E   = young,
+                              NU  = poiss,
+                              RHO = rho_b))
+
+MAT_T=DEFI_MATERIAU(ELAS=_F(
+                              E   = young,
+                              NU  = poiss,
+                              RHO = rho_t))
+
+# MATERIAU JOINT HYDRO MECANIQUE AVEC FROTTEMENT
+MAT_JHM=DEFI_MATERIAU(
+                  JOINT_MECA_FROT=_F(K_N=k_n,
+                                     K_T=k_t,
+                                     PENA_TANG=ecrouissage,
+                                     MU=mu,
+                                     ADHESION=adhe,
+                                     RHO_FLUIDE=rho_e, #kg/m^3
+                                     VISC_FLUIDE=visc_fluide, #Pa.s
+                                     OUV_MIN=ouv_min #m
+                                ),);
+
+
+CM_HM=AFFE_MATERIAU(MAILLAGE=MA,
+                 AFFE=(
+                      _F(GROUP_MA='BARRAGE',MATER = MAT_B),
+                      _F(GROUP_MA='TERRE',  MATER = MAT_T),
+                      _F(GROUP_MA='JOINT',  MATER = MAT_JHM))
+                 );
+
+# CONDITION AUX LIMITES SUR LA TERRE
+TERRE=AFFE_CHAR_CINE(MODELE=MO,MECA_IMPO=_F(GROUP_MA='TER_BORD',DX=0.0,DY=0.0));
+
+# CONDITION AUX LIMITES SYMMETRIE
+SYMM=AFFE_CHAR_CINE(MODELE=MO,MECA_IMPO=_F(GROUP_MA='SYMM',DZ=0.0,),);
+
+# POIDS
+PESBAR = AFFE_CHAR_MECA(
+  MODELE = MO,
+  FORCE_INTERNE = (_F(GROUP_MA='BARRAGE',FX=0, FY=-rho_b*ap,FZ=0.0))
+  );
+PESTER = AFFE_CHAR_MECA(
+  MODELE = MO,
+  FORCE_INTERNE = (_F(GROUP_MA='TERRE',  FX=0, FY=-rho_t*ap,FZ=0.0))
+  );
+
+# PRESSION D'EAU SUR LE BARRAGE
+p_am = FORMULE(VALE='max(rho_e*ap*(niv_am(INST)-Y),0)',
+               rho_e=rho_e,
+               ap=ap,
+               niv_am=niv_am,
+               NOM_PARA=['Y', 'INST'],)
+p_av = FORMULE(VALE='max(rho_e*ap*(niv_av(INST)-Y),0)',
+               rho_e=rho_e,
+               ap=ap,
+               niv_av=niv_av,
+               NOM_PARA=['Y', 'INST'],)
+
+PAMONT=AFFE_CHAR_MECA_F(MODELE=MO,PRES_REP=_F(GROUP_MA=('BAR_AM') ,PRES=p_am));
+PAVAL =AFFE_CHAR_MECA_F(MODELE=MO,PRES_REP=_F(GROUP_MA=('BAR_AV') ,PRES=p_av));
+
+
+# PRESSION EN AMONT ET AVAL DE FISSURE
+pamj = FORMULE(VALE='max(rho_e*ap*(niv_am(INST)),0.0)',
+               rho_e=rho_e,
+               ap=ap,
+               niv_am=niv_am,
+               NOM_PARA=['Y', 'INST'],)
+pavj = FORMULE(VALE='max(rho_e*ap*(niv_av(INST)),0.0)',
+               rho_e=rho_e,
+               ap=ap,
+               niv_av=niv_av,
+               NOM_PARA=['Y', 'INST'],)
+
+# ON UTILISE AFFE_CHAR_CINE CAR PLUS ROBUSTE POUR LES CALCULS AVEC EJ ET SOLVEUR MUMPS
+P_AM_J = AFFE_CHAR_CINE_F(MODELE = MO,MECA_IMPO = (_F(GROUP_NO='J_AMONT', PRE1=pamj )))
+P_AV_J = AFFE_CHAR_CINE_F(MODELE = MO,MECA_IMPO = (_F(GROUP_NO='J_AVAL',  PRE1=pavj )))
+
+
+# LISTE D'INSTANTS
+list_reel=[0,3.,tfin]
+LR=DEFI_LIST_REEL(VALE=list_reel);
+#LR=DEFI_LIST_REEL(DEBUT=0.0,INTERVALLE=(_F(JUSQU_A=tfin/50., NOMBRE=1),_F(JUSQU_A=tfin, NOMBRE=1)));
+
+L_INST =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = LR ),
+                        ECHEC=_F(
+                                 SUBD_NIVEAU=6,
+                                 SUBD_PAS  = 2,
+                                 SUBD_PAS_MINI = 1.E-10,
+                                 ))
+
+
+# CALCUL HYDRO MECANIQUE
+U_HM=STAT_NON_LINE(MODELE=MO,
+                  CHAM_MATER=CM_HM,
+                  EXCIT=(
+                         _F(CHARGE=TERRE),
+                         _F(CHARGE=SYMM),                              
+                         _F(CHARGE=PESBAR),
+                         _F(CHARGE=PESTER),
+                         _F(CHARGE=PAMONT),
+                         _F(CHARGE=PAVAL),
+                         _F(CHARGE=P_AM_J),
+                         _F(CHARGE=P_AV_J),
+                          ),
+                  COMPORTEMENT=(_F(RELATION='JOINT_MECA_FROT',
+                                GROUP_MA='JOINT'),
+                             _F(RELATION='ELAS',
+                                GROUP_MA=('TERRE','BARRAGE'))),
+                  INCREMENT=_F(LIST_INST=L_INST,INST_FIN=tfin),
+                  NEWTON=_F(MATRICE='TANGENTE',REAC_ITER=1),
+                  #RECH_LINEAIRE=_F(METHODE='MIXTE',ITER_LINE_MAXI=3,),
+                  CONVERGENCE = _F(
+                                   ITER_GLOB_MAXI = 25,
+                                   RESI_REFE_RELA = 1.E-6,
+                                   SIGM_REFE      = sigma_max,
+                                   FLUX_HYD1_REFE = flux_min),
+                  SOLVEUR=_F(METHODE='MUMPS',NPREC=12),
+                  AFFICHAGE =_F(INFO_RESIDU='OUI'),
+                  ARCHIVAGE = _F(LIST_INST = LR)
+                  );
+
+
+################### POST TRAITEMENT U_HM  #######################
+
+U_HM=CALC_CHAMP(reuse =U_HM,
+                RESULTAT=U_HM,
+                VARI_INTERNE=('VARI_ELNO'),
+#                GROUP_MA='JOINT'
+                );
+
+U_HM=CALC_CHAMP(reuse =U_HM,
+                RESULTAT=U_HM,
+                CONTRAINTE=('SIEF_ELNO'),
+#                GROUP_MA='JOINT'
+                );
+
+U_HM=CALC_CHAMP(reuse =U_HM,
+             RESULTAT=U_HM,
+             VARI_INTERNE='VARI_NOEU',CONTRAINTE='SIEF_NOEU',
+#             GROUP_MA='JOINT'
+             );
+
+# SAUT NORMAL DANS LE JOINT
+SAUTHM=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                               INTITULE='SAUT_N',
+                               RESULTAT=U_HM,
+                               NOM_CHAM='VARI_NOEU',
+                               INST=tfin,
+                               GROUP_NO=('JOINT_H'),
+                               NOM_CMP='V7'));
+
+# CONTRAINTE NORMALE TOTALE DANS LE JOINT
+SNT_HM=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                               INTITULE='SIG_N',
+                               RESULTAT=U_HM,
+                               NOM_CHAM='SIEF_NOEU',
+                               INST=tfin,
+                               GROUP_NO = ('JOINT_H'),
+                               NOM_CMP='SIGN'));
+
+# CONTRAINTE NORMALE MECANIQUE DANS LE JOINT (SANS PRESSION DE FLUIDE)
+SNM_HM=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                               INTITULE='SIG_N_MECA',
+                               RESULTAT=U_HM,
+                               NOM_CHAM='VARI_NOEU',
+                               INST=tfin,
+                               GROUP_NO = ('JOINT_H'),
+                               NOM_CMP='V11'));
+
+# PRESSION DE FLUIDE
+PRE_HM=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                               INTITULE='PRES_FLUIDE',
+                               RESULTAT=U_HM,
+                               NOM_CHAM='DEPL',
+                               INST=tfin,
+                               GROUP_NO = ('J_CURV'),
+                               NOM_CMP='PRE1'));
+
+# PRESSION DANS LE JOINT A PARTIR DE V18 :
+P_HM=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                             INTITULE='PRESS INTERPOL',
+                             RESULTAT=U_HM,
+                             NOM_CHAM='VARI_NOEU',
+                             INST=tfin,
+                             GROUP_NO=('J_CURV'),
+                             NOM_CMP='V18'));
+
+
+################### TESTS U_HM  NON REGRESSION #######################
+
+# SAUT ET CONTRAINTE NORMALE
+TEST_TABLE(
+           VALE_CALC=6.83960761997E-07,
+           NOM_PARA='V7',
+           TABLE=SAUTHM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=1.3,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-85378.6981636,
+           NOM_PARA='SIGN',
+           TABLE=SNT_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=1.3,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-2.06650161828E-08,
+           NOM_PARA='V7',
+           TABLE=SAUTHM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=3.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-98817.8680763,
+           NOM_PARA='SIGN',
+           TABLE=SNT_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=3.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-3.50177420506E-07,
+           NOM_PARA='V7',
+           TABLE=SAUTHM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=4.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=-367543.476157,
+           NOM_PARA='SIGN',
+           TABLE=SNT_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=4.6,),
+           )
+
+# PRESSION
+TEST_TABLE(
+           VALE_CALC=88163.6299154,
+           NOM_PARA='PRE1',
+           TABLE=PRE_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=1.8,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=88163.9084283,
+           NOM_PARA='V18',
+           TABLE=P_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=1.8,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=26049.083476,
+           NOM_PARA='PRE1',
+           TABLE=PRE_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=4.4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=26049.083476,
+           NOM_PARA='V18',
+           TABLE=P_HM,
+           FILTRE=_F(NOM_PARA='COOR_X',
+                     VALE=4.4,),
+           )
+
+#IMPR_RESU(FORMAT='MED',RESU=(_F(RESULTAT=U_HM,NOM_CHAM='VARI_ELGA',GROUP_MA='JOINT',NOM_CMP=('V18')))),
+#IMPR_TABLE(TABLE=PRE_HM,TRI=(_F(NOM_PARA='COOR_X',ORDRE='CROISSANT')))
+
+FIN(FORMAT_HDF='OUI')

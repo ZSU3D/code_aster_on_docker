@@ -1,0 +1,262 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+tfin = 0.1;
+
+pa = 0.002;
+
+fc = 15.0;
+
+om = ((2.0 * pi) * fc);
+
+E = 200.E9;
+
+rho = 8000.0;
+
+nu = 0.3;
+
+
+LISTR=DEFI_LIST_REEL(DEBUT=0.,
+                     INTERVALLE=_F(JUSQU_A=tfin,
+                                   PAS=pa,),);
+
+MAIL=LIRE_MAILLAGE(UNITE=20,
+                   FORMAT='MED',);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA='VOL',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=E,
+                          NU=nu,
+                          RHO=rho,),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='VOL',
+                            MATER=MAT,),);
+
+TAMAS=POST_ELEM(MASS_INER=_F(TOUT='OUI',),
+                MODELE=MODELE,
+                CHAM_MATER=CHMAT,);
+
+IMPR_TABLE(TABLE=TAMAS,);
+
+BLOCAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(GROUP_MA='ENCAS',
+                                   LIAISON='ENCASTRE',),);
+
+
+GRAV=AFFE_CHAR_MECA(MODELE=MODELE,
+                    PESANTEUR=_F(GRAVITE=300.,
+                                 DIRECTION=(-1.,0,1,),),);
+
+
+sinom = FORMULE(VALE='sin(om*INST)',
+                om=om,
+                NOM_PARA='INST',)
+
+
+TRANGENE=DYNA_LINE(TYPE_CALCUL='TRAN', BASE_CALCUL='GENE',
+                    SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                    MODELE=MODELE,
+                    CHAM_MATER=CHMAT,
+                    CHARGE=BLOCAGE,
+                    BANDE_ANALYSE = 50,
+                    INCREMENT=_F(INST_FIN=tfin,
+                                 PAS=pa,
+                                 ),
+                    EXCIT=_F(CHARGE=GRAV,
+                             FONC_MULT=sinom,),
+
+                    BASE_RESU = CO('MODE2'),
+                    RESU_GENE = CO('TRANGEN'),
+                    ENRI_STAT = 'NON',
+                    )
+
+
+DEPLPDZ=RECU_FONCTION(RESU_GENE=TRANGEN,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DZ',
+                      GROUP_NO='P',);
+
+DEPLPDX=RECU_FONCTION(RESU_GENE=TRANGEN,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='P',);
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=DEPLPDZ,
+                         VALE_PARA=0.05,
+                         VALE_CALC=0.14758711700494
+                      )))
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=DEPLPDX,
+                         VALE_PARA=0.05,
+                         VALE_CALC=5.667541668703E-05
+                       )))
+
+# calcul avec correction statique
+
+pa_s10 = pa/10
+
+TRANPHY=DYNA_LINE(TYPE_CALCUL='TRAN', BASE_CALCUL='PHYS',
+                    SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                    MODELE=MODELE,
+                    CHAM_MATER=CHMAT,
+                    CHARGE=BLOCAGE,
+                    INCREMENT=_F(INST_FIN=tfin,
+                                 PAS=pa_s10),
+                    EXCIT=_F(CHARGE=GRAV,
+                             FONC_MULT=sinom,
+                             ),
+                    ARCHIVAGE=_F(LIST_INST=LISTR, PAS_ARCH=10**8),
+                    )
+
+UZ3=RECU_FONCTION(RESULTAT=TRANPHY,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DZ',
+                      GROUP_NO='P',);
+
+UX3=RECU_FONCTION(RESULTAT=TRANPHY,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DX',
+                      GROUP_NO='P',);
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=UZ3,
+                         VALE_PARA=0.05,
+                         VALE_CALC=0.14604340154756
+                      )))
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=UX3,
+                         VALE_PARA=0.05,
+                         CRITERE = "ABSOLU",
+                         VALE_CALC=1.749786405277E-04,
+                      )))
+
+# calcul avec pas adaptatif
+
+pa_s100 = pa/100
+
+LIST0 = DEFI_LIST_REEL(
+                        DEBUT=0.,
+                        INTERVALLE = (_F( JUSQU_A = tfin, PAS = pa_s100, ),)
+                        )
+
+sinomv =CALC_FONC_INTERP(
+                        FONCTION = sinom,
+                        LIST_PARA = LIST0,
+                        NOM_RESU = 'SINTHER',
+                        PROL_GAUCHE = 'CONSTANT',
+                        PROL_DROITE = 'CONSTANT',
+                        INTERPOL = 'LIN',
+                         )
+
+
+TRANGEN2=DYNA_LINE(TYPE_CALCUL='TRAN', BASE_CALCUL='GENE',
+                    # SCHEMA_TEMPS=_F(SCHEMA='DEVOGE',),
+                    MODELE=MODELE,
+                    CHAM_MATER=CHMAT,
+                    CHARGE=BLOCAGE,
+                    INCREMENT=_F(INST_FIN=tfin,
+                                 ),
+                    EXCIT=_F(CHARGE=GRAV,
+                             FONC_MULT=sinomv,),
+
+                    ARCHIVAGE=_F(LIST_INST=LISTR, PAS_ARCH=10**8),
+
+                    ORTHO = 'OUI',
+
+                    )
+
+
+
+UZ4=RECU_FONCTION(RESULTAT=TRANGEN2,
+                      NOM_CHAM='DEPL',
+                      NOM_CMP='DZ',
+                      GROUP_NO='P',
+                      );
+
+UX4=RECU_FONCTION(RESULTAT=TRANGEN2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  GROUP_NO='P',
+                   );
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=UZ4,
+                         VALE_PARA=0.05,
+                         VALE_CALC=0.14665350269746,
+                       )))
+
+
+
+TEST_FONCTION(VALEUR=(_F(
+                         FONCTION=UX4,
+                         VALE_PARA=0.05,
+                         CRITERE = "ABSOLU",
+                         VALE_CALC=2.191476390357E-04,
+                       )))
+
+
+DUX34 = CALC_FONCTION(COMB=( _F(  FONCTION = UX3, COEF = 1.),
+                              _F(  FONCTION = UX4, COEF = -1.)),
+                      )
+DUZ34 = CALC_FONCTION(COMB=( _F(  FONCTION = UZ3, COEF = 1.),
+                             _F(  FONCTION = UZ4, COEF = -1.)),
+                      )
+
+MAXDUX34 = INFO_FONCTION( MAX=_F(  FONCTION = DUX34))
+MAXDUZ34 = INFO_FONCTION( MAX=_F(  FONCTION = DUZ34))
+
+# unite = 85
+# for st in ['UX3','UZ3','UX4','UZ4','DUZ34']:
+    # fichier = 'REPE_OUT/%s.txt' %(st)
+    # DEFI_FICHIER(UNITE=unite,FICHIER=  fichier )
+    # IMPR_FONCTION(FORMAT='TABLEAU',
+              # COURBE=_F(FONCTION=eval(st),),
+              # UNITE=unite,);
+    # DEFI_FICHIER(UNITE=unite,ACTION='LIBERER');
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.0E+00,
+           VALE_REFE=0.0,
+           NOM_PARA='DX',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MAXDUX34,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.0E+00,
+           VALE_REFE=0.0,
+           NOM_PARA='DZ',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MAXDUZ34,
+           PRECISION = 0.005,
+           )
+
+
+
+FIN()

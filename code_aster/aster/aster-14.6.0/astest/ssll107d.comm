@@ -1,0 +1,405 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+TCARS=MACR_CARA_POUTRE(    SYME_Z='OUI',FORMAT='MED',
+                              ORIG_INER=(0., -0.025,) )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 2.60000000E-04,
+           VALE_REFE=2.5999999999999998E-4,
+           NOM_PARA='A_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 5.00000000E-03,
+           VALE_REFE=5.0000000000000001E-3,
+           NOM_PARA='CDG_Y_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC= 6.74470346E-19,
+           VALE_REFE=0.0,
+           NOM_PARA='CDG_Z_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.21666667E-08,
+           VALE_REFE=7.2166699999999997E-08,
+           NOM_PARA='IY_G_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.44666667E-09,
+           VALE_REFE=3.4466700000000001E-09,
+           NOM_PARA='IZ_G_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=-5.55761974E-25,
+           VALE_REFE=0.0,
+           NOM_PARA='IYZ_G_M',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 5.20000000E-04,
+           VALE_REFE=5.1999999999999995E-4,
+           NOM_PARA='A',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC= 0.00000000E+00,
+           VALE_REFE=0.0,
+           NOM_PARA='CDG_Y',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC= 6.74470346E-19,
+           VALE_REFE=0.0,
+           NOM_PARA='CDG_Z',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.44333333E-07,
+           VALE_REFE=1.44333E-07,
+           NOM_PARA='IY_G',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.98933333E-08,
+           VALE_REFE=1.9893300000000001E-08,
+           NOM_PARA='IZ_G',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC=-5.55761974E-25,
+           VALE_REFE=0.0,
+           NOM_PARA='IYZ_G',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.98933333E-08,
+           VALE_REFE=1.9893300000000001E-08,
+           NOM_PARA='IY',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.44333333E-07,
+           VALE_REFE=1.44333E-07,
+           NOM_PARA='IZ',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=90.000000000,
+           VALE_REFE=90.0,
+           NOM_PARA='ALPHA',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=-0.025000000,
+           VALE_REFE=-0.025000000000000001,
+           NOM_PARA='Y_MIN',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.025000000,
+           VALE_REFE=0.025000000000000001,
+           NOM_PARA='Y_MAX',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=-0.010000000,
+           VALE_REFE=-1.E-2,
+           NOM_PARA='Z_MIN',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.010000000,
+           VALE_REFE=1.E-2,
+           NOM_PARA='Z_MAX',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.026925824,
+           VALE_REFE=0.026925999999999999,
+           NOM_PARA='R_MAX',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 4.69333333E-07,
+           VALE_REFE=4.6933300000000001E-07,
+           NOM_PARA='IY_P',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.98933333E-08,
+           VALE_REFE=1.9893300000000001E-08,
+           NOM_PARA='IZ_P',
+           TABLE=TCARS,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TCAR2=MACR_CARA_POUTRE(    UNITE=38,FORMAT='ASTER',
+                                GROUP_MA=('GR1', 'GR2',),
+                              ORIG_INER=(0.005, 0.,) )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.21666667E-08,
+           VALE_REFE=7.2166699999999997E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.44666667E-09,
+           VALE_REFE=3.4466700000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+# Pareil que TACR2, mais avec le maillage lu avant
+mail = LIRE_MAILLAGE(UNITE=38,FORMAT='ASTER')
+TCAR3=MACR_CARA_POUTRE(MAILLAGE=mail, GROUP_MA=('GR1', 'GR2',), ORIG_INER=(0.005, 0.0,) )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.21666667E-08,
+           VALE_REFE=7.2166699999999997E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.44666667E-09,
+           VALE_REFE=3.4466700000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+# Pareil que TACR2, mais avec le format MED
+IMPR_RESU(FORMAT='MED',UNITE=39,RESU=_F(MAILLAGE=mail),PROC0='NON')
+#
+TCAR4=MACR_CARA_POUTRE(UNITE=39,FORMAT='MED', GROUP_MA=('GR1', 'GR2',), ORIG_INER=(0.005, 0.0,) )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 7.21666667E-08,
+           VALE_REFE=7.2166699999999997E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.44666667E-09,
+           VALE_REFE=3.4466700000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='ENTITE',
+                     VALE_K='TOUT',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR1',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 3.60833333E-08,
+           VALE_REFE=3.6083300000000003E-08,
+           NOM_PARA='IY_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC= 1.72333333E-09,
+           VALE_REFE=1.7233300000000001E-09,
+           NOM_PARA='IZ_P',
+           TABLE=TCAR4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='GR2',),
+           )
+
+FIN()
+#
+#

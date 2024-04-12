@@ -1,0 +1,155 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#  IDENTIQUE A SSNA111A JUSQU'A STAT_NON_LINE.
+#  LANCE EN ETUDE SIMPLE, LE DIAGNOSTIC EST CPU_LIMIT
+#
+import aster
+import aster_core
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      PAR_LOT='NON',
+      DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse=MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(NOM='GM12',
+                                GROUP_MA='GM12',),
+                             ),);
+
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS',),);
+
+# On reoriente les group_ma GM11 et GM12 qui
+# interviennent dans le contact car leurs normales
+# doivent absolument etre sortantes
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_2D=(_F(GROUP_MA=('GM11')),
+                               _F(GROUP_MA=('GM12'))),
+                 );
+
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E=2.E5,
+                           NU=0.3,),
+                   ECRO_LINE=_F(D_SIGM_EPSI=5000.0,
+                                SY=300.0,),
+                                );
+
+MAT2=DEFI_MATERIAU(ELAS=_F(E=2.E9,
+                           NU=0.3,),);
+
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(GROUP_MA=('GM15'),
+                             MATER=MAT1,),
+                          _F(GROUP_MA=('GM17',),
+                             MATER=MAT2,),
+                             ),);
+
+CHA=AFFE_CHAR_MECA(MODELE=MO,
+                   DDL_IMPO=(_F(GROUP_MA='GM14',
+                                DX= 0.0,
+                                DY= 0.0,),
+                             _F(GROUP_MA=('GM9','GM11',),
+                                DX=0.0,
+                                DY=-0.4,),
+                             _F(GROUP_MA=('GM10',),
+                                DY=-0.4,),
+                                ),);
+
+CONT = DEFI_CONTACT(MODELE      = MO,
+                   FORMULATION  = 'DISCRETE',
+                   REAC_GEOM    = 'SANS',
+                   ZONE=(
+                        _F(
+                            APPARIEMENT='MAIT_ESCL',
+                              GROUP_MA_MAIT='GM11',
+                              GROUP_MA_ESCL='GM12',
+                              NORMALE='MAIT_ESCL',
+                         ),
+
+                       ),
+                  )
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                    NOMBRE=1000,),);
+
+F=DEFI_FONCTION(NOM_PARA='INST',
+                VALE=(0.0,  0.0,
+                      0.8,  1.0,
+                      1.0,  0.98),
+                      );
+
+
+tpmax = aster_core.get_option("tpmax")
+tpsnl = 7.
+print(("Decrease time limit from {0} to {1} s to force STAT_NON_LINE to "
+      "interrupt.".format(tpmax, tpsnl)))
+aster_core.set_option("tpmax", tpsnl)
+is_ok = 0
+try:
+  RESU=STAT_NON_LINE(
+                     MODELE=MO,
+                     CHAM_MATER=CHMAT,
+                     EXCIT=_F(CHARGE=CHA,
+                              FONC_MULT=F,),
+                     COMPORTEMENT=(
+                                 _F(RELATION='VMIS_ISOT_LINE',
+                                 DEFORMATION='SIMO_MIEHE',
+                                 GROUP_MA='GM15',
+                                 ),
+                                 _F(RELATION='ELAS',
+                                 GROUP_MA='GM17',),
+                                    ),
+                     CONTACT   = CONT,
+                     CONVERGENCE=(_F(ITER_GLOB_MAXI=20,)),
+                     INCREMENT=_F(LIST_INST=L_INST,
+                                 INST_FIN=1.,),
+                     NEWTON=_F(MATRICE='TANGENTE',
+                              PREDICTION='ELASTIQUE',MATR_RIGI_SYME='OUI',
+                              REAC_ITER=1,),
+                     ARCHIVAGE=_F(LIST_INST=L_INST,),);
+except aster.ArretCPUError as msg:
+   is_ok = 1
+
+print("Restore time limit to {0} s".format(tpmax))
+aster_core.set_option("tpmax", tpmax)
+
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',),
+                     _F(PARA='BOOLEEN',LISTE_I=is_ok,),
+                     ),
+               )
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+FIN();

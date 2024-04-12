@@ -1,0 +1,80 @@
+# -*- coding: utf-8 -*-
+
+###
+### This file is generated automatically by SALOME v6.6.0 with dump python functionality
+###
+
+import sys
+import salome
+salome.salome_init()
+theStudy = salome.myStudy
+import salome_notebook
+notebook = salome_notebook.notebook
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+
+###
+### GEOM component
+###
+
+import GEOM
+from salome.geom import geomBuilder
+geompy = geomBuilder.New(salome.myStudy)
+import math
+import SALOMEDS
+
+O = geompy.MakeVertex(0, 0, 0)
+OX = geompy.MakeVectorDXDYDZ(1, 0, 0)
+OY = geompy.MakeVectorDXDYDZ(0, 1, 0)
+OZ = geompy.MakeVectorDXDYDZ(0, 0, 1)
+A = geompy.MakeVertex(0.3, 0, 0)
+B = geompy.MakeVertex(0.35, 0, 0)
+AB = geompy.MakeLineTwoPnt(A, B)
+[A_1,B_1] = geompy.ExtractShapes(AB, geompy.ShapeType["VERTEX"], True)
+geompy.addToStudy( O, 'O' )
+geompy.addToStudy( OX, 'OX' )
+geompy.addToStudy( OY, 'OY' )
+geompy.addToStudy( OZ, 'OZ' )
+geompy.addToStudy( A, 'A' )
+geompy.addToStudy( B, 'B' )
+geompy.addToStudy( AB, 'AB' )
+geompy.addToStudyInFather( AB, A_1, 'A' )
+geompy.addToStudyInFather( AB, B_1, 'B' )
+
+###
+### SMESH component
+###
+
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+from salome.StdMeshers import StdMeshersBuilder
+
+Cylindre = smesh.Mesh(AB)
+Regular_1D = Cylindre.Segment()
+Nb_Segments_1 = Regular_1D.NumberOfSegments(10)
+Nb_Segments_1.SetDistrType( 0 )
+AB_1 = Cylindre.GroupOnGeom(AB,'AB',SMESH.EDGE)
+A_2 = Cylindre.GroupOnGeom(A_1,'A',SMESH.NODE)
+B_2 = Cylindre.GroupOnGeom(B_1,'B',SMESH.NODE)
+Quadratic_Mesh_1 = Regular_1D.QuadraticMesh()
+isDone = Cylindre.Compute()
+smesh.SetName(Cylindre, 'Cylindre')
+
+## set object names
+smesh.SetName(Cylindre.GetMesh(), 'Cylindre')
+smesh.SetName(Regular_1D.GetAlgorithm(), 'Regular_1D')
+smesh.SetName(Nb_Segments_1, 'Nb. Segments_1')
+smesh.SetName(AB_1, 'AB')
+smesh.SetName(A_2, 'A')
+smesh.SetName(B_2, 'B')
+smesh.SetName(Quadratic_Mesh_1, 'Quadratic Mesh_1')
+
+########Export du maillage au format MMED########
+Cylindre.ExportMED( r''+ExportPATH+'tpla01d.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+if salome.sg.hasDesktop():
+  salome.sg.updateObjBrowser(1)

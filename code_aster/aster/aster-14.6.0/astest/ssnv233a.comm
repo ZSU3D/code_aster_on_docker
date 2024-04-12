@@ -1,0 +1,290 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ======================================================================
+#
+#
+# TITRE: ESSAI DE TORSION - LOI DE MOHR-COULOMB, SIMU_POINT_MAT
+
+#
+# REMARQUE IMPORTANTE:
+# ---------------------
+#
+# Pour pouvoir utiliser VERI_MATR_TANG, il faut mettre SDVERI='NON'
+#                                                      ------------
+from Contrib.veri_matr_tang import VERI_MATR_TANG
+import numpy as np
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      PAR_LOT='OUI',
+      DEBUG=_F(SDVERI='OUI'))
+
+# modules mecaniques [kPa]
+K=516.2E6
+G=238.2E6
+# =>
+YOUNG = 9.*K*G /(3.*K+G)
+POISSON = (3.*K-2.*G) /(6.*K+2.*G)
+
+print('young=',YOUNG,' /// nu=',POISSON)
+
+# pression de preconsolidation [en kPa]
+PCO=50.E+3
+
+#*******************************************************************
+#    INCREMENTS DE TEMPS
+#*******************************************************************
+
+tarret =50.
+tfin   =100.
+npas   =100
+
+epxy_min =-.0001
+depxy    =epxy_min/npas
+temps_max =100.
+dtemps    =temps_max/npas
+
+TEMPS1=DEFI_LIST_REEL(DEBUT=0.,
+                      INTERVALLE=(_F(JUSQU_A = tarret   , NOMBRE = 5),
+                                  _F(JUSQU_A = temps_max, NOMBRE = 5),),);
+
+                                 
+#***********************************************************************
+#    ESSAI TRIAXIAL NON DRAINE CYCLIQUE
+#***********************************************************************
+SOL=DEFI_MATERIAU(ELAS=_F(E=YOUNG, NU=POISSON, ALPHA=0.),
+                  MOHR_COULOMB=_F(
+                            PHI      = 33.,
+                            ANGDIL   = 27.,
+                            COHESION = 1.0E+3,),);
+
+                            
+COEF0=DEFI_FONCTION(NOM_PARA    = 'INST',
+                    PROL_DROITE = 'CONSTANT',
+                    VALE=( 0.0, 0.,
+                           temps_max, 0.,),);
+
+                          
+COEFH=DEFI_FONCTION(NOM_PARA    = 'INST',
+                    PROL_DROITE = 'CONSTANT',
+                    VALE=( 0.0, -PCO,
+                           temps_max, -PCO,),);
+
+                           
+COEFV=DEFI_FONCTION(NOM_PARA    = 'INST',
+                    PROL_DROITE = 'CONSTANT',
+                    VALE=( 0.0, -3.*PCO,
+                           temps_max, -3.*PCO,),);
+
+COEXY=DEFI_FONCTION(NOM_PARA='INST',
+                    PROL_DROITE='CONSTANT',
+                    VALE=( 0.0, 0.0,
+                           temps_max, epxy_min),);
+# Verification lorsqu'on change l'axe de chargement
+
+axe_char ='DX'
+
+if axe_char=='DX':
+  sigm_impose=_F(SIXX=COEFV,
+                 SIYY=COEFH,
+                 SIZZ=COEFH,)
+  epsi_impose=_F(EPXY=COEXY,
+                 EPXZ=COEF0,
+                 EPYZ=COEF0,)
+  sigm_init=_F(SIXX=-3.*PCO,
+               SIYY=-PCO,
+               SIZZ=-PCO,)
+
+               
+elif axe_char=='DY':
+  sigm_impose=_F(SIYY=COEFV,
+                 SIXX=COEFH,
+                 SIZZ=COEFH,)
+  epsi_impose=_F(EPXY=COEXY,
+                 EPXZ=COEF0,
+                 EPYZ=COEF0,)
+  sigm_init=_F(SIYY=-3.*PCO,
+               SIXX=-PCO,
+               SIZZ=-PCO,)
+
+               
+elif axe_char=='DZ':
+  sigm_impose=_F(SIZZ=COEFV,
+                 SIYY=COEFH,
+                 SIXX=COEFH,)
+  epsi_impose=_F(EPXZ=COEXY,
+                 EPXY=COEF0,
+                 EPYZ=COEF0,)
+  sigm_init=_F(SIZZ=-3.*PCO,
+               SIYY=-PCO,
+               SIXX=-PCO,)
+
+# Verification de la matrice tangente?
+# ====================================
+matr_tang =True
+verif     =True
+
+if matr_tang & verif:
+  comp_incr =_F(RELATION='MOHR_COULOMB',
+                TYPE_MATR_TANG='VERIFICATION',
+                VALE_PERT_RELA=1.E-10,);
+elif matr_tang:
+  comp_incr =_F(RELATION='MOHR_COULOMB',
+                TYPE_MATR_TANG='PERTURBATION',
+                VALE_PERT_RELA=1.E-10,);
+else:
+  comp_incr =_F(RELATION='MOHR_COULOMB',);
+
+  
+DEBUG(SDVERI='NON')
+
+#
+# Calcul par perturbations
+#
+TSIGPERT=SIMU_POINT_MAT(INFO=2,
+                  COMPORTEMENT=_F(RELATION='MOHR_COULOMB',
+                               TYPE_MATR_TANG='PERTURBATION',
+                               VALE_PERT_RELA=1.E-10,),
+                  MATER=SOL,
+                  INCREMENT=_F(LIST_INST=TEMPS1,
+                               INST_INIT=0.,
+                               INST_FIN =tfin,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,
+                            PREDICTION='ELASTIQUE'),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-10,
+                                 ITER_GLOB_MAXI = 50,),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS1,),
+                  SIGM_IMPOSE=sigm_impose,
+                  EPSI_IMPOSE=epsi_impose,
+                  SIGM_INIT=sigm_init,
+                  EPSI_INIT=_F(EPXX=0.,
+                               EPYY=0.,
+                               EPZZ=0.,
+                               EPXY=0.,
+                               EPXZ=0.,
+                               EPYZ=0.,),);
+IMPR_TABLE(TABLE=TSIGPERT,);
+
+#
+# Calcul avec matrice tangente consistente calculee
+# On active la verification
+#
+TSIGTANG=SIMU_POINT_MAT(INFO=2,
+                  COMPORTEMENT=comp_incr,
+                  MATER=SOL,
+                  INCREMENT=_F(LIST_INST=TEMPS1,
+                               INST_INIT=0.,
+                               INST_FIN =tfin,),
+                  NEWTON=_F(MATRICE='TANGENTE',
+                            REAC_ITER=1,
+                            PREDICTION='ELASTIQUE'),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-10,
+                                 ITER_GLOB_MAXI = 10),
+                  ARCHIVAGE=_F(LIST_INST=TEMPS1,),
+                  SIGM_IMPOSE=sigm_impose,
+                  EPSI_IMPOSE=epsi_impose,
+                  SIGM_INIT=sigm_init,
+                  EPSI_INIT=_F(EPXX=0.,
+                               EPYY=0.,
+                               EPZZ=0.,
+                               EPXY=0.,
+                               EPXZ=0.,
+                               EPYZ=0.,),);
+
+# ================================================================
+#
+#            TEST DU NOMBRE D'ITERATIONS DE NEWTON
+#
+# ================================================================
+
+DIFF = FORMULE(VALE='NB_ITER1-NB_ITER',
+               NOM_PARA=['NB_ITER1', 'NB_ITER'],)
+                 
+TSIGTANG=CALC_TABLE(reuse=TSIGTANG,TABLE=TSIGTANG,
+                    ACTION=(_F(OPERATION='RENOMME',
+                               NOM_PARA =('NB_ITER','NB_ITER1'),),
+                            _F(OPERATION='COMB',
+                               TABLE    =TSIGPERT,
+                               NOM_PARA =('INST',),),
+                            _F(OPERATION='OPER',
+                               FORMULE  =DIFF,
+                               NOM_PARA ='NB_ITER_DIFF',),
+                            ),);
+                            
+IMPR_TABLE(TABLE=TSIGTANG,);
+#
+# On verifie que NB_ITER1 < NB_ITER a chaque instant
+#
+TEST_TABLE(NOM_PARA='NB_ITER_DIFF',
+           TABLE=TSIGTANG,
+           TYPE_TEST='MAX',
+           VALE_ABS='NON',
+           # Non-regression
+           VALE_CALC=0.,
+           # Reference
+           REFERENCE='AUTRE_ASTER',
+           CRITERE='ABSOLU',
+           PRECISION=.1,
+           VALE_REFE=0.,);
+           
+# ================================================================
+#                            POST-TRAITEMENTS
+# ================================================================
+# 
+# tsigm = TSIGTANG.EXTR_TABLE().values();
+# 
+# epxx = tsigm['EPXX'];
+# epyy = tsigm['EPYY'];
+# epxy = tsigm['EPXY'];
+# epzz = tsigm['EPZZ'];
+# sixx = tsigm['SIXX'];
+# siyy = tsigm['SIYY'];
+# sixy = tsigm['SIXY'];
+# sizz = tsigm['SIZZ'];
+# epvp = tsigm['V1'];
+# edvp = tsigm['V2'];
+# indi = tsigm['V3'];
+# 
+# # Verif
+# # -------------
+# sig1_calc =list( -2.*PCO+np.sqrt(PCO**2.+np.array(sixy)**2.) )
+# sig3_calc =list( -2.*PCO-np.sqrt(PCO**2.+np.array(sixy)**2.) )
+# 
+# co_sigm,co_epsi,co_vari,= [],[],[],;
+# 
+# # CHAMPS CINEMATIQUES
+# # _____________________________
+# co_sigm =Defi_Xmcourbe(courbe=co_sigm,
+#         #X=epxy, Y=sizz,
+#         X=epxy, Y=sig1_calc,
+#         legend='SIG1_CALC',
+#         color=1,);
+#         
+# co_sigm =Defi_Xmcourbe(courbe=co_sigm,
+#         #X=epxy, Y=sixx,
+#         X=epxy, Y=sig3_calc,
+#         legend='SIG3_CALC',
+#         color=2,);
+#         
+# co_sigm =Defi_Xmcourbe(courbe=co_sigm,
+#         X=epxy, Y=siyy,
+#         legend='SIYY',
+#         color=3,);
+FIN();

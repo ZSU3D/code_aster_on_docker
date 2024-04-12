@@ -1,0 +1,371 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+                                  
+MA=DEFI_GROUP(reuse=MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(GROUP_MA = ('SSUP_S','FACE2',),),
+                             _F(NOM='LFF',GROUP_MA = 'LFF',OPTION='NOEUD_ORDO'),),
+              )
+
+# Barsoum
+MA=MODI_MAILLAGE(reuse=MA,
+                 MAILLAGE=MA,
+                 MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                                GROUP_NO_FOND='LFF'))
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F( GROUP_MA='VMAT',
+                        PHENOMENE = 'MECANIQUE',
+                        MODELISATION = '3D')
+              )
+
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E = 2.E11,
+                           NU = 0.3,
+                           RHO = 7800.)
+                  )
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F( GROUP_MA='VMAT',
+                             MATER = MAT1)
+                   )
+
+
+###########################################
+# CONDITIONS AUX LIMITES ET CHARGEMENT
+###########################################
+
+CL=AFFE_CHAR_MECA(MODELE=MO,
+                  DDL_IMPO=(
+                            _F(GROUP_NO = 'SSUP_S',
+                               DY = 0.),
+                            _F(GROUP_NO = 'FACE2',
+                               DY = 0.),
+                            _F(GROUP_NO = 'PA',
+                               DZ = 0.),
+                            _F(GROUP_NO = 'PB',
+                               DZ = 0.)),
+                  LIAISON_DDL=_F(GROUP_NO = ( 'PA', 'PB',  ),
+                                 DDL = ( 'DX',  'DX',),
+                                 COEF_MULT = ( 1., 1.,  ),
+                                 COEF_IMPO = 0.)
+                 );
+
+
+FNX=DEFI_FONCTION(NOM_PARA='X',
+                  VALE=(-2.0, -2.0*(500.*500.*7800.),
+                        2.0, 2.0*(500.*500.*7800.)));
+
+
+FNY=DEFI_FONCTION(NOM_PARA='Y',
+                  VALE=(-2.0, -2.0*(500.*500.*7800.),
+                        2.0, 2.0*(500.*500.*7800.)));
+
+
+FNZ=DEFI_FONCTION(NOM_PARA='Z',
+                  VALE=(-2.0, 0.0,
+                        2.0, 0.0));
+
+
+CH1=AFFE_CHAR_MECA_F(MODELE=MO,
+                     FORCE_INTERNE=_F(GROUP_MA='VMAT',
+                                      FX=FNX,
+                                      FY=FNY,)
+                   );
+
+CH2=AFFE_CHAR_MECA_F(MODELE=MO,
+                     FORCE_INTERNE=_F(GROUP_MA='VMAT',
+                                      FZ=FNZ,)
+                   );
+
+##########################
+# CALCUL MECANIQUE
+##########################
+
+CHAMDEPL=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=(_F( CHARGE = CL),
+                              _F( CHARGE = CH1,),
+                              _F( CHARGE = CH2,),)
+                      );
+
+
+
+###############################
+# DEFINITION DE LA FISSURE
+###############################
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MA,
+                    SYME='OUI',
+                    FOND_FISS=_F(GROUP_MA='LFF',),
+                    LEVRE_SUP=_F(GROUP_MA='LEVREINF',),
+                    )
+
+###################################
+# CALCUL DE G ET DES K LOCAUX
+###################################
+
+
+R_INF=DEFI_CONSTANTE(VALE=0.00075)
+
+R_SUP=DEFI_CONSTANTE(VALE=0.0025)
+
+# calcul de G(s) et K(s) avec le lissage Legendre (par defaut)
+GLO1=CALC_G(RESULTAT=CHAMDEPL,
+            OPTION='CALC_K_G',
+            THETA=_F(FOND_FISS=FISS,
+                     R_INF_FO=R_INF,
+                     R_SUP_FO=R_SUP,),
+#            LISSAGE=_F(LISSAGE_THETA='LAGRANGE',
+#                       LISSAGE_G='LAGRANGE',),
+           );
+
+
+# solution de reference : calcul ANSYS
+# polynome interpolateur de la solution ANSYS :
+# K1ref(s) = -7.932e14.s^5 + 8.607e13.s^4 - 2.540e12.s^3 - 2.185e10.x^2 + 2.554e9.s + 6.087e7
+K1ref = FORMULE(VALE='-7.932e14*ABSC_CURV**5 +  8.607e13*ABSC_CURV**4 - 2.540e12*ABSC_CURV**3 - 2.185e10*ABSC_CURV**2 + 2.554e9*ABSC_CURV + 6.087e7',
+                NOM_PARA='ABSC_CURV',)
+
+Ecart = FORMULE(VALE='abs(K1REF-K1)/K1REF',
+                NOM_PARA=['K1', 'K1REF'],)
+
+GLO1=CALC_TABLE(TABLE=GLO1,
+                reuse=GLO1,
+                ACTION=(_F(OPERATION='OPER',NOM_PARA='K1REF',FORMULE=K1ref),
+                        _F(OPERATION='OPER',NOM_PARA='ECART',FORMULE=Ecart),
+                        ),
+                )
+
+IMPR_TABLE(TABLE=GLO1)
+
+###########################
+# TEST DES VALEURS DE K1
+###########################
+
+# a l'abscisse curviligne 0 (point 1)
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(0.),
+           PRECISION=0.11,
+           VALE_CALC=54752007.87967059,
+           )
+
+# a l'abscisse curviligne 5.34881e-3 (point 8)
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=5.34881e-3,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(5.34881e-3),
+           PRECISION=0.02,
+           VALE_CALC=74423110.32240902,
+           )
+
+# a l'abscisse curviligne 3.44482e-2 (point 25)
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=3.44482e-2),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(3.44482e-2),
+           PRECISION=0.01,
+           VALE_CALC=101903847.56606053,
+           )
+
+# a l'abscisse curviligne 5.36143e-2 (point 33)
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=5.36143e-2,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(5.36143e-2),
+           PRECISION=0.07,
+           VALE_CALC=96994254.22989388,
+           )
+
+
+# TESTS SUR K2 ET K3 POUR S'ASSURER QU'ILS SONT BIEN NULS
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K2',
+           TYPE_TEST='MAX',
+           REFERENCE='ANALYTIQUE',
+           VALE_REFE=0.,
+           PRECISION=1e-16,
+           CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           ORDRE_GRANDEUR=1e-16,
+           )
+
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K2',
+           TYPE_TEST='MIN',
+           REFERENCE='ANALYTIQUE',
+           VALE_REFE=0.,
+           PRECISION=1e-16,
+           CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           ORDRE_GRANDEUR=1e-16,
+           )
+
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K3',
+           TYPE_TEST='MAX',
+           REFERENCE='ANALYTIQUE',
+           VALE_REFE=0.,
+           PRECISION=1e-16,
+           CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           ORDRE_GRANDEUR=1e-16,
+           )
+           
+TEST_TABLE(TABLE=GLO1,
+           NOM_PARA='K3',
+           TYPE_TEST='MIN',
+           REFERENCE='ANALYTIQUE',
+           VALE_REFE=0.,
+           PRECISION=1e-16,
+           CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           ORDRE_GRANDEUR=1e-16,
+           )
+           
+
+
+##################################################
+# VERIFICATION : SOLUTION IDENTIQUE AVEC ROTATION
+##################################################
+
+CH3=AFFE_CHAR_MECA(MODELE=MO,
+                   ROTATION=_F(VITESSE = 500., 
+                               AXE = (0., 0., 1.,),),
+                 );
+
+CHAMDEP2=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=(_F( CHARGE = CL),
+                              _F( CHARGE = CH3))
+                      );
+
+# lissage de legendre (par defaut)
+GK2leg=CALC_G(RESULTAT=CHAMDEP2,
+              OPTION='CALC_K_G',
+              THETA=_F(FOND_FISS=FISS,
+                       R_INF_FO=R_INF,
+                       R_SUP_FO=R_SUP,),
+              )
+
+GK2leg=CALC_TABLE(TABLE=GK2leg,
+                  reuse=GK2leg,
+                  ACTION=(_F(OPERATION='OPER',NOM_PARA='K1REF',FORMULE=K1ref),
+                          _F(OPERATION='OPER',NOM_PARA='ECART',FORMULE=Ecart),
+                          ),
+                  )
+
+IMPR_TABLE(TABLE=GK2leg)
+
+# a l'abscisse curviligne 0 (point 1)
+TEST_TABLE(TABLE=GK2leg,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(0.),
+           PRECISION=0.24,
+           VALE_CALC=54752007.87967063,
+           )
+
+# a l'abscisse curviligne 5.34881e-3 (point 8)
+TEST_TABLE(TABLE=GK2leg,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=5.34881e-3,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(5.34881e-3),
+           PRECISION=0.08,
+           VALE_CALC=74423110.322409,
+           )
+
+# a l'abscisse curviligne 3.44482e-2 (point 25)
+TEST_TABLE(TABLE=GK2leg,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=3.44482e-2),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(3.44482e-2),
+           PRECISION=0.02,
+           VALE_CALC=101903847.56606053,
+           )
+
+# a l'abscisse curviligne 5.36143e-2 (point 33)
+TEST_TABLE(TABLE=GK2leg,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=5.36143e-2,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(5.36143e-2),
+           PRECISION=0.07,
+           VALE_CALC=96994254.22989425,
+           )
+
+
+
+
+
+
+# lissage de Lagrange_No_No
+GK2lagno=CALC_G(RESULTAT=CHAMDEP2,
+                OPTION='CALC_K_G',
+                THETA=_F(FOND_FISS=FISS,
+                         R_INF_FO=R_INF,
+                         R_SUP_FO=R_SUP,),
+                LISSAGE=_F(LISSAGE_THETA='LAGRANGE',
+                           LISSAGE_G='LAGRANGE_NO_NO',),
+                )
+
+GK2lagno=CALC_TABLE(TABLE=GK2lagno,
+                  reuse=GK2lagno,
+                  ACTION=(_F(OPERATION='OPER',NOM_PARA='K1REF',FORMULE=K1ref),
+                          _F(OPERATION='OPER',NOM_PARA='ECART',FORMULE=Ecart),
+                          ),
+                  )
+
+IMPR_TABLE(TABLE=GK2lagno)
+
+# a l'abscisse curviligne 5.36143e-2 (point 33)
+TEST_TABLE(TABLE=GK2lagno,
+           NOM_PARA='K1',
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=5.36143e-2,),
+           REFERENCE='SOURCE_EXTERNE',
+           VALE_REFE=K1ref(5.36143e-2),
+           PRECISION=0.01,
+           VALE_CALC=104081312.53943054,
+           )
+
+FIN()

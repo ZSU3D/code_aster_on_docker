@@ -1,0 +1,173 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+# lecture maillage lineique
+MAPOU=LIRE_MAILLAGE(FORMAT="ASTER",UNITE=20,);
+
+
+
+MOPOU=AFFE_MODELE(MAILLAGE=MAPOU,
+                  AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='POU_D_TG',),);
+
+
+
+POUCA=AFFE_CARA_ELEM(MODELE=MOPOU,
+# caracteristiques des sections, orientations et rigidite de torsion
+           POUTRE=_F(GROUP_MA=('POUTRE'),
+                     SECTION='GENERALE',
+                     CARA=('A','IY','IZ','JX','AY','AZ',),
+                     VALE=(4.50e-2,4.61625E-04,1.60375E-04,9.77e-5,1.,1.),
+                     ),
+           ORIENTATION=_F(GROUP_MA=('POUTRE'),
+                          CARA='ANGL_VRIL', VALE=0.0,),
+)
+
+# LES MATERIAUX
+BETON=DEFI_MATERIAU(ELAS=_F(E=2.E10,
+                            NU=0.25,
+                            RHO=9167.0,),);
+
+#
+# LES CHAMPS DE MATERIAUX
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAPOU,
+                    AFFE=_F(TOUT='OUI', MATER=(BETON)),
+                         );
+
+BLOQUAGE=AFFE_CHAR_MECA(MODELE=MOPOU,
+                        DDL_IMPO=(_F(GROUP_NO='A',  DX=0.0, DY=0.0, DZ=0.0,  DRX=0.0, DRY = 0.0, DRZ=0.0,),
+                                  ),)
+
+CHARGT=AFFE_CHAR_MECA(MODELE=MOPOU,
+                      FORCE_NODALE=_F(GROUP_NO='B', FZ=1.E4,),);
+
+# RESOLUTION DU PROBLEME ELASTIQUE
+U1=MECA_STATIQUE(MODELE=MOPOU, CHAM_MATER=CHMAT, CARA_ELEM=POUCA,
+                  EXCIT=(_F(CHARGE=BLOQUAGE,),  _F(CHARGE=CHARGT,),),);
+
+
+# CALCUL DE L'ENERGIE POTENTIELLE
+
+
+EPOT=POST_ELEM(MODELE=MOPOU,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM =POUCA,
+                   ENER_POT  =_F(TOUT='OUI'),
+                   RESULTAT  = U1,
+                   )
+
+IMPR_TABLE(TABLE=EPOT)
+
+IMPR_RESU(FORMAT="RESULTAT",RESU = _F(RESULTAT = U1, NOM_CHAM = 'DEPL'))
+
+TEST_RESU(RESU=(
+               _F( RESULTAT=U1,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='B',
+                   NOM_CMP='DZ',
+                   VALE_CALC=0.045269315822728,
+                   ),
+                )
+         )
+# Epot = 1/2 DZ_B * FZ_B
+
+TEST_TABLE(
+      TABLE=EPOT,
+      FILTRE=(
+         _F(NOM_PARA='NUME_ORDRE', CRIT_COMP='EQ', VALE_I=  1),
+      ),
+      NOM_PARA='TOTALE',
+      VALE_CALC=226.34657911364,
+      VALE_REFE=226.34657911364002,
+      REFERENCE='ANALYTIQUE',PRECISION=1.E-6)
+
+MASSELE=CALC_MATR_ELEM(CARA_ELEM=POUCA,
+                            INST=0.0,
+                            OPTION='MASS_MECA',
+                            MODELE=MOPOU,
+                            CHAM_MATER=CHMAT,
+                            CHARGE = BLOQUAGE,
+                            );
+        #  -------------                  -----------------
+RIGIELE=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                            MODE_FOURIER=0,
+                            INST=0.0,
+                            CARA_ELEM=POUCA,
+                            MODELE=MOPOU,
+                            CHAM_MATER=CHMAT,
+                            CHARGE = BLOQUAGE,
+                            );
+        #  -------------                  -----------------
+NUM=NUME_DDL(
+                   MATR_RIGI=RIGIELE,
+                     );
+        #  -------------                  -----------------
+MASS=ASSE_MATRICE(NUME_DDL=NUM,
+                          MATR_ELEM=MASSELE,
+                          );
+        #  -------------                  -----------------
+KASS=ASSE_MATRICE(NUME_DDL=NUM,
+                          MATR_ELEM=RIGIELE,
+                          );
+
+
+MODES=CALC_MODES(MATR_RIGI=KASS,
+                 MATR_MASS=MASS,
+                 CALC_FREQ=_F(NMAX_FREQ=10,
+                              ),
+                 )
+MODES=NORM_MODE(reuse =MODES,
+               MODE=MODES,
+               NORME='MASS_GENE',)
+# E = 2*(pi*f)^2
+EPOT2=POST_ELEM(MODELE=MOPOU,
+                   CHAM_MATER=CHMAT,
+                   CARA_ELEM =POUCA,
+                   ENER_POT  =_F(TOUT='OUI'),
+                   RESULTAT  = MODES,
+                   )
+
+IMPR_TABLE(TABLE=EPOT2)
+
+TEST_TABLE(
+      TABLE=EPOT2,
+      FILTRE=(
+         _F(NOM_PARA='NUME_ORDRE', CRIT_COMP='EQ', VALE_I=  7),
+      ),
+      NOM_PARA='FREQ',
+      VALE_CALC=69.796351994907,
+      )
+
+TEST_TABLE(
+      TABLE=EPOT2,
+      FILTRE=(
+         _F(NOM_PARA='NUME_ORDRE', CRIT_COMP='EQ', VALE_I=  7),
+      ),
+      NOM_PARA='TOTALE',
+      VALE_CALC=96160.162695954,
+      VALE_REFE=96160.162695954816,
+      REFERENCE='ANALYTIQUE',PRECISION=1.E-6)
+
+
+
+
+
+FIN();

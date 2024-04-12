@@ -1,0 +1,282 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#########################################################################
+# CE TEST MET EN DEFAUT LE SOLVEUR MULT_FRONT (MODELISATION D_PLAN_INCO_UPG)
+# VALIDATION DU SOLVEUR MUMPS EN MODULANT:
+#     - POUR LA DISTRIBUTION (CENTRALISE, MAIL_DISPERSE, SOUS_DOMAINE).
+# WARNING: MUMPS DISTRIBUE IGNORE LES COMPOSANTES NULLES DE LA MATRICE.
+#          POUR CE TEST IL FAUT PREVOIR UNE TAILLE D'ESPACE MEMOIRE POUR
+#          LE PIVOTAGE PLUS GRANDE QU'EN CENTRALISE (MOT-CLE PCENT_PIVOT).
+# WARNING: EN MODE PARALLELE, PAS PLUS DE 4 PROCS CAR LE DERNIER
+#          CALCUL EST BASE SUR UNE REPARTITION EN 4 SOUS-DOMAINES.
+#          POUR LANCER SUR PLUS DE PROC, AUGMENTER NB_PART EN CONSEQUENCE.
+# PARALLELE: VALEUR CONSEILLEE 2 PROCS
+#########################################################################
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED');
+MO=AFFE_MODELE(MAILLAGE=MA, 
+               AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='D_PLAN_INCO_UPG'),
+               DISTRIBUTION=_F(METHODE='SOUS_DOMAINE',NB_SOUS_DOMAINE=4),
+);
+
+MATERIAU=DEFI_MATERIAU(ELAS=_F(E=100., NU=0.4999));
+CH_MATER=AFFE_MATERIAU(MAILLAGE=MA, AFFE=_F(TOUT='OUI',  MATER=MATERIAU));
+
+SYMETRI2=AFFE_CHAR_MECA(MODELE=MO, DDL_IMPO= _F(TOUT='OUI', DX=1.0 , DY=2.0));
+
+INSTANTS=DEFI_LIST_REEL(DEBUT=0.0, INTERVALLE=_F(JUSQU_A=1.0, NOMBRE=1));
+RAMPE=DEFI_FONCTION(NOM_PARA='INST', VALE=(0.0,  0.0, 1.0,  1.0));
+
+#  1 : MUMPS (centralise)
+# -------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE='CENTRALISE'))
+RESU1=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',TYPE_RESOL='SYMGEN',PCENT_PIVOT=20,
+                   RESI_RELA=1.E-8,POSTTRAITEMENTS='AUTO',GESTION_MEMOIRE='AUTO'),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+RESU11=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',
+                              TYPE_RESOL='SYMGEN',
+                              RESI_RELA=1E-2,
+                              POSTTRAITEMENTS='SANS',
+                              ),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU11,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.0000000000000001E-05,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU11,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.0000000000000001E-05,),
+                ),
+          )
+
+RESU12=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',MIXER_PRECISION='OUI'),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU12,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=4.9999999999999998E-07,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU12,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=4.9999999999999998E-07,),
+                ),
+          )
+
+RESU13=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',FILTRAGE_MATRICE=1.E-8),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU13,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU13,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+#  2 : MUMPS (distribue par mailles)
+# ------------------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE='MAIL_DISPERSE'))
+RESU2=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',TYPE_RESOL='SYMGEN', RESI_RELA=1.E-8,
+                   GESTION_MEMOIRE='AUTO'),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU2,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+#  3 : MUMPS (distribue par sous-domaines)
+# ------------------------------------------
+RESU3=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',TYPE_RESOL='SYMGEN', RESI_RELA=1.E-8,
+                   GESTION_MEMOIRE='AUTO'),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU3,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU3,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+#  4 : MUMPS (distribue par sous-domaines avec matrice distribuee)
+# ------------------------------------------
+RESU4=STAT_NON_LINE(MODELE=MO,
+                   SOLVEUR=_F(METHODE='MUMPS',
+                              TYPE_RESOL='SYMGEN',
+                              RESI_RELA=1.E-8,
+
+                              MATR_DISTRIBUEE='OUI',
+                              GESTION_MEMOIRE='AUTO'
+                              ),
+                   CHAM_MATER=CH_MATER, INFO=1,
+                   EXCIT=(  _F(CHARGE=SYMETRI2)),
+                   COMPORTEMENT=_F(RELATION='ELAS'),
+                   INCREMENT=_F(LIST_INST=INSTANTS),
+                   NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS));
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU4,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,
+                   PRECISION=1.E-08,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU4,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=2.000000000,
+                   VALE_REFE=2.0,
+                   PRECISION=1.E-08,),
+                ),
+          )
+
+FIN();

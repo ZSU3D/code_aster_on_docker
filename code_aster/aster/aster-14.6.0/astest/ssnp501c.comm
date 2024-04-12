@@ -1,0 +1,235 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS TEST  SSNP501C
+# MODELE   : METHODE CONTINUE
+# MAILLAGE : QUA4
+# REMARQUE : LE MAILLAGE EST ISSU DE SSNP501A.MAIL CAR LES MODIFICATIONS
+#            DE MAILLAGE SONT IMPOSSIBLES AVEC LA METHODE CONTINUE.
+#
+#UNITES   : NEWTON , CENTIMETRE , SECONDE (N,CM,S)
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(TOUT_GROUP_MA='OUI',),
+                             _F(NOM='LRESU',
+                                UNION=('LESC','A','D'),),
+                             ),);
+
+#----- GRANDEUR PHYSIQUE ------
+
+POLTH=DEFI_MATERIAU(ELAS=_F(E=407.,
+                            NU=0.47999999999999998,),ECRO_LINE=_F(D_SIGM_EPSI=1.0,SY=1E15),)
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=20700000,
+                            NU=0.29999999999999999,),ECRO_LINE=_F(D_SIGM_EPSI=1.0,SY=1E15),)
+
+#-----   MODELE ----------------
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('ANNEAU','PLAQUE','LMAI','LESC'),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='C_PLAN',),);
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_2D=_F(GROUP_MA=('LMAI','LESC'),),
+                 INFO=2,);
+
+
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(GROUP_MA='PLAQUE',
+                             MATER=ACIER,),
+                          _F(GROUP_MA='ANNEAU',
+                             MATER=POLTH,),),);
+
+#------ CONDITIONS AUX LIMITES -----------------
+
+CL=AFFE_CHAR_MECA(MODELE=MO,
+                  DDL_IMPO=(_F(GROUP_NO='PLAQUE',
+                               DX=0.0,),
+                            _F(GROUP_NO='LCD',
+                               DY=0.0,),
+                            _F(GROUP_NO='LAB',
+                               DX=0.0,),
+                           ),
+                  LIAISON_DDL=_F(GROUP_NO=('A','P1'),
+                                 DDL=('DY','DY'),
+                                 COEF_MULT=(1.0,-1.0),
+                                 COEF_IMPO=0.0,),);
+
+DEPL=AFFE_CHAR_MECA(MODELE=MO,
+                    DDL_IMPO=_F(GROUP_NO='PLAQUE',
+                                DY=-2.225,),);
+
+
+CON  = DEFI_CONTACT(MODELE         = MO,
+                    FORMULATION    = 'CONTINUE',
+                    ALGO_RESO_GEOM = 'NEWTON',
+                    ALGO_RESO_CONT = 'NEWTON',
+                    ZONE =(
+                           _F(
+                             GROUP_MA_ESCL = 'LESC',
+                             GROUP_MA_MAIT = 'LMAI',
+                             ),
+                          ),
+                   );
+
+#--------- DEFINITION DES FONCTIONS -----------------
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,0.0,4.0,1.0),
+                    INTERPOL='LIN',);
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=4.0,
+                                   NOMBRE=16,),);
+
+#-------- CALCUL STATIQUE --------------------------
+
+RESU=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=CL,),
+                          _F(CHARGE=DEPL,
+                             FONC_MULT=RAMPE,),),
+                   CONTACT  = CON,
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',
+                                DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=LINST,),
+                   NEWTON=_F(MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   CONVERGENCE=_F(RESI_GLOB_RELA=9.9999999999999995E-07,
+                                  ITER_GLOB_MAXI=50,
+                                  ARRET='OUI',),);
+
+#------- POST TRAITEMENT -----------------------
+
+RESU=CALC_CHAMP(reuse =RESU,
+                CONTRAINTE=('SIGM_ELNO'),
+               RESULTAT=RESU,);
+
+RESU=CALC_CHAMP(reuse =RESU,
+             RESULTAT=RESU,
+             FORCE='REAC_NODA',CONTRAINTE='SIGM_NOEU',
+             );
+
+TAB_REAC=POST_RELEVE_T(ACTION=_F(INTITULE='MESSAGE',
+                                 GROUP_NO='LRESU',
+                                 RESULTAT=RESU,
+                                 NOM_CHAM='REAC_NODA',
+                                 RESULTANTE='DY',
+                                 OPERATION='EXTRACTION',),);
+
+
+TAB_PRES=POST_RELEVE_T(ACTION=_F(INTITULE='MESSAGE',
+                                 GROUP_NO='LRESU',
+                                 RESULTAT=RESU,
+                                 NOM_CHAM='SIGM_NOEU',
+                                 INST=4.0,
+                                 NOM_CMP=('SIYY','SIXY'),
+                                 OPERATION='EXTRACTION',),);
+
+
+#------- TEST DES RESULTATS --------------
+# TEST REFERENCE
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.1,
+           VALE_CALC=-8.78259567222,
+           VALE_REFE=-8.0083311249999998,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.05,
+           VALE_CALC=-16.8013028173,
+           VALE_REFE=-16.016662499999999,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.02,
+           VALE_CALC=-24.4956524317,
+           VALE_REFE=-24.02499375,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=3.0,),
+           )
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=0.03,
+           VALE_CALC=-32.8559610285,
+           VALE_REFE=-32.033324999999998,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=4.0,),
+           )
+
+# TEST NON REGRESSION
+TEST_RESU(RESU=_F(GROUP_NO='D',
+                  INST=2.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=0.73382600713111001,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='D',
+                  INST=4.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.2855270869707001,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='A',
+                  INST=2.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=-20.5303310727,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(GROUP_NO='A',
+                  INST=4.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=-14.9682025903,
+                  ),
+          )
+
+FIN();

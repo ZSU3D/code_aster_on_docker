@@ -1,0 +1,148 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION 3D - TUYAU - RELATIONS LINEAIRES 3D-TUYAU
+#======================================================================
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+EP=0.00818
+
+RMOY=0.1055
+
+REXT=RMOY + (EP/2.)
+
+RMOYN=- RMOY
+
+RC=0.305
+
+LTUBE=1.2
+
+L=RC + LTUBE
+
+YOUNG=2.E11
+
+POISSON=0.3
+
+SIGY=200.E6
+
+H=2.E10
+
+K=0.8333333333
+
+MOMENTMZ=17000.
+
+FYMAX=MOMENTMZ / (RMOY * RMOY * pi)
+
+FYMAXN=- FYMAX
+
+MA=LIRE_MAILLAGE(FORMAT='MED',VERI_MAIL=_F(VERIF='OUI'), )
+
+MO=AFFE_MODELE(   MAILLAGE=MA,AFFE=(
+     _F( GROUP_MA = ('AB', 'CD',),
+           PHENOMENE = 'MECANIQUE',
+           MODELISATION = 'TUYAU_3M'),
+     _F( GROUP_MA = ('COUDE', 'SURF1', 'SURF2',),
+           PHENOMENE = 'MECANIQUE',
+           MODELISATION = '3D'))
+                  )
+
+CAREL=AFFE_CARA_ELEM(   MODELE=MO,
+    POUTRE=_F( GROUP_MA = ('AB', 'CD',),   SECTION = 'CERCLE',
+            CARA = ('R', 'EP', ), VALE = ( REXT,  EP,)),ORIENTATION=(
+_F( GROUP_NO = 'A', CARA = 'GENE_TUYAU', VALE = (0., 0., 1.,)),
+_F( GROUP_NO = 'D', CARA = 'GENE_TUYAU', VALE = (0., 0., 1.,)))
+    )
+
+MAT=DEFI_MATERIAU(   ELAS=_F( E = YOUNG, NU = POISSON)
+                        )
+
+CHMAT=AFFE_MATERIAU(   MAILLAGE=MA,
+                       AFFE=_F( TOUT = 'OUI', MATER = MAT))
+
+CHAR1=AFFE_CHAR_MECA(  MODELE=MO,
+     DDL_IMPO=_F( GROUP_NO = 'A', DX = 0., DY = 0., DZ = 0., DRX = 0., DRY = 0., DRZ = 0.),
+    FORCE_NODALE=_F( GROUP_NO = 'D', MZ = MOMENTMZ),LIAISON_ELEM=(
+      _F( OPTION = '3D_TUYAU',
+                    CARA_ELEM = CAREL,
+                    AXE_POUTRE = (0., 1., 0.,),
+                     GROUP_MA_1 = 'SURF1',
+                    GROUP_NO_2 = 'B'),
+      _F( OPTION = '3D_TUYAU',
+                    CARA_ELEM = CAREL,
+                    AXE_POUTRE = (0., 1., 0.,),
+                     GROUP_MA_1 = 'SURF2',
+                    GROUP_NO_2 = 'C'))
+    )
+
+RESU1=MECA_STATIQUE(  MODELE=MO,   INFO=1,
+                          CHAM_MATER=CHMAT,
+                          CARA_ELEM=CAREL,
+                         EXCIT=_F(  CHARGE = CHAR1),
+                          SOLVEUR=_F(  METHODE = 'LDLT')
+                        )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='D',
+                  REFERENCE='AUTRE_ASTER',
+                  RESULTAT=RESU1,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.019221904,
+                  VALE_REFE=0.02,
+                  PRECISION=0.04,),
+          )
+
+# FLEXION HORS PLAN
+
+CHAR2=AFFE_CHAR_MECA(  MODELE=MO,
+     DDL_IMPO=_F( GROUP_NO = 'A', DX = 0., DY = 0., DZ = 0., DRX = 0., DRY = 0., DRZ = 0.),
+    FORCE_NODALE=_F( GROUP_NO = 'D', MY = MOMENTMZ),LIAISON_ELEM=(
+      _F( OPTION = '3D_TUYAU',
+                    CARA_ELEM = CAREL,
+                    AXE_POUTRE = (0., 1., 0.,),
+                     GROUP_MA_1 = 'SURF1',
+                    GROUP_NO_2 = 'B'),
+      _F( OPTION = '3D_TUYAU',
+                    CARA_ELEM = CAREL,
+                    AXE_POUTRE = (0., 1., 0.,),
+                     GROUP_MA_1 = 'SURF2',
+                    GROUP_NO_2 = 'C'))
+    )
+
+RESU2=MECA_STATIQUE(  MODELE=MO,   INFO=1,
+                          CHAM_MATER=CHMAT,
+                          CARA_ELEM=CAREL,
+                         EXCIT=_F(  CHARGE = CHAR2),
+                          SOLVEUR=_F(  METHODE = 'LDLT')
+                        )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='D',
+                  REFERENCE='AUTRE_ASTER',
+                  RESULTAT=RESU2,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DZ',
+                  VALE_CALC=-0.015609652,
+                  VALE_REFE=-0.015657,
+                  PRECISION=5.0E-3,),
+          )
+
+FIN()
+#
+#

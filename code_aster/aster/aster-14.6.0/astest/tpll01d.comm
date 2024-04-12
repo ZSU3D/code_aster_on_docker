@@ -1,0 +1,139 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: TPLL01D
+# CAS TEST TPLL01D
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+PHI0=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=0.0           )
+
+PHI1=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=-1200.0       )
+
+COEH=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=30.0          )
+
+T_EX=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=140.0         )
+
+T_IM=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=100.0         )
+
+MATERI=DEFI_MATERIAU( THER=_F(  LAMBDA = 0.75, RHO_CP = 2.0))
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED', )
+
+MAIL=DEFI_GROUP(reuse=MAIL,MAILLAGE=MAIL, CREA_GROUP_NO=_F( TOUT_GROUP_MA = 'OUI'))
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAIL,
+                AFFE=_F(  TOUT = 'OUI', MATER = MATERI) )
+
+MOTH=AFFE_MODELE(  MAILLAGE=MAIL,
+                      AFFE=_F( TOUT = 'OUI', MODELISATION = '3D_DIAG',
+                                      PHENOMENE = 'THERMIQUE'))
+
+# M22 et M23 (groupe G2):
+# normale = 0.8       0.6      0
+PHI1X=DEFI_CONSTANTE(    NOM_RESU='FLUXX',  VALE=0.8*(-1200.0)       )
+PHI1Y=DEFI_CONSTANTE(    NOM_RESU='FLUXY',  VALE=0.6*(-1200.0)       )
+
+
+CHTH=AFFE_CHAR_THER_F(  MODELE=MOTH,
+          #FLUX_REP=_F( GROUP_MA = 'G2',    FLUN = PHI1),
+          FLUX_REP=(_F( GROUP_MA = 'G2',  FLUX_X = PHI1X, FLUX_Y = PHI1Y ),
+                   ),
+           ECHANGE=_F( GROUP_MA = 'F1SUP',  COEF_H = COEH, TEMP_EXT = T_EX),
+          TEMP_IMPO=_F( GROUP_NO = 'F1INF',   TEMP = T_IM)
+         )
+
+LR8=DEFI_LIST_REEL(        DEBUT=0.,
+       INTERVALLE=_F(    JUSQU_A = 10.0,   NOMBRE = 2)
+                       )
+
+TEMPE=THER_LINEAIRE(        MODELE=MOTH,
+           ETAT_INIT=_F( STATIONNAIRE = 'OUI'),
+          INCREMENT=_F( LIST_INST = LR8),
+             CHAM_MATER=CHMAT, EXCIT=_F( CHARGE = CHTH)
+             )
+
+TEMPE=CALC_CHAMP(reuse=TEMPE,RESULTAT=TEMPE,THERMIQUE=('FLUX_ELNO','FLUX_ELGA'))
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=2,
+                   GROUP_NO='A',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=100.0,
+                   VALE_CALC=100.0,
+                   REFERENCE='ANALYTIQUE',),
+                _F(NUME_ORDRE=2,
+                   GROUP_NO='B',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=20.0,
+                   VALE_CALC=20.0,
+                   REFERENCE='ANALYTIQUE',),
+                _F(NUME_ORDRE=2,
+                   GROUP_NO='G',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_REFE=60.0,
+                   VALE_CALC=60.0,
+                   REFERENCE='ANALYTIQUE',),
+                _F(NUME_ORDRE=2,
+                   POINT=3,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_REFE=960.0,
+                   VALE_CALC=960.0,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=2,
+                   POINT=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_REFE=720.0,
+                   VALE_CALC=720.0,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M2',),
+                _F(NUME_ORDRE=2,
+                   POINT=3,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_REFE=960.0,
+                   VALE_CALC=960.0,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M1',),
+                _F(NUME_ORDRE=2,
+                   POINT=2,
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_REFE=720.0,
+                   VALE_CALC=720.0,
+                   REFERENCE='ANALYTIQUE',
+                   MAILLE='M2',),
+                ),
+          )
+
+FIN()
+#

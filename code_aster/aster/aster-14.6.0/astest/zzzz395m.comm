@@ -1,0 +1,153 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Test for DEFI_DOMAINE_REDUIT
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+# Read the mesh
+mesh=LIRE_MAILLAGE(FORMAT='MED',);
+
+# Mechanic model
+model=AFFE_MODELE(MAILLAGE=mesh,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),);
+
+####################################################################################################
+#
+# Construction du RID avec NB_COUCHE_SUPPL = 4 => RID == DOMAINE_ENTIER
+#
+####################################################################################################
+
+base_p=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model,
+                 UNITE      = 70,
+                 FORMAT_MED =_F(NOM_CHAM_MED = 'base_p__DEPL',
+                                NOM_CHAM     = 'DEPL',),
+                 TOUT_ORDRE = 'OUI',);
+
+
+base_d=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model,
+                 UNITE      = 71,
+                 FORMAT_MED = _F(NOM_CHAM_MED = 'base_d__SIEF_NOEU',
+                                 NOM_CHAM     = 'SIEF_NOEU',),
+                 TOUT_ORDRE = 'OUI',);
+
+# Avec NB_COUCHE_SUPPL = 4 => RID == DOMAINE_ENTIER
+mesh=DEFI_DOMAINE_REDUIT(reuse=mesh,INFO=2,
+            MAILLAGE=mesh,
+            BASE_PRIMAL=base_p,
+            BASE_DUAL=base_d,
+            NOM_DOMAINE='RID',
+            NB_COUCHE_SUPPL = 4,
+            GROUP_NO_INTERF='INF',);
+
+####################################################################################################
+#
+# Construction du RID avec interface EF
+#
+####################################################################################################
+
+# Read the mesh
+mesh2=LIRE_MAILLAGE(FORMAT='MED',);
+
+# Mechanic model
+model2=AFFE_MODELE(MAILLAGE=mesh2,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),);
+
+base_p2=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model2,
+                 UNITE      = 70,
+                 FORMAT_MED =_F(NOM_CHAM_MED = 'base_p__DEPL',
+                                NOM_CHAM     = 'DEPL',),
+                 NUME_ORDRE = 1,);
+
+
+base_d2=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model2,
+                 UNITE      = 71,
+                 FORMAT_MED = _F(NOM_CHAM_MED = 'base_d__SIEF_NOEU',
+                                 NOM_CHAM     = 'SIEF_NOEU',),
+                 NUME_ORDRE = 1,);
+
+# Avec CORR_COMPLET
+mesh2=DEFI_DOMAINE_REDUIT(reuse=mesh2,INFO=2,
+            MAILLAGE=mesh2,
+            BASE_PRIMAL=base_p2,
+            BASE_DUAL=base_d2,
+            NOM_DOMAINE='RID',
+            CORR_COMPLET = 'OUI',
+            GROUP_NO_ENCASTRE = 'SUB',
+            NB_COUCHE_ENCASTRE = 1,
+            NB_COUCHE_SUPPL    = 1,
+            GROUP_NO_INTERF='INF',);
+
+####################################################################################################
+#
+# Construction du RID avec DOMAINE_MINI
+#
+####################################################################################################
+
+
+# Read the mesh
+mesh3=LIRE_MAILLAGE(FORMAT='MED',);
+
+# Mechanic model
+model3=AFFE_MODELE(MAILLAGE=mesh3,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),);
+
+base_p3=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model3,
+                 UNITE      = 70,
+                 FORMAT_MED =_F(NOM_CHAM_MED = 'base_p__DEPL',
+                                NOM_CHAM     = 'DEPL',),
+                 NUME_ORDRE = 1,);
+
+
+base_d3=LIRE_RESU(TYPE_RESU  = 'MODE_EMPI',
+                 FORMAT     = 'MED',
+                 MODELE     = model3,
+                 UNITE      = 71,
+                 FORMAT_MED = _F(NOM_CHAM_MED = 'base_d__SIEF_NOEU',
+                                 NOM_CHAM     = 'SIEF_NOEU',),
+                 NUME_ORDRE = 1,);
+
+# Avec DOMAINE_MINI
+mesh3=DEFI_DOMAINE_REDUIT(reuse=mesh3,INFO=2,
+            MAILLAGE=mesh3,
+            BASE_PRIMAL=base_p3,
+            BASE_DUAL=base_d3,
+            NOM_DOMAINE='RID',
+            GROUP_NO_INTERF='INF',
+            DOMAINE_MINI=_F(GROUP_MA='S_inf'),
+            );
+
+
+FIN();

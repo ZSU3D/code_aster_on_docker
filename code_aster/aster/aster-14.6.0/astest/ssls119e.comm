@@ -1,0 +1,112 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#- CROCHET SOUS CISAILLEMENT
+#- MODELISATION AVEC DES ELEMENTS '3D' (CU20)
+#---------------------------------------------------------------------
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',);
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=_F(OPTION='NOEUD_ORDO',
+                                 GROUP_MA='K3',
+                                 NOM='K3',
+                                 GROUP_NO_EXTR='CC',
+                                 GROUP_NO_ORIG='C',),);
+
+MO=AFFE_MODELE(AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),
+               MAILLAGE=MAIL,);
+
+CAR_ELE=AFFE_CARA_ELEM(MODELE=MO,
+                        MASSIF=_F(GROUP_MA='TOUT_ELT',
+                                  ANGL_REP=(0.,0.),),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(NU=0.35,
+                          E=22752510.,
+                        RHO = 8000.),);
+
+CHAM_MAT=AFFE_MATERIAU(AFFE=_F(MATER=MAT,
+                               TOUT='OUI',),
+                       MAILLAGE=MAIL,);
+
+CHA=AFFE_CHAR_MECA(FACE_IMPO=_F(GROUP_MA='ENCASTR',
+                               DZ=0.0,
+                               DX=0.0,
+                               DY=0.0,),
+                   MODELE=MO,
+                   FORCE_FACE=_F(GROUP_MA='LIBRE',
+                                  FZ= 172.4307,),);
+
+RESU=MECA_STATIQUE(CHAM_MATER=CHAM_MAT,
+                   MODELE=MO,
+                   CARA_ELEM=CAR_ELE,
+                   EXCIT=_F(CHARGE=CHA,),);
+
+RESU=CALC_CHAMP(reuse =RESU,
+                RESULTAT=RESU,
+                CONTRAINTE='SIGM_ELNO',
+                TOUT_ORDRE='OUI',);
+
+DEP_Z=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                              INTITULE='TAB_NORM',
+                              NOM_CMP='DZ',
+                              RESULTAT=RESU,
+                              NOM_CHAM='DEPL',
+                              GROUP_NO='K3',),);
+
+SIGMA=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                              INTITULE='TAB_SIGM ',
+                              TOUT_CMP='OUI',
+                              GROUP_NO='K3',
+                              RESULTAT=RESU,
+                              NOM_CHAM='SIGM_ELNO',),);
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='C',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=0.1252,
+                   VALE_CALC=0.13351826634123,
+                   PRECISION=7.0E-02,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='CC',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=0.1252,
+                   VALE_CALC=0.13492775337154,
+                   PRECISION=8.0E-02,
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+FIN();

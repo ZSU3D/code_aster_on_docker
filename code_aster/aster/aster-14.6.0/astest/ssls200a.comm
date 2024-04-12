@@ -1,0 +1,408 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# TEST DE NON REGRESSION :
+# (les valeurs de reference ont ete obtenues par Code_Aster)
+#
+# - On utilise dans le maillage de nombreux types de mailles
+#   (pour valider le plus d'elements finis)
+#
+# - domaines testes :
+#      MECANIQUE THERMO LINEAIRE, MODELISATION='DKT','COQUE_3D', ...
+# =========================================================================
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+M1=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+M1=DEFI_GROUP(reuse =M1,
+              MAILLAGE=M1,
+              CREA_GROUP_MA=_F(NOM='TOUT',
+                               TOUT='OUI',),);
+
+MA=CREA_MAILLAGE(MAILLAGE=M1,
+                 MODI_MAILLE=(_F(MAILLE='Q9',
+                                 OPTION='QUAD8_9',),
+                              _F(MAILLE='T7',
+                                 OPTION='TRIA6_7',),),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=(_F(MAILLE='S1',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKT',),
+                     _F(MAILLE='Q1',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKT',),
+                     _F(MAILLE='T1',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKT',),
+                     _F(MAILLE='T2',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKT',),
+                     _F(MAILLE='Q2',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='Q4G',),
+                     _F(MAILLE='T4',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='Q4G',),
+                     _F(MAILLE='Q3',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DST',),
+                     _F(MAILLE='T3',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DST',),
+                     _F(MAILLE='Q9',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='COQUE_3D',),
+                     _F(MAILLE='T7',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='COQUE_3D',),),);
+
+F1=DEFI_FONCTION(NOM_PARA='TEMP',VALE=(-1000.,-1200.,
+                       1000.,1200.,
+                       ),PROL_DROITE='LINEAIRE',PROL_GAUCHE='CONSTANT',);
+
+F2=DEFI_CONSTANTE(VALE=0.3,);
+
+RHOF=DEFI_CONSTANTE(VALE = 8.1,)
+MAT=DEFI_MATERIAU(ELAS_FO=_F(E=F1,
+                             NU=F2,
+                             RHO=RHOF,
+                             TEMP_DEF_ALPHA=1.5,
+                             ALPHA=F1,),);
+
+CARA=AFFE_CARA_ELEM(MODELE=MO,
+                    COQUE=_F(GROUP_MA='TOUT',
+                             EPAIS=0.7,
+                             ANGL_REP=(10.,-20.,),
+                             A_CIS=0.6,),);
+
+TEMPLIN=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',
+                   OPERATION='AFFE',
+                   MAILLAGE=MA,
+                   AFFE=_F(TOUT='OUI',
+                           NOM_CMP=('TEMP_INF','TEMP_MIL','TEMP_SUP',),
+                           VALE=(12.,18.,24.,),),);
+
+TEMPLI=CREA_RESU(OPERATION='AFFE',
+                 TYPE_RESU='EVOL_THER',
+                 NOM_CHAM='TEMP',
+                 AFFE=_F(CHAM_GD=TEMPLIN,
+                         INST=0.0,),);
+
+TEMPER=CREA_RESU(OPERATION='PREP_VRC2',
+                 TYPE_RESU='EVOL_THER',
+                 PREP_VRC2=_F(EVOL_THER=TEMPLI,
+                              MODELE=MO,
+                              CARA_ELEM=CARA,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),
+                    AFFE_VARC=_F(TOUT='OUI',
+                                 EVOL=TEMPER,
+                                 NOM_VARC='TEMP',
+                                 NOM_CHAM='TEMP',
+                                 VALE_REF=1.5,),);
+
+# ------------------------------------------------------------------
+
+CHPES=AFFE_CHAR_MECA(MODELE=MO,
+                     PESANTEUR=_F(GRAVITE=9.8,
+                                  DIRECTION=(0.3,0.1,-0.4,),),
+                     DDL_IMPO=(_F(NOEUD='N1',
+                                  DX=1.,
+                                  DY=2.,
+                                  DZ=3.,
+                                  DRX=1.,
+                                  DRY=2.,
+                                  DRZ=3.,),
+                               _F(NOEUD='N6',
+                                  DX=2.,
+                                  DY=3.,
+                                  DZ=4.,
+                                  DRX=1.,
+                                  DRY=2.,
+                                  DRZ=5.,),),
+                     FORCE_ARETE=_F(MAILLE='S1',
+                                    FZ=8.,),
+                     FORCE_COQUE=_F(TOUT='OUI',
+                                    F1=5.,
+                                    F2=8.,
+                                    F3=9.,
+                                    MF1=5.,),);
+
+CHME2=AFFE_CHAR_MECA(MODELE=MO,
+                     FORCE_COQUE=_F(TOUT='OUI',
+                                    PRES=5.,),);
+
+# ------------------------------------------------------------------
+
+MESTAT=MECA_STATIQUE(MODELE=MO,
+                     CHAM_MATER=CHMAT,
+                     CARA_ELEM=CARA,
+                     EXCIT=(_F(CHARGE=CHPES,),
+                            _F(CHARGE=CHME2,),),);
+
+MESTAT=CALC_CHAMP(reuse =MESTAT,
+                  RESULTAT=MESTAT,
+                  CONTRAINTE=('SIGM_ELNO','EFGE_ELNO',),
+                  DEFORMATION=('EPSI_ELGA','EPSI_ELNO',),);
+
+MESTAT2=POST_CHAMP(RESULTAT=MESTAT,
+                   EXTR_COQUE=_F(NOM_CHAM=('SIGM_ELNO','EPSI_ELNO',),
+                                 NUME_COUCHE=1,
+                                 NIVE_COUCHE='MOY',),);
+MESTAT=CALC_CHAMP(reuse =MESTAT,
+                  RESULTAT=MESTAT,
+                  MAILLE=('Q1','T1','Q2','Q3','T3','T4','Q9','T7'),
+                  DEFORMATION=('DEGE_ELNO','DEGE_ELGA',));
+
+MESTAT2=CALC_CHAMP(reuse =MESTAT2,
+               RESULTAT=MESTAT2,
+               CONTRAINTE='SIGM_NOEU',
+               DEFORMATION='EPSI_NOEU');
+
+ENGENDRE_TEST(CO=MESTAT,);
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=45031.3033356,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='EFGE_ELNO',
+                   VALE_CALC=183836.693352,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='EPSI_ELGA',
+                   VALE_CALC=85399.5602598,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT2,
+                   NOM_CHAM='EPSI_ELNO',
+                   VALE_CALC=31618.269149,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT2,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=9399.59624836,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='SIEF_ELGA',
+                   VALE_CALC=1366489.5073,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='SIGM_ELNO',
+                   VALE_CALC=1597700.74562,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='DEGE_ELNO',
+                   VALE_CALC=63974.2953883,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MESTAT,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=48779.4753311,
+                   ),
+                ),
+          )
+
+# ----------------------------------------------------------------------
+
+MASS2=POST_ELEM(ENER_POT=_F(MAILLE=('Q1','T1','Q2','Q3','T3','T4'),),
+                MODELE=MO,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARA,
+                RESULTAT=MESTAT,);
+
+MASS3=POST_ELEM(MASS_INER=_F(TOUT='OUI',),
+                MODELE=MO,
+                CHAM_MATER=CHMAT,
+                CARA_ELEM=CARA,
+                RESULTAT=MESTAT,);
+
+ENGENDRE_TEST(CO=(MASS2,MASS3,),);
+
+TEST_TABLE(
+           VALE_CALC_I=6,
+           NOM_PARA='NUME_ORDRE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS2,
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+           NOM_PARA='INST',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS2,
+           )
+
+TEST_TABLE(
+           VALE_CALC=31737674.2361,
+           NOM_PARA='TOTALE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS2,
+           )
+
+TEST_TABLE(
+           VALE_CALC=100.0,
+           NOM_PARA='POUR_CENT',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS2,
+           )
+
+TEST_TABLE(
+           VALE_CALC=101.428043459,
+           NOM_PARA='MASSE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.791666666667,
+           NOM_PARA='CDG_X',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.416666666667,
+           NOM_PARA='CDG_Y',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.833333333333,
+           NOM_PARA='CDG_Z',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=42.8815228181,
+           NOM_PARA='IX_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=52.7749832239,
+           NOM_PARA='IY_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=32.0160436625,
+           NOM_PARA='IZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=2.81744565165,
+           NOM_PARA='IXY_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=5.6348913033,
+           NOM_PARA='IXZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=13.8392930409,
+           NOM_PARA='IYZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=23.0909017206,
+           NOM_PARA='IX_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=44.8870182396,
+           NOM_PARA='IY_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=59.6946297443,
+           NOM_PARA='IZ_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=125.443768709,
+           NOM_PARA='ALPHA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=58.4611397066,
+           NOM_PARA='BETA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+TEST_TABLE(
+           VALE_CALC=148.756141016,
+           NOM_PARA='GAMMA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=MASS3,
+           )
+
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(MAILLAGE=MA,
+                  RESULTAT=MESTAT,
+                  NOM_CHAM='SIEF_ELGA',),);
+
+IMPR_RESU(RESU=_F(RESULTAT=MESTAT,NOM_CHAM=('EPSI_ELGA','EPSI_ELNO')))
+
+FIN();
+
+#

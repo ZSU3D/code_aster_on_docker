@@ -1,0 +1,316 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+import numpy, math
+
+# MODELISATION H : X-FEM INCLINEE - TRACTION (FACE SUP)
+
+#---------------------------------------------------------
+#                   PARAMETRES
+#---------------------------------------------------------
+
+#*********************************************************
+#                    GEOMETRIE
+#                    *********
+#     Parametres a modifier avec le maillage
+#*********************************************************
+#
+# EPAISSEUR DE L EPROUVETTE SELON X
+B = 1. ;
+#
+# DEMI-LONGUEUR DE L EPROUVETTE SELON Y
+W = 5. ;
+#
+# DEMI-LONGUEUR DE L EPROUVETTE SELON Z
+L = 15. ;
+#
+# NOMBRE D ELEMENTS SELON X
+NX = 5. ;
+#
+# NOMBRE D ELEMENTS SELON Z
+NZ = 51. ;
+#
+#*********************************************************
+
+# LONGUEUR DE LA FISSURE
+A = 2.5 ;
+
+# ANGLE D INCLINAISON DE LA FISSURE
+ALPHA = 45.*pi/180. ;
+
+# COURONNES POUR LE CALCUL DES SIF
+# entre 0 et 1, ensuite ramene entre 0 et A*cos(ALPHA)
+RI = [ 0.1 , 0.2  , 0.4  , 0.1 , 0.3 , 0.4 ]
+RS = [ 1.  , 1.   , 1.  ,  0.7 , 0.7 , 0.8 ]
+
+# PROPRIETES DE L ACIER UTILISE
+E   = 1.E6;
+nu  = 0.;
+rho = 7800.0;
+
+# PRESSION APPLIQUEE SUR LES FACES INFERIEURE ET SUPERIEURE
+PRES=-1.E6
+
+#---------------------------------------------------------
+#       MAILLAGE : pave maille regulierement en HEXA
+#                 ( nombre impair delements selon z )
+#---------------------------------------------------------
+
+MAILLAG1=LIRE_MAILLAGE(FORMAT='MED',INFO=1);
+
+LARX = B/NX;
+LARZ = 2*L/NZ;
+PRECIS = 1.E-6;
+VX     = [    1.  ,   0. ,     0.     ]
+VY     = [    0.  ,   1. ,     0.     ]
+VZ     = [    0.  ,   0. ,     1.     ]
+PT0    = [    0.  ,   0.  ,    0.     ]
+PT1    = [    0.  , 2.*W  , L-LARZ/2. ]
+PT1S   = [    0.  , 2.*W  , L+LARZ/2. ]
+PT2    = [    B   , 2.*W  , L-LARZ/2. ]
+PT2S   = [    B   , 2.*W  , L+LARZ/2. ]
+
+MAILLAG1=DEFI_GROUP( reuse =MAILLAG1,
+                     MAILLAGE=MAILLAG1,
+                     CREA_GROUP_NO=( _F(NOM='NOEUD1',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT1,
+                                        PRECISION=PRECIS,
+                                        RAYON=PRECIS),
+                                     _F(NOM='NOEUD1S',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT1S,
+                                        PRECISION=PRECIS,
+                                        RAYON=PRECIS),
+                                     _F(NOM='NOEUD2',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT2,
+                                        PRECISION=PRECIS,
+                                        RAYON=PRECIS),
+                                     _F(NOM='NOEUD2S',
+                                        OPTION='ENV_SPHERE',
+                                        POINT=PT2S,
+                                        PRECISION=PRECIS,
+                                        RAYON=PRECIS),
+                                     _F(NOM='SURFGAU',
+                                        OPTION='PLAN',
+                                        POINT=PT0,
+                                        VECT_NORMALE=VY,
+                                        PRECISION=PRECIS),
+                                    ),
+                      INFO=1);
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO=_F(GROUP_MA='VOL'));
+
+#---------------------------------------------------------
+#                   MODELE ET FISSURE
+#---------------------------------------------------------
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                     AFFE=(_F(GROUP_MA=('VOL'),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D'),
+                           _F(GROUP_MA=('SURFINF','SURFSUP'),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D')));
+
+MAILLAG1=MODI_MAILLAGE(reuse =MAILLAG1,
+                       MAILLAGE=MAILLAG1,
+                       ORIE_PEAU_3D=_F(GROUP_MA=('SURFSUP','SURFINF')),
+                       );
+
+LN = FORMULE(VALE='(Z-L)*cos(ALPHA)-Y*sin(ALPHA)',
+             L=L,
+             ALPHA=ALPHA,
+             NOM_PARA=['X', 'Y', 'Z'],)
+LT = FORMULE(VALE='(Z-L-A*sin(ALPHA))*sin(ALPHA)+(Y-A*cos(ALPHA))*cos(ALPHA)',
+             L=L,
+             A=A,
+             ALPHA=ALPHA,
+             NOM_PARA=['X', 'Y', 'Z'],)
+
+XFONI = 0. ;
+YFONI = A*cos(ALPHA) ;
+ZFONI = L+A*sin(ALPHA) ;
+XORI = 0. ;
+YORI = 0. ;
+ZORI = 0. ;
+XVECT = 0. ;
+YVECT = sin(ALPHA) ;
+ZVECT = -cos(ALPHA) ;
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                    DEFI_FISS=_F(FONC_LT=LT,FONC_LN=LN),
+                    INFO=1,
+                    );
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,FISSURE=FISS,INFO=1);
+
+
+#---------------------------------------------------------
+#                   MATERIAU
+#---------------------------------------------------------
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=rho));
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELEK,
+                       AFFE=_F(TOUT = 'OUI',
+                                MATER=ACIER),
+                             );
+
+#---------------------------------------------------------
+#                   CHARGEMENTS
+#---------------------------------------------------------
+
+CHRIG1=AFFE_CHAR_MECA(MODELE=MODELEK,
+                      LIAISON_DDL=(_F(GROUP_NO=( 'NOEUD1' , 'NOEUD1S'),DDL=('DX' ,'DX'),COEF_MULT=(1.0,1.0), COEF_IMPO=0.0),
+                                   _F(GROUP_NO=( 'NOEUD1' , 'NOEUD1S'),DDL=('DZ' ,'DZ'),COEF_MULT=(1.0,1.0), COEF_IMPO=0.0),
+                                   _F(GROUP_NO=( 'NOEUD2' , 'NOEUD2S'),DDL=('DZ' ,'DZ'),COEF_MULT=(1.0,1.0), COEF_IMPO=0.0),
+                                   ));
+
+CHRIG2=AFFE_CHAR_MECA(MODELE=MODELEK,
+                         DDL_IMPO=( _F(GROUP_NO='SURFGAU', DY=0.0),
+                                  ));
+
+
+CHPRES=AFFE_CHAR_MECA(MODELE=MODELEK,
+                      PRES_REP=_F(GROUP_MA=('SURFSUP','SURFINF'),PRES=PRES));
+
+#---------------------------------------------------------
+#                   RESOLUTION
+#---------------------------------------------------------
+
+UTOT1=MECA_STATIQUE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMA1,
+                   EXCIT=(
+                          _F(CHARGE=CHRIG1),
+                          _F(CHARGE=CHRIG2),
+                          _F(CHARGE=CHPRES),
+                          ),
+                   SOLVEUR=_F(   
+                            METHODE='MUMPS',
+                            PRETRAITEMENTS='SANS'),
+                   INFO=1,
+                   ); 
+#------------------------------------------------------------------------
+# POST-TRAITEMENT : CALCUL DES SIFS PAR LA METHODE ENERGETIQUE AVEC X-FEM
+#------------------------------------------------------------------------
+
+nbc=len(RI)
+
+SIF = [None]*(nbc+1)
+
+# Conversion degre radian pour beta
+BETA_RAD = FORMULE(VALE='BETA*pi/180',
+                   NOM_PARA='BETA',)
+
+for i in range(0,nbc) :
+
+   RI[i]=RI[i]*A*cos(ALPHA)
+   RS[i]=RS[i]*A*cos(ALPHA)
+
+   SIF[i]=CALC_G(RESULTAT=UTOT1,
+                 OPTION='CALC_K_G',
+                 THETA=_F(FISSURE=FISS,
+                          R_INF=RI[i],
+                          R_SUP=RS[i]),
+                 LISSAGE=_F(LISSAGE_THETA='LAGRANGE',
+                            LISSAGE_G='LAGRANGE'),
+                 INFO=2);
+
+   IMPR_TABLE(TABLE=SIF[i]);
+
+   SIF[i]=POST_RUPTURE(reuse=SIF[i],
+                       TABLE=SIF[i],
+                       OPERATION='ANGLE_BIFURCATION',
+                       NOM_PARA='BETA',);
+
+   SIF[i]=CALC_TABLE(reuse=SIF[i],
+                     TABLE=SIF[i],
+                     ACTION=_F(OPERATION='OPER',
+                               FORMULE=BETA_RAD,
+                               NOM_PARA='BETA_RAD',));
+                    
+   IMPR_TABLE(TABLE=SIF[i]);
+   
+# SOLUTION ANALYTIQUE (Fracture Mechanics T.L. ANDERS0N p.63,91)
+
+K1_K2 = cos(ALPHA)/sin(ALPHA);
+BETAREF = 2*atan(0.25*(K1_K2-sqrt((K1_K2)**2.+8.))) ;
+
+VAL_CALC = [
+    -0.981896985146,
+    -0.982744299246,
+    -0.981873192746,
+    -0.982720533606,
+    -0.981930484331,
+    -0.982785520311,
+    -0.981828703894,
+    -0.982642713456,
+    -0.98175895782,
+    -0.982565347666,
+    -0.98196011584,
+    -0.982784838703,  ]
+             
+for i in range(0,nbc) :
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='BETA_RAD',
+              TYPE_TEST='MAX',
+              VALE_CALC=VAL_CALC[2*i+0], VALE_REFE=BETAREF,
+              CRITERE='RELATIF',
+              PRECISION=0.061,    
+              REFERENCE='ANALYTIQUE');
+
+   TEST_TABLE(TABLE=SIF[i],
+              NOM_PARA='BETA_RAD',
+              TYPE_TEST='MIN',
+              VALE_CALC=VAL_CALC[2*i+1], VALE_REFE=BETAREF,
+              CRITERE='RELATIF',
+              PRECISION=0.061,    
+              REFERENCE='ANALYTIQUE');
+
+
+# -------------------------------------------------------------
+#            POST-TRAITEMENT POUR LA VISUALISATION X-FEM
+# -------------------------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(
+                       MODELE        = MODELEK,
+                       INFO          = 2)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D'))
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,
+                        
+                        INFO          = 2)
+
+#IMPR_RESU(FORMAT='GMSH',UNITE=81,RESU=_F(RESULTAT=RES_XFEM));
+
+
+
+FIN();

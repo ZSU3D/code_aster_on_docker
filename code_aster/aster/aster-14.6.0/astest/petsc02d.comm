@@ -1,0 +1,181 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# TEST MPI SUR 4 PROCESSEURS
+# CHARGEMENT DE NEUMANN (PRESSION REPARTIE)
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),);
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+#Acier
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E=2.1e+11,
+                           NU=0.3,),);
+
+AFMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT1,),);
+
+ENCASTR=AFFE_CHAR_MECA(MODELE=MO,
+                       DDL_IMPO=_F(GROUP_NO='Cote_inferieur',
+                                   DX=0,
+                                   DY=0,
+                                   DZ=0,),);
+
+PRESSION=AFFE_CHAR_MECA(MODELE=MO,
+                        PRES_REP=_F(GROUP_MA='load_top',
+                                    PRES=100000000.0,),);
+
+# DISTRIBUTION PAR GREL
+
+MESTAT=MECA_STATIQUE(MODELE=MO,
+                     CHAM_MATER=AFMAT,
+                     EXCIT=(_F(CHARGE=ENCASTR,),
+                            _F(CHARGE=PRESSION,),),
+                     SOLVEUR=_F(METHODE='PETSC',
+                                MATR_DISTRIBUEE='OUI',
+                                ALGORITHME='GCR',
+                                PRE_COND='LDLT_SP',
+                                RESI_RELA=1e-12,
+                                PCENT_PIVOT=100,),
+                     INFO=2,);
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=MESTAT,
+                  NOM_CHAM='DEPL',),);
+
+INT_DZ=POST_ELEM(INTEGRALE=_F(GROUP_MA='Face_i',
+                              NOM_CHAM='DEPL',
+                              NOM_CMP='DZ',
+                              TYPE_MAILLE='2D',),
+                 CHAM_MATER=AFMAT,
+                 RESULTAT=MESTAT,);
+
+INT_DX=POST_ELEM(INTEGRALE=_F(GROUP_MA='Arete_superieure_y',
+                              NOM_CHAM='DEPL',
+                              NOM_CMP='DX',
+                              TYPE_MAILLE='1D',),
+                 CHAM_MATER=AFMAT,
+                 RESULTAT=MESTAT,);
+
+INT_DY=POST_ELEM(INTEGRALE=_F(GROUP_MA='Arete_superieure_x',
+                              NOM_CHAM='DEPL',
+                              NOM_CMP='DY',
+                              TYPE_MAILLE='1D',),
+                 CHAM_MATER=AFMAT,
+                 RESULTAT=MESTAT,);
+
+IMPR_TABLE(TABLE=INT_DZ,);
+
+IMPR_TABLE(TABLE=INT_DX,);
+
+IMPR_TABLE(TABLE=INT_DY,);
+
+TEST_TABLE(TABLE=INT_DZ,
+           NOM_PARA='MOYE_DZ',
+           VALE_CALC=-0.000208987708339,);
+
+TEST_TABLE(TABLE=INT_DX,
+           NOM_PARA='MOYE_DX',
+           VALE_CALC=-7.364604818E-05,);
+
+TEST_TABLE(TABLE=INT_DY,
+           NOM_PARA='MOYE_DY',
+           VALE_CALC=-7.364604818E-05,);
+
+# CHARGEMENT : PRESSION SUIVEUSE, LA MATRICE N'EST PAS SYMETRIQUE 
+T = 1.0;
+
+tau = 1.0;
+
+
+ListReel=DEFI_LIST_REEL(DEBUT=0,
+                        INTERVALLE=_F(JUSQU_A=T,
+                                      PAS=tau,),);
+
+EVOL=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=AFMAT,
+                   EXCIT=(_F(CHARGE=ENCASTR,),
+                          _F(CHARGE=PRESSION,
+                             TYPE_CHARGE='SUIV',),),
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                   DEFORMATION='GROT_GDEP',),
+                   INCREMENT=_F(LIST_INST=ListReel,),
+                   NEWTON=_F(PREDICTION='TANGENTE',
+                             MATRICE='TANGENTE',
+                             REAC_ITER=1,
+                             REAC_ITER_ELAS=1,),
+                   CONVERGENCE=_F(RESI_GLOB_MAXI=0.0001,
+                                  RESI_GLOB_RELA=1e-06,
+                                  ITER_GLOB_MAXI=20,
+                                  ),
+                   SOLVEUR=_F(METHODE='PETSC',
+                              MATR_DISTRIBUEE='OUI',
+                              ALGORITHME='GCR',
+                              PRE_COND='LDLT_SP',
+                              RESI_RELA=1e-06,
+                              NMAX_ITER=0,
+                              REAC_PRECOND=30,
+                              PCENT_PIVOT=100,),);
+
+EV_DZ=POST_ELEM(INTEGRALE=_F(GROUP_MA='Face_i',
+                             NOM_CHAM='DEPL',
+                             NOM_CMP='DZ',
+                             TYPE_MAILLE='2D',),
+                CHAM_MATER=AFMAT,
+                RESULTAT=EVOL,
+                NUME_ORDRE=1,);
+
+EV_DX=POST_ELEM(INTEGRALE=_F(GROUP_MA='Arete_superieure_y',
+                             NOM_CHAM='DEPL',
+                             NOM_CMP='DX',
+                             TYPE_MAILLE='1D',),
+                CHAM_MATER=AFMAT,
+                RESULTAT=EVOL,
+                NUME_ORDRE=1,);
+
+EV_DY=POST_ELEM(INTEGRALE=_F(GROUP_MA='Arete_superieure_x',
+                             NOM_CHAM='DEPL',
+                             NOM_CMP='DY',
+                             TYPE_MAILLE='1D',),
+                CHAM_MATER=AFMAT,
+                RESULTAT=EVOL,
+                NUME_ORDRE=1,);
+
+# Test de non-regression sur la valeur moyenne des déplacements
+
+TEST_TABLE(TABLE=EV_DZ,
+           NOM_PARA='MOYE_DZ',
+           VALE_CALC=-0.000209188587359,);
+
+TEST_TABLE(TABLE=EV_DX,
+           NOM_PARA='MOYE_DX',
+           VALE_CALC=-7.36954516145E-05,);
+
+TEST_TABLE(TABLE=EV_DY,
+           NOM_PARA='MOYE_DY',
+           VALE_CALC=-7.36954516145E-05,);
+
+FIN();
+#CHECKSUM:e25e9d8cc951297d921f96935e634338  -:FIN CHECKSUM

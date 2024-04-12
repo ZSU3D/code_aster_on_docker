@@ -1,0 +1,199 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: irmela.zentner at edf.fr
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',))
+#
+from math import pi
+arias =0.05
+DT=0.01           
+frr=5.0
+amor=0.4
+wg=frr*2.*pi
+fp=-0.01
+TSM=5.0
+tini=0.5
+##################################################################
+#
+##################################################################
+# B: SIMULATION POUR DSP NON SEPARABLE - FREQ FOND VARIABLE
+##################################################################
+#
+##################################################################
+#----
+#----
+#################################################################
+#"JENNINGS_HOUSNER"
+#----------------------------------------------------------------
+#
+ACCE4=GENE_ACCE_SEISME( INFO  =2, INIT_ALEA=10000,
+              PAS_INST       = DT,PESANTEUR =9.81,DUREE_PHASE_FORTE =TSM,
+              FREQ_FILTRE=0.05, FREQ_CORNER = 0.25,FREQ_PENTE=fp,
+              DSP        = _F(AMOR_REDUIT  =amor,  FREQ_FOND =frr, ),
+              MODULATION      = _F(TYPE=   "JENNINGS_HOUSNER", INTE_ARIAS =arias), )
+
+FONCT4=RECU_FONCTION(    TABLE=ACCE4,
+                              FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',
+                                       VALE_I = 1),
+                              NOM_PARA_TABL='FONCTION',)
+
+N4_intea=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCT4,
+                             PESANTEUR = 9.81,OPTION = ('INTE_ARIAS') ))
+
+
+N4_duree=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCT4,
+                             PESANTEUR = 9.81, OPTION = ('DUREE_PHAS_FORT' ) ))
+
+
+RMS4=INFO_FONCTION( ECART_TYPE=_F(  FONCTION = FONCT4))
+#
+TEST_TABLE(
+           VALE_CALC = 0.0692962334718  ,
+           NOM_PARA='INTE_ARIAS',
+           TABLE=N4_intea,
+           )
+
+TEST_TABLE(
+           VALE_CALC=5.02,
+           NOM_PARA='DUREE_PHAS_FORT',
+           TABLE=N4_duree,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.16980052702,
+           NOM_PARA='ECART_TYPE',
+           TABLE=RMS4,
+           )
+
+#################################################################
+#"GAMMA"
+#----------------------------------------------------------------
+#
+ACCE5=GENE_ACCE_SEISME( INFO =2, INIT_ALEA=1356000, 
+               PESANTEUR =9.81,  DUREE_PHASE_FORTE =TSM, PAS_INST = DT, FREQ_PENTE=0.0,
+               DSP        = _F(AMOR_REDUIT  =amor,  FREQ_FOND =frr, ),
+               MODULATION      = _F( TYPE=   "GAMMA", INST_INI= tini, INTE_ARIAS=arias),)
+
+FONCT5=RECU_FONCTION(    TABLE=ACCE5,
+                              FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',
+                                       VALE_I = 1),
+                              NOM_PARA_TABL='FONCTION',)
+
+N5_intea=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCT5,
+                             PESANTEUR = 9.81, OPTION = ('INTE_ARIAS') ))
+
+
+N5_duree=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCT5,
+                             PESANTEUR = 9.81, OPTION = ('DUREE_PHAS_FORT'  ) ))
+
+RMS5=INFO_FONCTION( ECART_TYPE=_F(  FONCTION = FONCT5))
+
+TEST_TABLE(
+           VALE_CALC=0.0616005327387,
+           NOM_PARA='INTE_ARIAS',
+           TABLE=N5_intea,
+           )
+
+TEST_TABLE(
+           VALE_CALC=4.39,
+           NOM_PARA='DUREE_PHAS_FORT',
+           TABLE=N5_duree,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.157490024116,
+           NOM_PARA='ECART_TYPE',
+           TABLE=RMS5,
+           )
+################################################################
+
+#################################################################
+#"GAMMA, ACCE_MAX , COEF_CORR"
+#----------------------------------------------------------------
+ecart=1.0/9.81
+TSM=3.0
+ACCEXY=GENE_ACCE_SEISME( INFO =2, INIT_ALEA=100000, 
+               PESANTEUR =9.81,  DUREE_PHASE_FORTE =TSM, PAS_INST = DT, FREQ_PENTE=-0.5, COEF_CORR=0.5,
+               DSP        = _F(AMOR_REDUIT  =amor,  FREQ_FOND =frr, ),
+               MODULATION      = _F( TYPE=   "GAMMA", INST_INI= tini, ECART_TYPE = ecart),)
+
+FONCTX=RECU_FONCTION(TABLE=ACCEXY,
+                         FILTRE=(_F(NOM_PARA = 'NUME_ORDRE', VALE_I = 1),
+                                 _F(NOM_PARA = 'NOM_PARA', VALE_K = 'ACCE1'),),
+                        NOM_PARA_TABL='FONCTION',)
+
+FONCTY=RECU_FONCTION( TABLE=ACCEXY,
+                         FILTRE=(_F(NOM_PARA = 'NUME_ORDRE', VALE_I = 1),
+                                 _F(NOM_PARA = 'NOM_PARA', VALE_K = 'ACCE2'),),
+                        NOM_PARA_TABL='FONCTION',)
+
+N_MAXX=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCTX,
+                             OPTION = ('MAXI') ))
+
+N_dureeX=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCTX,
+                             PESANTEUR = 9.81, OPTION = ('DUREE_PHAS_FORT'  ) ))
+
+N_dureeY=INFO_FONCTION(  NOCI_SEISME=_F(
+                             FONCTION = FONCTY,
+                             PESANTEUR = 9.81, OPTION = ('DUREE_PHAS_FORT'  ) ))
+
+RMSX=INFO_FONCTION( ECART_TYPE=_F(  FONCTION = FONCTX))
+RMSY=INFO_FONCTION( ECART_TYPE=_F(  FONCTION = FONCTY))
+
+
+TEST_TABLE(
+           VALE_CALC=2.97664060417,
+           NOM_PARA='ACCE_MAX',
+           TABLE=N_MAXX,
+           )
+
+TEST_TABLE(VALE_CALC=3.12,
+           NOM_PARA='DUREE_PHAS_FORT',
+           VALE_REFE=TSM,
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.1,
+           TABLE=N_dureeX,
+           )
+TEST_TABLE(VALE_CALC=3.19,
+           NOM_PARA='DUREE_PHAS_FORT',
+           VALE_REFE=TSM,
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.1,
+           TABLE=N_dureeY,
+           )
+
+TEST_TABLE(VALE_CALC=0.520514619841,
+           NOM_PARA='ECART_TYPE',
+           TABLE=RMSX,
+           )
+
+TEST_TABLE(VALE_CALC=0.531123991018,
+           NOM_PARA='ECART_TYPE',
+           TABLE=RMSY,
+           )
+
+################################################################
+FIN( )

@@ -1,0 +1,197 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# ======================================================================
+# E.F. VIBRO-ACOUSTIQUES HEXA8 ET QUAD4
+# VALIDATION INDEPENDANTE PAR LMS_NT (J.P.ROSSION)
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),IMPR_MACRO='OUI')
+#
+MA=LIRE_MAILLAGE(FORMAT='MED',)
+
+MO=AFFE_MODELE(
+         MAILLAGE=MA,AFFE=(
+         _F( GROUP_MA = 'FLUIDE',
+                   MODELISATION = '3D_FLUIDE', PHENOMENE = 'MECANIQUE'),
+         _F( GROUP_MA = 'INTER',
+                   MODELISATION = 'FLUI_STRU', PHENOMENE = 'MECANIQUE'),
+         _F( GROUP_MA = 'PLAQUE',
+                   MODELISATION = 'DKT', PHENOMENE = 'MECANIQUE'))
+         )
+
+#
+# PROPRIETES MECANIQUES
+#
+AIR=DEFI_MATERIAU(
+          FLUIDE=_F( RHO = 1.2,
+                CELE_R = 340.0)
+         )
+
+ACIER=DEFI_MATERIAU(
+          ELAS=_F( RHO = 7800.,
+              NU = 0.3,
+                E = 2.E+11)
+         )
+
+CARAPLA=AFFE_CARA_ELEM(
+            MODELE=MO,
+            COQUE=_F( GROUP_MA = 'PLAQUE',
+                   EPAIS = 0.005)
+          )
+
+CHM=AFFE_MATERIAU(
+         MAILLAGE=MA,AFFE=(
+         _F( GROUP_MA = ('FLUIDE', 'INTER',),
+              MATER = AIR),
+         _F( GROUP_MA = 'PLAQUE',
+              MATER = ACIER))
+         )
+
+CHM2=AFFE_MATERIAU(
+         MAILLAGE=MA,AFFE=(
+         _F( GROUP_MA = ('FLUIDE', 'INTER',),
+              MATER = AIR),
+         _F( GROUP_MA = 'PLAQUE',
+              MATER = ACIER))
+         )
+
+#
+# CONDITIONS AUX LIMITES
+#
+DDLIMP=AFFE_CHAR_MECA(
+         MODELE=MO,
+          DDL_IMPO=_F( GROUP_NO = 'NOEUDF',
+                    DX = 0., DY = 0., DZ = 0.)
+         )
+
+FORCE=AFFE_CHAR_MECA(
+         MODELE=MO,
+         FORCE_NODALE=_F( GROUP_NO = 'N1',
+                      FZ = 1.)
+         )
+
+
+#
+# MATRICES ELEMENTAIRES
+#
+MK1=CALC_MATR_ELEM(
+         OPTION='RIGI_MECA',
+         MODELE=MO,
+         CHAM_MATER=CHM,
+         CARA_ELEM=CARAPLA,
+         CHARGE=(DDLIMP, FORCE,)
+        )
+
+MK2=CALC_MATR_ELEM(
+         OPTION='RIGI_MECA',
+         MODELE=MO,
+         CHAM_MATER=CHM2,
+         CARA_ELEM=CARAPLA,
+         CHARGE=(DDLIMP, FORCE,)
+        )
+
+MM=CALC_MATR_ELEM(
+         OPTION='MASS_MECA',
+         MODELE=MO,
+         CHAM_MATER=CHM,
+         CARA_ELEM=CARAPLA,
+         CHARGE=(DDLIMP, FORCE,)
+        )
+
+NDDL=NUME_DDL(
+         MATR_RIGI=MK1,
+        )
+
+VECTELEM=CALC_VECT_ELEM(
+               OPTION='CHAR_MECA',
+               CHAM_MATER=CHM,
+               CHARGE=(DDLIMP, FORCE,)
+           )
+
+#
+# ASSEMBLAGE
+#
+MATK1=ASSE_MATRICE(
+         MATR_ELEM=MK1,
+         NUME_DDL=NDDL
+        )
+
+MATK2=ASSE_MATRICE(
+         MATR_ELEM=MK2,
+         NUME_DDL=NDDL
+        )
+
+MATK=COMB_MATR_ASSE(COMB_R=(_F( MATR_ASSE = MATK1,COEF_R = 1.),
+                           _F( MATR_ASSE = MATK2,COEF_R = 0.)))
+
+MATM=ASSE_MATRICE(
+         MATR_ELEM=MM,
+         NUME_DDL=NDDL
+        )
+
+VECTASS=ASSE_VECTEUR(
+               VECT_ELEM=VECTELEM,
+               NUME_DDL=NDDL
+          )
+
+#
+# REPONSE HARMONIQUE
+#
+
+DYNAHARM=DYNA_VIBRA(TYPE_CALCUL='HARM',BASE_CALCUL='PHYS',
+               MATR_RIGI=MATK,
+               MATR_MASS=MATM,
+               FREQ=100.,
+               EXCIT=_F( VECT_ASSE = VECTASS,
+                      COEF_MULT = 1.,
+                      PUIS_PULS = 0,
+                      PHAS_DEG = 0.)
+           )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   VALE_CALC_C=-0.0685016+0j,
+                   VALE_REFE_C=(-0.0584+0j),
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=0.18,
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='N1',
+                   NOM_CMP='PRES',),
+                _F(NUME_ORDRE=1,
+                   VALE_CALC_C=-0.02507196+0j,
+                   VALE_REFE_C=(-0.02536+0j),
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='N2',
+                   NOM_CMP='PRES',
+                   PRECISION=0.02,),
+                _F(NUME_ORDRE=1,
+                   VALE_CALC_C=0.09240108+0.0j,
+                   VALE_REFE_C=(0.092240+0j),
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYNAHARM,
+                   NOM_CHAM='DEPL',
+                   GROUP_NO='N3',
+                   NOM_CMP='PRES',
+                   PRECISION=2.E-3,),
+                ),
+          )
+
+FIN()
+#

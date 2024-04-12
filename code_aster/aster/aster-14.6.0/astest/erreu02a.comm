@@ -1,0 +1,332 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+import aster
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ),DEBUG=_F(SDVERI='OUI'),
+      ERREUR=_F(ERREUR_F='EXCEPTION',),
+      PAR_LOT='NON',)
+
+fmt_raison='-'*80+"""
+
+   Exception interceptee
+   Message : %s
+
+"""+'-'*80+'\n'
+
+
+M=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MO=AFFE_MODELE(MAILLAGE=M, AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='AXIS',),)
+
+E1  = DEFI_FONCTION(NOM_PARA='TEMP',VALE= (0.,1.E11,   1000., 3.E11),)
+E2  = DEFI_FONCTION(NOM_PARA='TEMP',VALE= (0.,2.E11,   1000., 6.E11),)
+N2  = DEFI_NAPPE(   NOM_PARA='SECH',  PROL_DROITE='LINEAIRE', PROL_GAUCHE='LINEAIRE',
+                    PARA=(0.,100.,), FONCTION=(E1,E2,)            )
+
+
+NU=DEFI_CONSTANTE(VALE= 0.2)
+
+ALPHA=DEFI_FONCTION(NOM_PARA='TEMP',VALE= (0.,2.E-5,1000., 8.E-5),)
+
+BETON1=DEFI_MATERIAU(ELAS_FO=_F(E=E1, NU=NU, ALPHA = ALPHA, TEMP_DEF_ALPHA =20),)
+BETON2=DEFI_MATERIAU(ELAS_FO=_F(E=N2, NU=NU, ALPHA = ALPHA, TEMP_DEF_ALPHA =20),)
+BETON3=DEFI_MATERIAU(ELAS=_F(E=1E12, NU=0.3,))
+BETON4=DEFI_MATERIAU(ELAS=_F(E=1E12, NU=0.3,ALPHA = 2.E-5))
+
+SECHI=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R',  OPERATION='AFFE', MAILLAGE=M,
+                AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=100.),)
+
+SECHF=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=M,
+                AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=80.),)
+
+SECH1=CREA_RESU(OPERATION='AFFE', TYPE_RESU='EVOL_THER', NOM_CHAM='TEMP',
+                AFFE=( _F(CHAM_GD=SECHI, INST=0.0,),
+                       _F(CHAM_GD=SECHF, INST=3600.0,),   ),)
+
+TEMPI=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=M,
+                AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=20.0,),)
+
+TEMPF=CREA_CHAMP(TYPE_CHAM='NOEU_TEMP_R', OPERATION='AFFE', MAILLAGE=M,
+                AFFE=_F(TOUT='OUI', NOM_CMP='TEMP', VALE=120.0,),)
+
+TEMP1=CREA_RESU(OPERATION='AFFE', TYPE_RESU='EVOL_THER', NOM_CHAM='TEMP',
+                AFFE=( _F(CHAM_GD=TEMPI, INST=0.0,),
+                       _F(CHAM_GD=TEMPF, INST=3600.0,),   ),)
+
+CH1=AFFE_CHAR_MECA(MODELE=MO, FACE_IMPO=_F(GROUP_MA=('D1','D3'), DY=1.0,),)
+
+##################################################################################################
+##################################################################################################
+
+
+
+
+
+# CM1 : CHAMP DE MATERIAU FONCTION DE LA TEMPERATURE :
+#------------------------------------------------------
+CM1=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON1, ),
+                 AFFE_VARC=( _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),),)
+
+U1=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM1, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+U1=CALC_CHAMP(reuse=U1,RESULTAT=U1,CONTRAINTE=('SIGM_ELNO'),DEFORMATION=('EPSI_ELNO'))
+
+U1=CALC_CHAMP(reuse =U1,RESULTAT = U1,DEFORMATION='EPSI_NOEU',CONTRAINTE='SIGM_NOEU')
+
+TEST_RESU(RESU=(_F(INST=1800.0,
+                   RESULTAT=U1,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=1.4519999999992E-3,),
+                _F(INST=1800.0,
+                   RESULTAT=U1,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=-1.3794000000007001E8,),
+                ),
+          )
+
+# CM2 : CHAMP DE MATERIAU FONCTION DE LA TEMPERATURE ET DU SECHAGE :
+#---------------------------------------------------------------------
+CM2=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON2, ),
+                 AFFE_VARC=(_F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                            _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),),)
+
+
+U2=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+U2=CALC_CHAMP(reuse=U2,RESULTAT=U2,CONTRAINTE=('SIGM_ELNO'),DEFORMATION=('EPSI_ELNO'))
+
+U2=CALC_CHAMP(reuse =U2,RESULTAT = U2,DEFORMATION='EPSI_NOEU',CONTRAINTE='SIGM_NOEU')
+
+TEST_RESU(RESU=(_F(INST=1800.0,
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSI_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='EPXX',
+                   VALE_CALC=1.4519999999986E-3,),
+                _F(INST=1800.0,
+                   RESULTAT=U2,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N5',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=-2.6208600000007001E8,),
+                ),
+          )
+
+# CM1A : CHAMP DE MATERIAU =F(TEMP) + TEMP OUBLIEE => CALCULEL6_56 CAR ALPHA=F(TEMP):
+#-----------------------------------------------------------------------------------
+CM1A=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON1, ),
+               # AFFE_VARC=( _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),),
+                 )
+
+is_ok = 0
+try :
+    U1A=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM1A, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "MATERIAL1_56":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM1B : CHAMP DE MATERIAU =F(TEMP) + TEMP OUBLIE SUR QUELQUES MAILLES => MATERIAL1_2 :
+#---------------------------------------------------------------------------------------------------------
+CM1B=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON1, ),
+                 AFFE_VARC=( _F(MAILLE=('M1','M3'),EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),),
+                 )
+
+is_ok = 0
+try :
+    U1B=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM1B, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message.strip() == "MATERIAL1_2":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM2A : CHAMP DE MATERIAU F(TEMP,SECH)  + SECH OUBLIE => CALCULEL6_62 :
+#---------------------------------------------------------------------------
+CM2A=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON2, ),
+                 AFFE_VARC=( #_F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                              _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),
+                              ))
+
+is_ok = 0
+try :
+    U2A=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2A, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except  aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "CALCULEL6_62":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM2B : CHAMP DE MATERIAU F(TEMP,SECH)  + TEMP OUBLIE => MATERIAL1_56 :
+#---------------------------------------------------------------------------
+CM2B=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON2, ),
+                 AFFE_VARC=(  _F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                             #_F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),
+                             ))
+
+is_ok = 0
+try :
+    U2B=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2B, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except  aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "MATERIAL1_56":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM2C : CHAMP DE MATERIAU F(TEMP,SECH)  + SECH OUBLIE SUR QUELQUES MAILLES => CALCULEL6_62 :
+#--------------------------------------------------------------------------------------------
+CM2C=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON2, ),
+                 AFFE_VARC=(  _F(MAILLE=('M1','M3'),EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                              _F(TOUT='OUI',EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),
+                              ))
+
+is_ok = 0
+try :
+    U2C=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2C, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except  aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "CALCULEL6_62":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM2D : CHAMP DE MATERIAU F(TEMP,SECH)  + TEMP OUBLIE SUR QUELQUES MAILLES => MATERIAL1_2 :
+#--------------------------------------------------------------------------------------------
+CM2D=AFFE_MATERIAU(MAILLAGE=M,
+                 AFFE=_F(TOUT='OUI', MATER=BETON2, ),
+                 AFFE_VARC=(  _F(TOUT='OUI',EVOL=SECH1,NOM_VARC='SECH',NOM_CHAM='TEMP',VALE_REF=100),
+                              _F(MAILLE=('M1','M3'),EVOL=TEMP1,NOM_VARC='TEMP',NOM_CHAM='TEMP',VALE_REF=20),
+                              ))
+
+is_ok = 0
+try :
+    U2D=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2D, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+except  aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "MATERIAL1_2":
+      is_ok = 1
+
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',), _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+
+# CM2E : CHAMP DE MATERIAU CONSTANT ; PAS DE TEMP => OK
+#--------------------------------------------------------------------------------------------
+CM2E=AFFE_MATERIAU(MAILLAGE=M, AFFE=_F(TOUT='OUI', MATER=BETON3, ))
+U2E=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2E, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+
+
+
+# CM2F : CHAMP DE MATERIAU CONSTANT ET ALPHA ; PAS DE TEMP => OK
+#--------------------------------------------------------------------------------------------
+CM2F=AFFE_MATERIAU(MAILLAGE=M, AFFE=_F(TOUT='OUI', MATER=BETON4, ))
+U2F=MECA_STATIQUE( MODELE=MO, CHAM_MATER=CM2F, EXCIT=_F(CHARGE=CH1,), INST = 1800.)
+
+FIN()

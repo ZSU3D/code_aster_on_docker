@@ -1,0 +1,300 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#----------------------------------------------
+#                   MAILLAGE
+#----------------------------------------------
+
+# dimensions de la structure
+ly = 10.0;
+
+MAILLAG0=LIRE_MAILLAGE(FORMAT='MED',INFO=1,);
+
+MAILLAG0=DEFI_GROUP(reuse =MAILLAG0,
+                    MAILLAGE=MAILLAG0,
+                    CREA_GROUP_NO=(_F(GROUP_MA='SURF',),
+                                   _F(NOM='GN',
+                                      OPTION='PLAN',
+                                      NOEUD_CENTRE='N141',
+                                      VECT_NORMALE=(0.,1.),
+                                      PRECISION=0.00001,),),
+                                     );
+MAILLAG1=CO('MAILLAG1')
+MACR_ADAP_MAIL(ADAPTATION = 'RAFFINEMENT_UNIFORME',
+               MAILLAGE_N =MAILLAG0,
+               MAILLAGE_NP1 =MAILLAG1,
+                        )
+
+#----------------------------------------------
+#                   MODELE ET FISSURE
+#----------------------------------------------
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                     AFFE=(_F(GROUP_MA=('SURF',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='C_PLAN',),
+                           _F(GROUP_MA=('LIG1','LIG3',),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='C_PLAN',),),);
+
+X0=5.
+Y0=11.77
+R=64.27
+LN = FORMULE(VALE='(X-X0)**2+(Y-Y0)**2-R',
+             X0=X0,
+             Y0=Y0,
+             R=R,
+             NOM_PARA=['X', 'Y'],)
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    DEFI_FISS=_F(FONC_LN=LN,),
+                    GROUP_MA_ENRI='SURF',);
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=FISS,
+                         CONTACT='STANDARD');
+
+mu=2.0
+CTXFEM = DEFI_CONTACT(MODELE         = MODELEK,
+                      FORMULATION    = 'XFEM',
+                      FROTTEMENT     = 'COULOMB',
+                      ITER_CONT_MAXI = 4,
+                      ITER_FROT_MAXI = 6,
+                      ELIM_ARETE     = 'ELIM',
+                      REAC_GEOM      = 'SANS',
+                      ZONE=(
+                            _F(
+                               FISS_MAIT    = FISS,
+                               INTEGRATION  = 'GAUSS',
+                               ORDRE_INT=4,
+                               CONTACT_INIT = 'OUI',
+                               COULOMB      = mu,
+                               SEUIL_INIT   = -5,
+                               ALGO_CONT    = 'STANDARD',
+                               COEF_CONT    = 100.,
+                               ALGO_FROT    = 'STANDARD',
+                               COEF_FROT    = 1000.,
+                             ),
+                         ),
+                   );
+
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=1.0E6
+nu=0.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,
+                            NU=nu,
+                            RHO=7800.0,),);
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELEK,
+                       AFFE=_F(GROUP_MA=('SURF',),
+                                MATER=ACIER,
+                                ),);
+
+#----------------------------------------------
+#                   CHARGEMENTS
+#----------------------------------------------
+
+Ud=-1.E-6
+CH1=AFFE_CHAR_MECA(MODELE=MODELEK,
+                   DDL_IMPO=(_F(GROUP_MA='LIG1',
+                                          DX=0.0,
+                                          DY=0.0,),
+                                       _F(GROUP_MA='LIG3',
+                                          DX=0.0,
+                                          DY=Ud,),),
+                    INFO=1,);
+
+#----------------------------------------------
+#                   RESOLUTION
+#----------------------------------------------
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                    NOMBRE=1,),);
+
+UTOT1=STAT_NON_LINE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMAT,
+                   EXCIT=(
+                          _F(CHARGE=CH1,),),
+                   CONTACT  = CTXFEM,
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                GROUP_MA='SURF',),
+                   INCREMENT=_F(LIST_INST=L_INST,
+                                INST_FIN=1.0,),
+                   CONVERGENCE=(_F(ARRET='OUI',
+                                  RESI_GLOB_RELA=1E-9)),
+                   SOLVEUR=_F(METHODE='MUMPS',
+                                          NPREC=-1,),
+                   NEWTON=_F(REAC_ITER=1,),
+                   ARCHIVAGE=_F(CHAM_EXCLU='VARI_ELGA',),
+                   INFO=1,);
+
+#----------------------------------------------
+#             IMPRESSION
+#----------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(MODELE        = MODELEK,
+                       INFO          = 2)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='C_PLAN',),)
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,
+                        INFO          = 2)
+
+IMPR_RESU(FORMAT='MED',UNITE=80,RESU=_F(RESULTAT=RES_XFEM));
+
+#----------------------------------------------
+#                  TESTS
+#----------------------------------------------
+
+LAG1=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                             GROUP_NO=('NFISSU',),
+                             RESULTAT=RES_XFEM,
+                             NOM_CHAM='DEPL',
+                             NUME_ORDRE=1,
+                             NOM_CMP=('LAGS_C','LAGS_F1',),
+                             OPERATION='EXTRACTION',),);
+
+#THETA=atan((Y0-Y)/(X0-X))
+#lagc=(E*Ud/ly)*sin(THETA)*sin(THETA)
+#lagf=1/mu*cos(THETA)/sin(THETA)
+
+
+LAG2 = CALC_TABLE(TABLE = LAG1,
+                  ACTION = (_F(OPERATION = 'FILTRE',
+                               NOM_PARA  = 'NOEUD',
+                               CRIT_COMP = 'REGEXP',
+                               VALE_K    = 'N[^P]',),
+                            _F(OPERATION = 'FILTRE',
+                               NOM_PARA  = 'LAGS_C',
+                               CRIT_COMP = 'NE',
+                               VALE      = 0,),),);
+
+MINI=atan((-sqrt(R-X0*X0))/X0)
+CMAX=E*Ud/ly*sin(MINI)*sin(MINI)
+CMIN=E*Ud/ly
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=-0.100067650261,
+           VALE_REFE=-0.10000000000000001,
+           NOM_PARA='LAGS_C',
+           TYPE_TEST='MIN',
+           TABLE=LAG2,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=-0.0611032108726,
+           VALE_REFE=-0.061101602613972301,
+           NOM_PARA='LAGS_C',
+           TYPE_TEST='MAX',
+           TABLE=LAG2,)
+
+LAG3 = CALC_TABLE(TABLE = LAG2,
+                  ACTION = (_F(OPERATION = 'FILTRE',
+                               NOM_PARA  = 'COOR_X',
+                               CRIT_COMP = 'LE',
+                               VALE      = 5,),),);
+
+
+MINI=atan((sqrt(R-X0*X0))/X0)
+FMAX=(cos(MINI))/(sin(MINI)*mu)
+FMIN=0.
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.000308266744356,
+           VALE_REFE=0.0,
+           NOM_PARA='LAGS_F1',
+           TYPE_TEST='MIN',
+           TABLE=LAG3,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=0.399255419912,
+           VALE_REFE=0.39894181395195571,
+           NOM_PARA='LAGS_F1',
+           TYPE_TEST='MAX',
+           TABLE=LAG3,)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=RES_XFEM,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=4.36594293746E-11,
+
+                   CRITERE='ABSOLU',
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=RES_XFEM,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.0042231798604,
+
+                   CRITERE='ABSOLU',
+                   ),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=RES_XFEM,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='LAGS_C',
+                   VALE_CALC=25.5297604161,
+
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=RES_XFEM,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='LAGS_F1',
+                   VALE_CALC=57.9674992791,
+
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+IMPR_TABLE(TABLE=LAG2,
+           FORMAT='AGRAF',
+           FORMAT_R='1PE12.5',
+           IMPR_FONCTION='NON',);
+
+
+FIN();

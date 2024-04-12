@@ -1,0 +1,239 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#  SYSTEME MASSE-RESSORT A 2 DEGRES DE LIBERTE
+#  ANALYSE SPECTRALE MONO SUPPORTEE AVEC
+#  CORRECTION STATIQUE
+#
+POURSUITE(CODE='OUI');
+
+#-----------------------------------------------------------------------
+#
+# Calcul des modes statiques pour la correction statique
+#
+#-----------------------------------------------------------------------
+
+MODE_CO=MODE_STATIQUE(MATR_MASS=MATRMASS,
+                      PSEUDO_MODE=_F(AXE='X',),
+                      MATR_RIGI=MATRRIGI,);
+
+MODE_CO=CALC_CHAMP(reuse=MODE_CO,RESULTAT=MODE_CO,CONTRAINTE=('SIEF_ELGA','EFGE_ELNO'))
+
+
+MODE_CO=CALC_CHAMP(reuse =MODE_CO,
+                RESULTAT=MODE_CO,
+                FORCE='FORC_NODA')
+
+MODE_CO=CALC_CHAMP(reuse =MODE_CO,
+                RESULTAT=MODE_CO,
+                FORCE='REAC_NODA')
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_CO,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.025330000,
+                   VALE_REFE=0.025329999999999998,
+                   NOEUD_CMP=('ACCE', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_CO,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.025330000,
+                   VALE_REFE=0.025329999999999998,
+                   NOEUD_CMP=('ACCE', 'X'),),
+                ),
+          )
+
+#-----------------------------------------------------------------------
+
+COABS=COMB_SISM_MODAL(CORR_FREQ='NON',
+                      MASS_INER=MAS,
+                      COMB_MODE=_F(TYPE='ABS',),
+                      MODE_MECA=MODES,
+                      AMOR_REDUIT=0.0,
+                      NUME_MODE=2,
+                      MONO_APPUI='OUI',
+                      OPTION=('DEPL','EFGE_ELNO','FORC_NODA','REAC_NODA'),
+                      MODE_CORR=MODE_CO,
+                      EXCIT=_F(AXE=(1.0,0.0,0.0),
+                               SPEC_OSCI=SPEC1,
+                               ECHELLE=1.0,),);
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COABS,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COABS,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                ),
+          )
+
+#-----------------------------------------------------------------------
+
+COSRS=COMB_SISM_MODAL(CORR_FREQ='NON',
+                      MASS_INER=MAS,
+                      COMB_MODE=_F(TYPE='SRSS',),
+                      MODE_MECA=MODES,
+                      AMOR_REDUIT=0.05,
+                      NUME_MODE=2,
+                      MONO_APPUI='OUI',
+                      OPTION=('DEPL','EFGE_ELNO','FORC_NODA','REAC_NODA'),
+                      MODE_CORR=MODE_CO,
+                      EXCIT=_F(AXE=(1.0,0.0,0.0),
+
+                               SPEC_OSCI=SPEC1,
+                               ECHELLE=1.0,),);
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COSRS,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COSRS,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                ),
+          )
+
+#-----------------------------------------------------------------------
+
+CODPC=COMB_SISM_MODAL(CORR_FREQ='NON',
+                      MASS_INER=MAS,
+                      COMB_MODE=_F(TYPE='DPC',),
+                      MODE_MECA=MODES,
+                      AMOR_REDUIT=0.05,
+                      NUME_MODE=2,
+                      OPTION=('DEPL','EFGE_ELNO','FORC_NODA','REAC_NODA'),
+                      MODE_CORR=MODE_CO,
+                      MONO_APPUI='OUI',
+                      EXCIT=_F(AXE=(1.0,0.0,0.0),
+                               SPEC_OSCI=SPEC1,
+                               ECHELLE=1.0,),);
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=CODPC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=CODPC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                ),
+          )
+
+#-----------------------------------------------------------------------
+
+COCQC=COMB_SISM_MODAL(CORR_FREQ='NON',
+                      MASS_INER=MAS,
+                      COMB_MODE=_F(TYPE='CQC',),
+                      MODE_MECA=MODES,
+                      AMOR_REDUIT=0.05,
+                      NUME_MODE=2,
+                      OPTION=('DEPL','EFGE_ELNO','FORC_NODA','REAC_NODA'),
+                      MODE_CORR=MODE_CO,
+                      MONO_APPUI='OUI',
+                      EXCIT=_F(AXE=(1.0,0.0,0.0),
+                               SPEC_OSCI=SPEC1,
+                               ECHELLE=1.0,),);
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COCQC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=COCQC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                ),
+          )
+
+#-----------------------------------------------------------------------
+
+CODSC=COMB_SISM_MODAL(CORR_FREQ='NON',
+                      MASS_INER=MAS,
+                      COMB_MODE=_F(DUREE=15.0,
+                                   TYPE='DSC',),
+                      MODE_MECA=MODES,
+                      AMOR_REDUIT=0.05,
+                      NUME_MODE=2,
+                      OPTION=('DEPL','EFGE_ELNO','FORC_NODA','REAC_NODA'),
+                      MODE_CORR=MODE_CO,
+                      MONO_APPUI='OUI',
+                      EXCIT=_F(AXE=(1.0,0.0,0.0),
+                               SPEC_OSCI=SPEC1,
+                               ECHELLE=1.0,),);
+
+TEST_RESU(RESU=(_F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=CODSC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P2',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                _F(REFERENCE='ANALYTIQUE',
+                   RESULTAT=CODSC,
+                   NOM_CHAM='DEPL',
+                   NOEUD='P3',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.023027055,
+                   VALE_REFE=0.023023027049999999,
+                   NOEUD_CMP=('DIR', 'X'),),
+                ),
+          )
+
+FIN();

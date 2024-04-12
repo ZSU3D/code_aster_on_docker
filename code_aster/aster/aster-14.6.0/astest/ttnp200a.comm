@@ -1,0 +1,645 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+# ========================================================================
+# TEST DE NON REGRESSION :
+# (les valeurs de reference ont ete obtenues par Code_Aster)
+#
+# - On utilise dans le maillage de nombreux types de mailles
+#   (pour valider le plus d'elements finis)
+#
+# - domaines testes :
+#      THERMIQUE LINEAIRE (OU NON), MODELISATION='PLAN'
+# =========================================================================
+
+# ----------------------------------------------------------------------
+#    DEFINITION DU MODELE
+# ----------------------------------------------------------------------
+MA=LIRE_MAILLAGE(FORMAT='MED',  )
+
+MO=AFFE_MODELE(    MAILLAGE=MA, VERI_JACOBIEN='OUI',
+                         AFFE=_F(  GROUP_MA = ( 'GMA2', 'GMA3', 'GMA4',
+                                                 'GMA5', 'GMA6', 'GMA7', ),
+                                PHENOMENE = 'THERMIQUE',
+                                MODELISATION = 'PLAN') )
+
+# ----------------------------------------------------------------------
+#    DEFINITION ET AFFECTATION DU MATERIAU
+# ----------------------------------------------------------------------
+FOA=DEFI_FONCTION(       NOM_PARA='X',
+                               VALE=(-12.8,   5.7,
+                                      14.1,   1.4,   ),
+                           INTERPOL=('LIN', 'LOG',),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+FOB=DEFI_FONCTION(       NOM_PARA='X',
+                               VALE=( 0.1,   0.87,
+                                      0.15,  1.2,
+                                      0.2,   1.5,
+                                      0.25,  1.62,   ),
+                           INTERPOL=( 'LIN', 'LOG',  ),
+                         PROL_DROITE='CONSTANT',
+                        PROL_GAUCHE='LINEAIRE',
+                              VERIF='CROISSANT'    )
+
+FOC=DEFI_FONCTION(       NOM_PARA='Y',
+                               VALE=( 0.5,   1.02,
+                                      0.9,   0.57,
+                                      1.1,   0.98,   ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT'     )
+
+FOD=DEFI_FONCTION(       NOM_PARA='Y',
+                               VALE=(-3.2,  1.7,
+                                      1.8,  1.2,
+                                      4.1,  0.5,  ),
+                        PROL_GAUCHE='CONSTANT'     )
+
+FOE=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=( -10.3,   0.87,
+                                        5.3,   1.6,
+                                        7.8,   1.32,
+                                       11.2,   1.4,
+                                       18.2,   1.5,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+                        
+FOE2=DEFI_FONCTION(       NOM_PARA='TEMP',
+                               VALE=( -10.3,   0.87,
+                                        5.3,   1.6,
+                                        7.8,   1.32,
+                                       11.2,   1.4,
+                                       18.2,   1.5,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+FOF=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=( -1.2,    1.27,
+                                       1.15,   1.2,
+                                       3.2,    1.4,
+                                      25.7,    1.32, ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT'     )
+
+FOG=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=(-7.5,   1.1,
+                                      3.15,  1.2,
+                                     16.2,   1.34,
+                                     31.25,  1.22, ) )
+# pour M116 le vecteur normal est (nx,ny)                                     
+nx = -0.99062788251219891
+ny = -0.1365884269965691
+FOGX=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=(-7.5,   nx*1.1,
+                                      3.15,  nx*1.2,
+                                     16.2,   nx*1.34,
+                                     31.25,  nx*1.22, ) )
+FOGY=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=(-7.5,   ny*1.1,
+                                      3.15,  ny*1.2,
+                                     16.2,   ny*1.34,
+                                     31.25,  ny*1.22, ) )
+
+FOH=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=( -18.5,   1.12,
+                                       11.1,   1.25,
+                                       34.5,   1.1,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+FOI=DEFI_FONCTION(       NOM_PARA='INST',
+                               VALE=( -0.45,  1.02,
+                                       1.4,   0.8,
+                                       8.5,   1.07,
+                                      21.6,   0.98,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+                        
+FOI2=DEFI_FONCTION(       NOM_PARA='TEMP',
+                               VALE=( -0.45,  1.02,
+                                       1.4,   0.8,
+                                       8.5,   1.07,
+                                      21.6,   0.98,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+FOJ=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=( -6.8,  15.3,
+                               -5.4,  15.5,
+                                1.6,  16.2,
+                                8.7,  16.6,
+                                9.3,  19.9,
+                               20.2,  20.2,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+FOK=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=(-5.1,   18.0,
+                              -2.1,   18.1,
+                               5.7,   18.9,
+                               6.4,   25.4,
+                               9.8,   25.5,   ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE'     )
+
+TRC=DEFI_TRC( HIST_EXP=(
+        _F(  VALE = ( -1.106E+03,  1.100E+01,  8.563E+00, -2.760E-02,
+                    1.220E-04, -2.955E-07,  3.402E-10, -1.517E-13,
+                    0.000E+00,  0.000E+00,  0.000E+00,  8.360E+00,
+                    1.000E-01, -2.000E-01,  0.000E+00,  6.001E+00,
+                    5.000E-01,  0.000E+00,  1.000E+00,  3.450E+00, )),
+        _F(  VALE = ( -2.206E+03,  1.100E+01,  8.563E+00, -2.760E-02,
+                    1.220E-04, -2.955E-07,  3.402E-10, -1.517E-13,
+                    0.000E+00,  0.000E+00,  0.000E+00,  8.360E+00,
+                    0.000E+00,  1.000E-02,  3.000E-01,  6.001E+00,
+                    2.000E-01,  1.000E-01,  1.000E+00,  3.450E+00, ))),
+              TEMP_MS=(
+                    _F(
+                              SEUIL = -1.6,
+                              AKM = 1.45,
+                              BKM = 0.85,
+                              TPLM = -2.6),
+                    ) )
+
+MAT=DEFI_MATERIAU(    THER=_F(  LAMBDA = 2.3,
+                               RHO_CP = 1.7),
+                       META_ACIER=_F(  TRC = TRC,
+                                    AR3 = 830.,
+                                    ALPHA = -0.03,
+                                    MS0 = 3.5,
+                                    AC1 = 1.1,
+                                    AC3 = 1.8,
+                                    TAUX_1 = 1.7,
+                                    TAUX_3 = 2.4)
+                                    )
+
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MA,
+                              AFFE=_F(  TOUT = 'OUI',
+                                     MATER = MAT) )
+
+MAT_NL=DEFI_MATERIAU(    THER_NL=_F(  LAMBDA = FOJ,
+                                     BETA = FOK),
+                       META_ACIER=_F(  TRC = TRC,
+                                    AR3 = 830.,
+                                    ALPHA = -0.03,
+                                    MS0 = 3.5,
+                                    AC1 = 1.1,
+                                    AC3 = 1.8,
+                                    TAUX_1 = 1.7,
+                                    TAUX_3 = 2.4)
+                                     )
+
+CHMATNL=AFFE_MATERIAU(    MAILLAGE=MA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = MAT_NL) )
+
+# ----------------------------------------------------------------------
+#    DEFINITION DE CHAMPS
+# ----------------------------------------------------------------------
+CHAMNO1=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_DEPL_R',
+MAILLAGE=MA,
+                               AFFE=_F(  GROUP_NO = ('GNO1', 'GNO4',),
+                                      NOM_CMP = ('DX', 'DY', 'DZ',),
+                                      VALE = (-0.2, 0.3,  0.8, )) )
+
+CHAMNO2=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_DEPL_R',
+                    MAILLAGE=MA,
+                               AFFE=_F(  GROUP_NO = 'GNO2',
+                                      NOM_CMP = ('DX', 'DY', 'DZ',),
+                                      VALE = (0.8,  0.2,  0.1, )) )
+
+CHAMNO3=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R',
+                    MAILLAGE=MA,AFFE=(
+                               _F(  NOEUD = ( 'N73',  'N49',  'N74', ),
+                                      NOM_CMP = 'TEMP',
+                                      VALE = 2.8),
+                               _F(  NOEUD = 'N135',
+                                      NOM_CMP = 'TEMP',
+                                      VALE = 0.7)) )
+
+CHAMNO4=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R',
+                    MAILLAGE=MA,AFFE=(
+                               _F(  TOUT = 'OUI',
+                                      NOM_CMP = 'TEMP',
+                                      VALE = 0.),
+                               _F(  NOEUD = ( 'N9', 'N27', 'N57', 'N102', ),
+                                      NOM_CMP = 'TEMP',
+                                      VALE = 1.1),
+                               _F(  NOEUD = ( 'N10', 'N15', 'N98', 'N186',),
+                                      NOM_CMP = 'TEMP',
+                                      VALE = 0.6)) )
+
+POT_ELRE=CREA_RESU(OPERATION='AFFE', TYPE_RESU='EVOL_THER',
+                   NOM_CHAM='TEMP',
+                   AFFE=_F(  CHAM_GD = CHAMNO4, INST = 4.,MODELE=MO,CHAM_MATER=CHMAT),
+                                 )
+CALC_CHAMP(reuse=POT_ELRE,RESULTAT=POT_ELRE,THERMIQUE=('SOUR_ELGA'))
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  POINT=1,
+                  RESULTAT=POT_ELRE,
+                  NOM_CHAM='SOUR_ELGA',
+                  NOM_CMP='SOUR',
+                  VALE_CALC=0.23360300606833,
+                  MAILLE='M101',),
+          )
+
+CHELEM1=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELGA_SOUR_R',
+                     NOM_CHAM='SOUR_ELGA',RESULTAT=POT_ELRE,
+                     NUME_ORDRE=1)
+
+LR1=DEFI_LIST_REEL(         DEBUT=0.3,
+                         INTERVALLE=_F(  JUSQU_A = 18.7,
+                                      NOMBRE = 2) )
+
+CARTE=CREA_CHAMP(OPERATION='AFFE', TYPE_CHAM='CART_VAR2_R', MAILLAGE=MA,AFFE=(
+
+                           _F(  TOUT = 'OUI',
+             NOM_CMP = ('V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7',),
+             VALE = (0.1,  0.08, 0.06, 0.0, 0.76, 0.0, 0.0)),
+                           _F(  GROUP_MA = 'GMA3',
+                                  NOM_CMP = ('V7', 'V2','V5'),
+                                  VALE = (-1.1, 0.7, 0.14)),
+                           _F(  MAILLE = ('M46', 'M47', ),
+                                  NOM_CMP = 'V7',
+                                  VALE = -1.2)) )
+
+# ----------------------------------------------------------------------
+#    AFFECTATION DES CHARGEMENTS ET DES CONDITIONS LIMITES
+# ----------------------------------------------------------------------
+CHTH1=AFFE_CHAR_THER(         MODELE=MO,
+                           LIAISON_DDL=_F(  GROUP_NO = ( 'GNO5', 'GNO6', ),
+                                         DDL = ( 'TEMP', 'TEMP',
+                                                       'TEMP', ),
+                                         COEF_MULT = ( 0.8,  1.1, -0.7, ),
+                                         COEF_IMPO = 1.3),
+                           TEMP_IMPO=_F(  NOEUD = ( 'N129', 'N130', ),
+                                       TEMP = 1.8),
+                           LIAISON_UNIF=(
+                                         _F(  MAILLE = 'M60',
+                                              DDL = ('TEMP', 'TEMP',
+                                                     'TEMP', 'TEMP', )),
+                                         _F(  GROUP_MA = 'GMA22',
+                                              DDL = 'TEMP'),
+                                         _F(  NOEUD = ( 'N19', 'N163', ),
+                                              DDL = ( 'TEMP', 'TEMP',)),
+                                         _F(  GROUP_NO = 'GNO1',
+                                              DDL = 'TEMP')),
+                           SOURCE=(
+                                         _F(  SOUR_CALCULEE = CHELEM1),
+                                         _F(  MAILLE = 'M66',
+                                              SOUR = 0.3),
+                                         _F(  GROUP_MA = 'GMA8',
+                                              SOUR = 0.2)),
+                           FLUX_REP=(
+                                         _F(  MAILLE = 'M134',
+                                              FLUN = -1.2),
+                                         _F(  GROUP_MA = 'GMA16',
+                                              FLUN = -0.8)) )
+
+# duplication du chargement pour tester EVOL_CHAR/FLUN (equivalent à FLUX_REP)
+CHTH1C =AFFE_CHAR_THER(         MODELE=MO,
+                           LIAISON_DDL=_F(  GROUP_NO = ( 'GNO5', 'GNO6', ),
+                                         DDL = ( 'TEMP', 'TEMP',
+                                                       'TEMP', ),
+                                         COEF_MULT = ( 0.8,  1.1, -0.7, ),
+                                         COEF_IMPO = 1.3),
+                           TEMP_IMPO=_F(  NOEUD = ( 'N129', 'N130', ),
+                                       TEMP = 1.8),
+                           LIAISON_UNIF=(
+                                         _F(  MAILLE = 'M60',
+                                              DDL = ('TEMP', 'TEMP',
+                                                     'TEMP', 'TEMP', )),
+                                         _F(  GROUP_MA = 'GMA22',
+                                              DDL = 'TEMP'),
+                                         _F(  NOEUD = ( 'N19', 'N163', ),
+                                              DDL = ( 'TEMP', 'TEMP',)),
+                                         _F(  GROUP_NO = 'GNO1',
+                                              DDL = 'TEMP')),
+                           SOURCE=(
+                                         _F(  SOUR_CALCULEE = CHELEM1),
+                                         _F(  MAILLE = 'M66',
+                                              SOUR = 0.3),
+                                         _F(  GROUP_MA = 'GMA8',
+                                              SOUR = 0.2)),
+                           )
+
+FLUN=[None]*6
+# valeur de la fonction FOE
+for i,coef in enumerate([0.87, 1.6, 1.32, 1.4, 1.5, 1.6]):
+
+    FLUN[i] = CREA_CHAMP(TYPE_CHAM = 'ELEM_FLUN_R',
+                       OPERATION = 'AFFE',
+                       MODELE    = MO,
+                       PROL_ZERO='OUI',
+                       INFO=2,
+                       AFFE      = (_F(
+                                        MAILLE = 'M134',
+                                        NOM_CMP=('FLUN',),
+                                        VALE=(-1.2*coef,),
+                                        ),
+                                    _F(
+                                        GROUP_MA = 'GMA16',
+                                        NOM_CMP=('FLUN',),
+                                        VALE=(-0.8*coef,),
+                                        ),
+                                    ),
+                         )
+
+
+EVOL_FLU = CREA_RESU(OPERATION='AFFE',
+                     TYPE_RESU='EVOL_CHAR',
+                     NOM_CHAM='FLUN',
+                     AFFE=(_F( CHAM_GD=FLUN[0], INST=-10.3, ),
+                           _F( CHAM_GD=FLUN[1], INST=5.3, ),
+                           _F( CHAM_GD=FLUN[2], INST=7.8, ),
+                           _F( CHAM_GD=FLUN[3], INST=11.2, ),
+                           _F( CHAM_GD=FLUN[4], INST=18.2, ),
+                           _F( CHAM_GD=FLUN[5], INST=25.2, ),
+                           ),
+                    )
+
+CHTH1_EC=AFFE_CHAR_THER(MODELE=MO,
+                        EVOL_CHAR=EVOL_FLU,
+                        )
+##
+                                              
+                                              
+
+CHTH1B=AFFE_CHAR_THER(         MODELE=MO,
+                           ECHANGE=(
+                                         _F(  MAILLE = 'M150',
+                                              COEF_H = 1.3,
+                                              TEMP_EXT = 0.6),
+                                         _F(  GROUP_MA = 'GMA12',
+                                              COEF_H = 1.1,
+                                              TEMP_EXT = 1.8)), )
+
+CHTH2=AFFE_CHAR_THER(            MODELE=MO,
+                           PRE_GRAD_TEMP=(
+                                         _F(  GROUP_MA = 'GMA10',
+                                              FLUX_Y = -0.7),
+                                         _F(  MAILLE = ( 'M60', 'M81', 'M93', ),
+                                              FLUX_X = 0.5,
+                                              FLUX_Y = 0.8)),
+                           ECHANGE_PAROI=_F(  GROUP_MA_1 = 'GMA14',
+                                              MAILLE_2 = 'M144',
+                                              COEF_H = 0.7) )
+
+CHTHF=AFFE_CHAR_THER_F(         MODELE=MO,
+                             LIAISON_DDL=_F(  NOEUD = ( 'N124', 'N44', ),
+                                           DDL = ( 'TEMP',
+                                                         'TEMP',),
+                                           COEF_MULT = ( -1.7, 1.1, ),
+                                           COEF_IMPO = FOB),
+                             TEMP_IMPO=_F(  GROUP_NO = 'GNO12',
+                                         TEMP = FOC),LIAISON_UNIF=(
+                             _F(  MAILLE = 'M9',
+                                            DDL = 'TEMP'),
+                             _F(  GROUP_MA = 'GMA19',
+                                            DDL = 'TEMP'),
+                             _F(  NOEUD = ( 'N141', 'N39', ),
+                                            DDL = 'TEMP'),
+                             _F(  GROUP_NO = 'GNO2',
+                                            DDL = 'TEMP')),SOURCE=(
+                             _F(  MAILLE = ('M83', 'M90', 'M92', ),
+                                      SOUR = FOE),
+                             _F(  GROUP_MA = 'GMA9',
+                                      SOUR = FOF)),FLUX_REP=(
+                             _F(  MAILLE = 'M116',
+                                        FLUX_X = FOGX,
+                                        FLUX_Y = FOGY),
+                             _F(  GROUP_MA = 'GMA17',
+                                        FLUN = FOH)) )
+
+CHTHFB=AFFE_CHAR_THER_F(         MODELE=MO,FLUX_NL=(
+                             _F(  MAILLE = ( 'M30', 'M112', ),
+                                       FLUN = FOI2),
+                             _F(  GROUP_MA = 'GMA11',
+                                       FLUN = FOE2)),ECHANGE=(
+                             _F(  GROUP_MA = 'GMA13',
+                                       COEF_H = FOB,
+                                       TEMP_EXT = FOC),
+                             _F(  MAILLE = 'M104',
+                                       COEF_H = FOD,
+                                       TEMP_EXT = FOE)),
+                             ECHANGE_PAROI=_F(  MAILLE_1 = ( 'M113', 'M115', ),
+                                             GROUP_MA_2 = 'GMA15',
+                                             COEF_H = FOF,
+                                             TRAN = (0., 0.25,)), )
+
+CHCI=AFFE_CHAR_CINE(       MODELE=MO,THER_IMPO=(
+                          _F(  GROUP_NO = 'GNO8',
+                                      TEMP = 3.4),
+                          _F(  NOEUD = 'N72',
+                                      TEMP = 1.1)) )
+
+CHCIF=AFFE_CHAR_CINE_F(       MODELE=MO,THER_IMPO=(
+                             _F(  GROUP_NO = 'GNO9',
+                                         TEMP = FOB),
+                             _F(  NOEUD = ('N121', 'N123',),
+                                         TEMP = FOC)) )
+
+# ----------------------------------------------------------------------
+#   COMMANDES GLOBALES DE THERMIQUE
+# ----------------------------------------------------------------------
+
+THL10=THER_LINEAIRE(        MODELE=MO,
+                          CHAM_MATER=CHMAT,EXCIT=(
+                               _F( CHARGE = CHTH1,
+                                      FONC_MULT = FOF),
+                               _F( CHARGE = CHTH1B),
+                               _F( CHARGE = CHTH2),
+                               _F( CHARGE = CHTHF,
+                                      FONC_MULT = FOH),
+                               _F( CHARGE = CHTHFB),
+                               _F( CHARGE = CHCI,
+                                      FONC_MULT = FOI),
+                               _F( CHARGE = CHCIF,
+                                      FONC_MULT = FOE)),
+                           INCREMENT=_F(  LIST_INST = LR1),
+                           ETAT_INIT=_F( VALE = 0.) )
+
+THL10=CALC_CHAMP(reuse=THL10,THERMIQUE=('FLUX_ELNO','FLUX_ELGA'),RESULTAT=THL10)
+
+
+THL10=CALC_META(reuse=THL10,
+                RESULTAT=THL10,
+                OPTION='META_ELNO',
+                ETAT_INIT=_F(META_INIT_ELNO=CARTE),
+                COMPORTEMENT=_F(RELATION='ACIER',
+                             TOUT='OUI'),);
+
+#     -  THERMIQUE NON LINEAIRE
+#        ----------------------
+THNL1=THER_NON_LINE(        MODELE=MO,
+                          CHAM_MATER=CHMATNL,EXCIT=(
+                               _F(  CHARGE = CHTH1,
+                                       FONC_MULT = FOE),
+                               _F(  CHARGE = CHTH1B)),
+                          CONVERGENCE=_F() )
+THNL1_EC=THER_NON_LINE(   MODELE=MO,
+                          CHAM_MATER=CHMATNL,
+                          EXCIT=(
+                                 _F(CHARGE = CHTH1C,
+                                    FONC_MULT = FOE),
+                                 _F(  CHARGE = CHTH1_EC),
+                                 _F(  CHARGE = CHTH1B)),
+                          CONVERGENCE=_F() )
+                          
+                          
+
+THNL6=THER_NON_LINE(        MODELE=MO,
+                          CHAM_MATER=CHMATNL,EXCIT=(
+                                 _F(  CHARGE = CHTH1,
+                                       FONC_MULT = FOE),
+                                #_F(CHARGE = CHTH1C,
+                                    #FONC_MULT = FOE),
+                                 #_F(  CHARGE = CHTH1_EC),
+                               _F(  CHARGE = CHTH1B)),
+                           INCREMENT=_F(  LIST_INST = LR1),
+                          CONVERGENCE=_F(),
+                          PARM_THETA=1.,
+                           ARCHIVAGE=_F(  PAS_ARCH = 2),
+                           ETAT_INIT=_F( VALE = 0.),)
+
+THNL6=CALC_CHAMP(reuse=THNL6,
+                 RESULTAT=THNL6,
+                 THERMIQUE=('FLUX_ELGA','FLUX_ELNO',),);
+
+THNL6=CALC_META(reuse=THNL6,
+                MODELE=MO,
+                CHAM_MATER=CHMATNL,
+                RESULTAT=THNL6,
+                OPTION='META_ELNO',
+                ETAT_INIT=_F(META_INIT_ELNO=CARTE),
+                COMPORTEMENT=_F(RELATION='ACIER',
+                             TOUT = 'OUI'),);
+
+ENGENDRE_TEST (  CO = (THNL1, THNL6, THL10) )
+
+TEST_RESU(RESU=(
+                _F(NUME_ORDRE=0,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='META_ELNO',
+                   VALE_CALC=2497.779999999936,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=539.335266527,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='META_ELNO',
+                   VALE_CALC=3760.405507370081,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='FLUX_ELGA',
+                   VALE_CALC=1145.00198117,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='FLUX_ELNO',
+                   VALE_CALC=1273.62606116,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=684.127670304,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='META_ELNO',
+                   VALE_CALC=3824.2309300458555,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='FLUX_ELGA',
+                   VALE_CALC=1201.87367665,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THL10,
+                   NOM_CHAM='FLUX_ELNO',
+                   VALE_CALC=1338.28857192,
+                   ),
+                _F(NUME_ORDRE=0,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL1,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=471.03617152718,
+                   ),
+                _F(NUME_ORDRE=0,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL6,
+                   NOM_CHAM='META_ELNO',
+                   VALE_CALC=2497.779999999936,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL6,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=523.34852393938,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL6,
+                   NOM_CHAM='META_ELNO',
+                   VALE_CALC=3661.7835316230403,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL6,
+                   NOM_CHAM='FLUX_ELGA',
+                   VALE_CALC=1069.2623176536999,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL6,
+                   NOM_CHAM='FLUX_ELNO',
+                   VALE_CALC=1163.6362823572999,
+                   ),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=0,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THNL1_EC,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=471.03617152718,
+                   ),
+                ),
+          )
+
+FIN( )
+#

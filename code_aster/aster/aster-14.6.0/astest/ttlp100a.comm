@@ -1,0 +1,226 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MAIL=DEFI_GROUP( reuse=MAIL,
+                       MAILLAGE=MAIL,CREA_GROUP_NO=(
+                       _F(  GROUP_MA = 'BORDG'),
+                       _F(  GROUP_MA = 'BORDD'))
+                    )
+
+#
+
+LONTOT=0.990
+
+# SOMME DES LONG. DES 2 PLAQUES
+
+LONMAX=1.000
+
+# ABSCISSE MAXIMALE
+#
+# =====================================================================
+#      DEFINITION DU MODELE, DU CHAMP DE MATERIAU ET DU CHARGEMENT
+# =====================================================================
+#
+# MODELE
+# ------
+#
+
+MODTHER=AFFE_MODELE(
+                           MAILLAGE=MAIL,
+                           AFFE=_F(  TOUT = 'OUI',
+                                  PHENOMENE = 'THERMIQUE',
+                                  MODELISATION = 'PLAN')
+                        )
+
+#
+# CHAMP DE MATERIAU
+# -----------------
+#
+
+CONDUC=40.
+
+CHAMAS=7.3E-4
+
+#
+
+MAT=DEFI_MATERIAU(
+                              THER=_F(  LAMBDA = CONDUC,
+                                     RHO_CP = CHAMAS)
+                        )
+
+CHMAT=AFFE_MATERIAU(
+                             MAILLAGE=MAIL,
+                             AFFE=_F(  TOUT = 'OUI',
+                                    MATER = MAT,
+                                    )
+                          )
+
+#
+# CHARGEMENT
+# ----------
+#
+
+TEMPG=100.
+
+TEMPD=300.
+
+COEFH=80.
+
+#
+
+CHATHER=AFFE_CHAR_THER(
+                              MODELE=MODTHER,TEMP_IMPO=(
+                              _F(  GROUP_NO = 'BORDG',
+                                          TEMP = TEMPG),
+                              _F(  GROUP_NO = 'BORDD',
+                                          TEMP = TEMPD)),
+                                ECHANGE_PAROI=_F(  GROUP_MA_1 = 'INTERG',
+                                                GROUP_MA_2 = 'INTERD',
+                                                COEF_H = COEFH)
+                           )
+
+#
+# =====================================================================
+#                            LISTE D'INSTANTS
+# =====================================================================
+#
+
+LINST=DEFI_LIST_REEL(
+                            DEBUT=0.0,
+                            INTERVALLE=_F(  JUSQU_A = 5.E-2,  NOMBRE = 50)
+                          )
+
+#
+# =====================================================================
+#    CALCUL TRANSITOIRE LINEAIRE TENDANT VERS UN ETAT STATIONNAIRE
+# =====================================================================
+#
+
+TEMPINIT=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R',
+MAILLAGE=MAIL,AFFE=(
+                             _F(  GROUP_NO = 'RECTG',
+                                    NOM_CMP = 'TEMP',
+                                    VALE = TEMPG),
+                             _F(  GROUP_NO = 'RECTD',
+                                    NOM_CMP = 'TEMP',
+                                    VALE = TEMPD))
+                          )
+
+#
+
+RESUTHLI=THER_LINEAIRE(
+                              MODELE=MODTHER,
+                              CHAM_MATER=CHMAT,
+                              EXCIT=_F(  CHARGE = CHATHER),
+                              ETAT_INIT=_F(  CHAM_NO = TEMPINIT),
+                              PARM_THETA=0.57,
+                              INCREMENT=_F(  LIST_INST = LINST)
+                           )
+
+#
+# =====================================================================
+#                VERIFICATION QUE L'ON A BIEN ATTEINT
+#                LA SOLUTION ANALYTIQUE STATIONNAIRE
+# =====================================================================
+#
+
+TSTAT=CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='NOEU_TEMP_R',
+                        RESULTAT=RESUTHLI,
+                        NOM_CHAM='TEMP',
+                        NUME_ORDRE=50
+                     )
+
+#
+
+GRAD = FORMULE(VALE="""
+COEFH*(TEMPD-TEMPG)/(CONDUC+COEFH*LONTOT)""",
+               COEFH=COEFH,
+               TEMPD=TEMPD,
+               TEMPG=TEMPG,
+               CONDUC=CONDUC,
+               LONTOT=LONTOT,
+               NOM_PARA='BIDON',)
+
+TINTG = FORMULE(VALE="""
+TEMPG + COEFH*(TEMPD-TEMPG)/(CONDUC+COEFH*LONTOT)*X """,
+                TEMPG=TEMPG,
+                COEFH=COEFH,
+                TEMPD=TEMPD,
+                CONDUC=CONDUC,
+                LONTOT=LONTOT,
+                NOM_PARA='X',)
+
+TINTD = FORMULE(VALE="""
+TEMPD - COEFH*(TEMPD-TEMPG)/(CONDUC+COEFH*LONTOT)*(LONMAX-X)""",
+                TEMPD=TEMPD,
+                COEFH=COEFH,
+                TEMPG=TEMPG,
+                CONDUC=CONDUC,
+                LONTOT=LONTOT,
+                LONMAX=LONMAX,
+                NOM_PARA='X',)
+#
+
+TEST_RESU(CHAM_NO=(_F(NOEUD='N3',
+                      CRITERE='RELATIF',
+                      NOM_CMP='TEMP',
+                      CHAM_GD=TSTAT,
+                      VALE_CALC=133.55704697986579,
+                      REFERENCE='ANALYTIQUE',
+                      VALE_REFE=TINTG(0.25),
+                      ),
+                   _F(NOEUD='N5',
+                      CRITERE='RELATIF',
+                      NOM_CMP='TEMP',
+                      CHAM_GD=TSTAT,
+                      VALE_CALC=166.44295302013421,
+                      REFERENCE='ANALYTIQUE',
+                      VALE_REFE=TINTG(0.495),
+                      ),
+                   _F(NOEUD='N101',
+                      CRITERE='RELATIF',
+                      NOM_CMP='TEMP',
+                      CHAM_GD=TSTAT,
+                      VALE_CALC=233.55704697986579,
+                      REFERENCE='ANALYTIQUE',
+                      VALE_REFE=TINTD(0.505),
+                      ),
+                   _F(NOEUD='N103',
+                      CRITERE='RELATIF',
+                      NOM_CMP='TEMP',
+                      CHAM_GD=TSTAT,
+                      VALE_CALC=266.44295302013421,
+                      REFERENCE='ANALYTIQUE',
+                      VALE_REFE=TINTD(0.75),
+                      ),
+                   ),
+          )
+
+#
+
+FIN()
+#

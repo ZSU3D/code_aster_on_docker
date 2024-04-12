@@ -1,0 +1,235 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+M=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED')
+
+
+
+M=MODI_MAILLAGE( reuse=M,   MAILLAGE=M,
+                        ORIE_PEAU_3D=_F(  GROUP_MA = ( 'SINF_2', 'SINF_4', ),  )
+                      )
+
+MA=DEFI_MATERIAU(            ELAS=_F(  E = 2.E11,
+                                        NU = 0.3,          ) )
+
+CM=AFFE_MATERIAU(        MAILLAGE=M,
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        MATER = MA,
+                                        ))
+
+M=DEFI_GROUP(reuse=M,   MAILLAGE=M,CREA_GROUP_NO=(
+                _F(  GROUP_MA = 'SSUP_F',  ),
+                _F(  GROUP_MA = 'SINF_F',   )) )
+
+MO = [None]*2
+
+MO[0]=AFFE_MODELE(             MAILLAGE=M,
+                                  
+                                 AFFE=_F(  GROUP_MA = 'MAIL',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = '3D_INCO_UPG', ))
+
+MO[1]=AFFE_MODELE(             MAILLAGE=M,
+                                  
+                                 AFFE=_F(  GROUP_MA = 'MAIL',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = '3D_INCO_UP', ))
+
+LINST = DEFI_LIST_REEL   ( DEBUT      =  0.,
+                           INTERVALLE =_F (JUSQU_A= 1.0, NOMBRE = 1   )
+                                         );
+FF1=DEFI_FOND_FISS(MAILLAGE=M,
+                   FOND_FISS=_F(TYPE_FOND='FERME',
+                                GROUP_MA = 'LFF',
+                                NOEUD_ORIG = 'N49',
+                                MAILLE_ORIG = 'M3233',),
+                   SYME='OUI',
+                   LEVRE_SUP=_F(GROUP_MA = 'LEVINF',)
+                  )
+
+FF=DEFI_FOND_FISS(MAILLAGE=M,
+                  FOND_FISS=_F(TYPE_FOND='FERME',
+                               GROUP_MA = 'LFF',
+                               NOEUD_ORIG = 'N49',
+                               MAILLE_ORIG = 'M3233',),
+                   SYME='OUI',
+                   LEVRE_SUP=_F(GROUP_MA = 'LEVINF',)
+                 )
+CH = [None]*2
+RESU = [None]*2
+THET1 = [None]*2
+THET = [None]*2
+G01 = [None]*2
+G0 = [None]*2
+GLOC1 = [None]*2
+GLOC2 =[None]*2
+GLOC3 =[None]*2
+
+for i in range(2) :
+   CH[i]=AFFE_CHAR_MECA(       MODELE=MO[i],
+                              DDL_IMPO=(
+                         _F(  NOEUD = 'N9957',         DX = 0.,    ),
+                         _F(  NOEUD = 'N10021',        DX = 0.,    ),
+                         _F(  NOEUD = 'N9966',         DY = 0.,    ),
+                         _F(  NOEUD = 'N10094',        DY = 0.,    ),
+                         _F(  GROUP_NO = 'SSUP_F',     DZ = 0.,    )),PRES_REP=(
+                         _F(  GROUP_MA = 'SINF_1',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_2',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_3',   PRES = -1.E6, ),
+                         _F(  GROUP_MA = 'SINF_4',   PRES = -1.E6, ))
+                   )
+
+   RESU[i] = STAT_NON_LINE (MODELE     =   MO[i],
+                        CHAM_MATER =   CM,
+                        EXCIT      =_F ( CHARGE       = CH[i],),
+                        COMPORTEMENT  =_F ( RELATION     = 'ELAS',
+                                         DEFORMATION  = 'PETIT',
+                                         TOUT         = 'OUI'    ),
+                        INCREMENT  =_F ( LIST_INST    = LINST, ),
+                        CONVERGENCE = _F(
+                              RESI_GLOB_MAXI=1e-07,
+                              ITER_GLOB_MAXI = 15,
+                  ),
+                        NEWTON     =_F ( REAC_INCR    = 1 ))
+
+#IMPR_TABLE(       TABLE=G0,);
+
+   GLOC1[i]=CALC_G(        RESULTAT=RESU[i],
+                     INFO=2,
+                     INST = 1,
+                     THETA=_F(FOND_FISS=FF,),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+   TEST_TABLE(       TABLE=GLOC1[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N403',      ),
+                     VALE_CALC=11.8601328045,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.04,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC1[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N2862',      ),
+                     VALE_CALC=11.60523834,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.01,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC1[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N375',      ),
+                     VALE_CALC=11.841205281738,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.035,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC1[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N292',      ),
+                     VALE_CALC=11.8687201842,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.04,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(TABLE=GLOC1[i],
+           NOM_PARA='G',
+           TYPE_TEST = 'MAX',
+           VALE_CALC=11.8687201842,
+           VALE_REFE=1.158648E+01,
+           PRECISION=0.05,
+           REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(TABLE=GLOC1[i],
+           NOM_PARA='G',
+           TYPE_TEST = 'MIN',
+           VALE_CALC=11.5971937956,
+           VALE_REFE=1.158648E+01,
+           PRECISION=0.01,
+           REFERENCE='ANALYTIQUE'       )
+
+   GLOC2[i]=CALC_G(        RESULTAT=RESU[i],
+                     INST = 1,
+                     THETA=_F(FOND_FISS=FF,),
+                     LISSAGE=_F(LISSAGE_G='LAGRANGE_NO_NO',
+                                LISSAGE_THETA='LAGRANGE'),
+                     )
+   TEST_TABLE(       TABLE=GLOC2[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N403',      ),
+                     VALE_CALC=11.763099799026,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.025,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC2[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N2862',      ),
+                     VALE_CALC=11.655556518891,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.02,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC2[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N375',      ),
+                     VALE_CALC=11.743277221398,
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.02,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(       TABLE=GLOC2[i],
+                     NOM_PARA='G',
+                     FILTRE=_F(  NOM_PARA = 'NOEUD',
+                            VALE_K = 'N292',      ),
+                     VALE_CALC=11.769029525819, 
+                     VALE_REFE=1.158648E+01,
+                     PRECISION=0.03,
+                     REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(TABLE=GLOC2[i],
+           NOM_PARA='G',
+           TYPE_TEST = 'MAX',
+           VALE_CALC=11.771000316799,
+           VALE_REFE=1.1714999753978E+01,
+           PRECISION=0.02,
+           REFERENCE='ANALYTIQUE'       )
+
+   TEST_TABLE(TABLE=GLOC2[i],
+           NOM_PARA='G',
+           TYPE_TEST = 'MIN',
+           VALE_CALC=11.646814965523,
+           VALE_REFE=1.1575479415611E+01,
+           PRECISION=0.02,
+           REFERENCE='ANALYTIQUE'       )
+
+
+FIN( )
+#
+#

@@ -1,0 +1,291 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# PHYSIQUEMENT, LE PROBLEME TRAITE EST CELUI D'UN BARREAU ETIRE SELON Y
+#  D - C
+#  E   !       DX=0. PARTOUT   (CAR NU=0.)
+#  A - B       DY(A)=DY(B)=1.  (IMPOSE)
+#              DY(D)=DY(C)=2.  (IMPOSE)
+#              DY(E)=1.5       (SOLUTION)
+#--------------------------------------------------------------------------
+
+import aster
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), ERREUR=_F(ERREUR_F='EXCEPTION'), PAR_LOT='NON', DEBUG=_F(SDVERI='OUI'))
+
+fmt_raison='-'*80+"""
+
+   Exception erreur_Fatale interceptee
+   Message : %s
+
+"""+'-'*80+'\n'
+
+mail = LIRE_MAILLAGE(FORMAT='MED',INFO=2);
+model = AFFE_MODELE(MAILLAGE=mail, AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='D_PLAN'));
+
+mat = DEFI_MATERIAU(ELAS=_F(E  = 1.,  NU = 0.,),);
+chmat = AFFE_MATERIAU(MAILLAGE=mail, AFFE=_F(TOUT  = 'OUI', MATER = mat),);
+
+
+# ------- Chargements
+ch0=AFFE_CHAR_MECA(MODELE=model, DDL_IMPO= _F(GROUP_MA='AB',DX=0.,DY=1.), );
+chcine=AFFE_CHAR_CINE(MODELE=model,  MECA_IMPO=(_F(GROUP_MA='CD',DY=2.), ));
+chcine2=AFFE_CHAR_CINE(MODELE=model,  MECA_IMPO=(_F(GROUP_MA='AB',DY=5.), ));
+
+# ------- calculs communs
+rigiel = CALC_MATR_ELEM(MODELE= model, CHAM_MATER= chmat, OPTION= 'RIGI_MECA', CHARGE=ch0)
+rigiel2= CALC_MATR_ELEM(MODELE= model, CHAM_MATER= chmat, OPTION= 'RIGI_MECA', CHARGE=ch0)
+vecel = CALC_VECT_ELEM(CHARGE=ch0, CHAM_MATER = chmat, OPTION = 'CHAR_MECA')
+
+
+#***************************************************************************************************
+# 1) resolution "simple" : DDL_IMPO + AFFE_CHAR_CINE :
+#***************************************************************************************************
+
+# 1.1) avec LDLT :
+#-----------------
+nu11    = NUME_DDL(MATR_RIGI = rigiel);
+matas11 = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu11, CHAR_CINE = chcine);
+vecas11 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu11 )
+vcine11 = CALC_CHAR_CINE (NUME_DDL=nu11, CHAR_CINE=chcine);
+matas11 = FACTORISER(reuse=matas11,MATR_ASSE=matas11, METHODE= 'LDLT');
+u11=RESOUDRE( MATR = matas11, CHAM_NO= vecas11 , CHAM_CINE= vcine11)
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u11,
+                     VALE_CALC=1.5,
+                     VALE_REFE=1.5,),
+          )
+
+# 1.2) avec MULT_FRONT :
+#-----------------------
+nu12    = NUME_DDL(MATR_RIGI = rigiel);
+matas12 = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu12, CHAR_CINE = chcine);
+vecas12 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu12 )
+vcine12 = CALC_CHAR_CINE (NUME_DDL=nu12, CHAR_CINE=chcine);
+matas12 = FACTORISER(reuse=matas12,MATR_ASSE=matas12, METHODE= 'MULT_FRONT', RENUM= 'MD');
+u12=RESOUDRE( MATR = matas12, CHAM_NO= vecas12 , CHAM_CINE= vcine12 )
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u12,
+                     VALE_CALC=1.5,
+                     VALE_REFE=1.5,),
+          )
+
+# 1.3) avec GCPC :
+#-----------------------
+nu13    = NUME_DDL(MATR_RIGI = rigiel );
+matas13 = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu13, CHAR_CINE = chcine);
+vecas13 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu13 )
+vcine13 = CALC_CHAR_CINE (NUME_DDL=nu13, CHAR_CINE=chcine);
+pmatas13=FACTORISER(MATR_ASSE=matas13,METHODE= 'GCPC' , PRE_COND='LDLT_INC' )
+u13=RESOUDRE(MATR_PREC=pmatas13, MATR=matas13, CHAM_NO=vecas13,CHAM_CINE=vcine13 )
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u13,
+                     VALE_CALC=1.49999999263,
+                     VALE_REFE=1.5,),
+          )
+
+#***************************************************************************************************
+# 2) avec COMB_MATR_ASSE et DDL_IMPO + AFFE_CHAR_CINE :
+#   (les 2 matrices a combiner ont le meme nume_ddl et les memes char_cine)
+#***************************************************************************************************
+
+# 2.1) avec LDLT :
+#-----------------
+nu21    = NUME_DDL(MATR_RIGI = rigiel);
+matas21a = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu21, CHAR_CINE = chcine);
+matas21b = ASSE_MATRICE (MATR_ELEM = rigiel2, NUME_DDL  = nu21, CHAR_CINE = chcine);
+vecas21 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu21 )
+vcine21 = CALC_CHAR_CINE (NUME_DDL=nu21, CHAR_CINE=chcine);
+matas21=COMB_MATR_ASSE( COMB_R=(  _F(  MATR_ASSE = matas21a, COEF_R = 1.),
+                                  _F(  MATR_ASSE = matas21b, COEF_R = 1.)))
+matas21 = FACTORISER(reuse=matas21,MATR_ASSE=matas21, METHODE= 'LDLT');
+u21=RESOUDRE( MATR = matas21, CHAM_NO= vecas21 , CHAM_CINE= vcine21)
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u21,
+                     VALE_CALC=1.5,
+                     VALE_REFE=1.5,),
+          )
+
+# 2.2) avec MULT_FRONT :
+#------------------------
+nu22    = NUME_DDL(MATR_RIGI = rigiel);
+matas22a = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu22, CHAR_CINE = chcine);
+matas22b = ASSE_MATRICE (MATR_ELEM = rigiel2, NUME_DDL  = nu22, CHAR_CINE = chcine);
+vecas22 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu22 )
+vcine22 = CALC_CHAR_CINE (NUME_DDL=nu22, CHAR_CINE=chcine);
+matas22=COMB_MATR_ASSE( COMB_R=(  _F(  MATR_ASSE = matas22a, COEF_R = 1.),
+                                  _F(  MATR_ASSE = matas22b, COEF_R = 1.)))
+matas22 = FACTORISER(reuse=matas22,MATR_ASSE=matas22, METHODE= 'MULT_FRONT', RENUM= 'MD');
+u22=RESOUDRE( MATR = matas22, CHAM_NO= vecas22 , CHAM_CINE= vcine22)
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u22,
+                     VALE_CALC=1.5,
+                     VALE_REFE=1.5,),
+          )
+
+# 2.3) avec GCPC :
+#------------------------
+nu23    = NUME_DDL(MATR_RIGI = rigiel);
+matas23a = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu23, CHAR_CINE = chcine);
+matas23b = ASSE_MATRICE (MATR_ELEM = rigiel2, NUME_DDL  = nu23, CHAR_CINE = chcine);
+vecas23 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu23 )
+vcine23 = CALC_CHAR_CINE (NUME_DDL=nu23, CHAR_CINE=chcine);
+matas23=COMB_MATR_ASSE( COMB_R=(  _F(  MATR_ASSE = matas23a, COEF_R = 1.),
+                                  _F(  MATR_ASSE = matas23b, COEF_R = 1.)))
+pmatas23=FACTORISER(MATR_ASSE=matas23, METHODE= 'GCPC', PRE_COND='LDLT_INC' )
+u23=RESOUDRE(MATR_PREC=pmatas23, MATR=matas23, CHAM_NO=vecas23,CHAM_CINE=vcine23 )
+TEST_RESU(CHAM_NO=_F(REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     GROUP_NO='E',
+                     CHAM_GD=u23,
+                     VALE_CALC=1.49999994562,
+                     VALE_REFE=1.5,),
+          )
+
+#***************************************************************************************************
+# 3) On verifie que certaines choses sont impossibles COMB_MATR_ASSE et DDL_IMPO + AFFE_CHAR_CINE :
+#***************************************************************************************************
+
+
+# 3.1) COMB_MATR_ASSE : on ne peut pas combiner une matrice LIGNE_DE_CIEL avec une matrice MORSE :
+#-------------------------------------------------------------------------------------------------
+is_ok = 0
+try :
+    XXXX=COMB_MATR_ASSE( COMB_R=(  _F(  MATR_ASSE = matas21a, COEF_R = 1.),
+                                   _F(  MATR_ASSE = matas22b, COEF_R = 1.)))
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "ALGELINE2_28":
+      is_ok = 1
+
+# TEST_RESU
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',),  _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(XXXX, TAB1),),)
+
+
+# 3.2) RESOUDRE+ AFFE_CHAR_CINE : Il ne faut pas oublier le mot cle CHAM_CINE :
+#-------------------------------------------------------------------------------------------------
+is_ok = 0
+try :
+    XXXX=RESOUDRE( MATR = matas11, CHAM_NO= vecas11 )
+
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "ALGELINE3_41":
+      is_ok = 1
+
+# TEST_RESU
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',),  _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(XXXX, TAB1),),)
+
+
+# 3.3) COMB_MATR_ASSE + 2 AFFE_CHAR_CINE incompatibles  :
+#-------------------------------------------------------------------------------------------------
+is_ok = 0
+try :
+      nu33    = NUME_DDL(MATR_RIGI = rigiel);
+      matas33a = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu33, CHAR_CINE = chcine);
+      matas33b = ASSE_MATRICE (MATR_ELEM = rigiel2, NUME_DDL  = nu33, CHAR_CINE = chcine2);
+      XXXX=COMB_MATR_ASSE( COMB_R=(  _F(  MATR_ASSE = matas33a, COEF_R = 1.),
+                                        _F(  MATR_ASSE = matas33b, COEF_R = 1.)))
+
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "ALGELINE2_10":
+      is_ok = 1
+
+# TEST_RESU
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',),  _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(XXXX, TAB1),),)
+
+
+# 3.4) RESOUDRE +  AFFE_CHAR_CINE incompatibles  :
+#      incoherence de la charge cinematique du 1er membre et celle du second_membre
+#-------------------------------------------------------------------------------------------------
+is_ok = 0
+try :
+     nu34    = NUME_DDL(MATR_RIGI = rigiel);
+     matas34 = ASSE_MATRICE (MATR_ELEM = rigiel, NUME_DDL  = nu34, CHAR_CINE = chcine);
+     vecas34 = ASSE_VECTEUR(  VECT_ELEM=vecel,   NUME_DDL=nu34 )
+     vcine34 = CALC_CHAR_CINE (NUME_DDL=nu34, CHAR_CINE=chcine2);
+     matas34 = FACTORISER(reuse=matas34,MATR_ASSE=matas34, METHODE= 'MULT_FRONT', RENUM= 'MD');
+     u34=RESOUDRE( MATR = matas34, CHAM_NO= vecas34 , CHAM_CINE= vcine34 )
+
+except aster.error as err:
+   print(fmt_raison % str(err))
+   # on verifie que l'erreur fatale est bien celle que l'on attendait :
+   if err.id_message == "ALGELINE_32":
+      is_ok = 1
+
+# TEST_RESU
+TAB1=CREA_TABLE(LISTE=(_F(PARA='TEST',TYPE_K='K8',LISTE_K='VALEUR  ',),  _F(PARA='BOOLEEN',LISTE_I=is_ok,),),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TAB1,
+           FILTRE=_F(NOM_PARA='TEST',
+                     VALE_K='VALEUR  ',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB1),),)
+
+
+FIN();

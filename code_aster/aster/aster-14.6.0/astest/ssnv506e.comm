@@ -1,0 +1,204 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+SSNV506E=LIRE_MAILLAGE(FORMAT='MED',);
+
+SSNV506E=DEFI_GROUP(reuse =SSNV506E,
+                    MAILLAGE=SSNV506E,
+                    CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI',),);
+
+#-------------------------------------------------------------
+#                 GRANDEURS PHYSIQUES
+#-------------------------------------------------------------
+
+ACIER_B=DEFI_MATERIAU(ELAS=_F(E=210000.,
+                              NU=0.3,),
+                      ECRO_LINE=_F(D_SIGM_EPSI=0.0,
+                                   SY=50,),);
+
+AC_SPH=DEFI_MATERIAU(ELAS=_F(E=21000000.,
+                                NU=0.3,),);
+
+DPLY=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,
+                         1.0,1.0,),
+                   INTERPOL='LIN',);
+
+#----------------------------------------------------------------
+#                       MODELE
+#----------------------------------------------------------------
+
+MO=AFFE_MODELE(MAILLAGE=SSNV506E,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS',),);
+
+#REORIENTATION DES NORMALES
+SSNV506E=MODI_MAILLAGE(reuse =SSNV506E,
+                       MAILLAGE=SSNV506E,
+                       ORIE_PEAU_2D=_F(GROUP_MA=('SMAI','SESC'),),
+                       );
+
+#AFFECTATION DU MATERIAU
+CHMAT=AFFE_MATERIAU(MAILLAGE=SSNV506E,
+                    AFFE=(_F(GROUP_MA='MAT1',
+                             MATER=AC_SPH,),
+                          _F(GROUP_MA='MAT2',
+                             MATER=ACIER_B,),),);
+
+#CONDITIONS AUX LIMITES
+CHA1 = DEFI_CONTACT(MODELE         = MO,
+                    FORMULATION    = 'CONTINUE',
+                    ALGO_RESO_CONT = 'NEWTON',
+                    ALGO_RESO_GEOM = 'NEWTON',
+                    ZONE =(
+                           _F(
+                              GROUP_MA_MAIT='SMAI',
+                              GROUP_MA_ESCL='SESC',
+                              TOLE_PROJ_EXT=-1.0,
+                              SANS_GROUP_NO=('E','S',),
+                             ),
+                          ),
+                   );
+
+CHA2=AFFE_CHAR_MECA(MODELE=MO,
+                    DDL_IMPO=(_F(GROUP_NO='NDPL',
+                                 DY=-100.0,),
+                              _F(GROUP_NO=('LS','LB'),
+                                 DX=0.0,),
+                              _F(GROUP_NO='PLANX',
+                                 DX=0.0,DY=0.0,),),
+                    LIAISON_DDL=_F(GROUP_NO=('E','S'),
+                                   DDL=('DY','DY'),
+                                   COEF_MULT=(1.0,-1.0),
+                                   COEF_IMPO=0.0,),);
+
+#------------------------------------------------------------------
+#                         RESOLUTION
+#------------------------------------------------------------------
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=(_F(JUSQU_A=0.01,
+                                    NOMBRE=5,),
+                                 _F(JUSQU_A=0.15,
+                                    NOMBRE=24,),
+                                 _F(JUSQU_A=1.0,
+                                    NOMBRE=34,),),);
+
+DEFLIST =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = LINST),
+                        ECHEC=_F(ACTION        = 'DECOUPE',
+                                 SUBD_METHODE  = 'MANUEL',
+                                 SUBD_PAS=4,
+                                 SUBD_PAS_MINI=9.9999999999999995E-07,),)
+
+U=STAT_NON_LINE(MODELE=MO,
+                #INFO=2,
+                CHAM_MATER=CHMAT,
+                EXCIT=(
+                       _F(CHARGE=CHA2,
+                          FONC_MULT=DPLY,),),
+                CONTACT  = CHA1,
+                COMPORTEMENT=(_F(RELATION='VMIS_ISOT_LINE',
+                             GROUP_MA='MAT2',),
+                             _F(RELATION='ELAS',
+                             GROUP_MA='MAT1',),),
+                INCREMENT=_F(LIST_INST=DEFLIST,
+                              INST_FIN=1.,),
+                NEWTON=_F(MATRICE='TANGENTE',
+                          REAC_ITER=1,),
+                CONVERGENCE=_F(ITER_GLOB_MAXI=15,),
+                );
+
+#------------------------------------------------------------------
+#                         POST TRAITEMENT
+#------------------------------------------------------------------
+
+U=CALC_CHAMP(reuse =U,
+          RESULTAT=U,
+          FORCE='REAC_NODA',);
+
+LINST2=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=1.,
+                                   NOMBRE=10,),);
+
+TAB_REAC=POST_RELEVE_T(ACTION=_F(INTITULE='REAC',
+                                 GROUP_NO='SESC',
+                                 RESULTAT=U,
+                                 NOM_CHAM='REAC_NODA',
+                                 LIST_INST=LINST2,
+                                 RESULTANTE='DY',
+                                 OPERATION='EXTRACTION',),);
+
+#------------------------------------------------------------------
+#                         TESTS DES RESULTATS
+#------------------------------------------------------------------
+# TESTS SUR DES VALEURS ANALYTIQUES
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=-2.0968811185444E+06,
+           VALE_REFE=-2.0380426000000001E6,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.2,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=-4.0928448037514E+06,
+           VALE_REFE=-4.0760852000000002E6,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.4,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=-5.8466501666858E+06,
+           VALE_REFE=-6.1141277999999998E6,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.1,
+           VALE_CALC=-7.6820191781862E+06,
+           VALE_REFE=-8.1521704000000004E6,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.8,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.15,
+           VALE_CALC=-9.1299149431374E+06,
+           VALE_REFE=-10190213,
+           NOM_PARA='DY',
+           TABLE=TAB_REAC,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+FIN();

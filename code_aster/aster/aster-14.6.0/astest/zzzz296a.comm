@@ -1,0 +1,140 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# lecture maillage lineique
+MAPOU=LIRE_MAILLAGE(FORMAT="ASTER",UNITE=20,);
+
+MODELE=AFFE_MODELE(
+    MAILLAGE=MAPOU,
+    AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='TUYAU_3M',),
+)
+
+# Caractéristique des tuyaux
+Ncou = 2; Nsect = 8; Rext = 10.0; Ep =1.0
+
+CARA=AFFE_CARA_ELEM(
+    MODELE=MODELE,
+    INFO=1,
+    POUTRE=_F(GROUP_MA=('POUTRE','POUTRE0'), SECTION='CERCLE', CARA=('R','EP'),
+              VALE=(Rext,Ep), TUYAU_NSEC = Nsect, TUYAU_NCOU = Ncou, ),
+)
+
+
+#
+CSIEF=CREA_CHAMP(TYPE_CHAM='ELGA_SIEF_R', OPERATION="AFFE", MODELE=MODELE,
+   AFFE_SP=_F( CARA_ELEM = CARA,),PROL_ZERO='OUI',
+   AFFE=_F(TOUT="OUI", NOM_CMP=('SIXX',), VALE= ( 0.0, ),),
+)
+
+RESU=CREA_RESU(TYPE_RESU = "EVOL_NOLI", OPERATION ="AFFE", NOM_CHAM='SIEF_ELGA',
+   AFFE= _F(CHAM_GD = CSIEF, MODELE = MODELE, CARA_ELEM =CARA, INST =0.0,),
+)
+
+
+TBEPS0=CREA_TABLE(RESU=_F(RESULTAT=RESU,GROUP_MA='POUTRE0',NOM_CHAM=('SIEF_ELGA'),
+                          TOUT_CMP='OUI',INST = 0.0))
+TBEPSI=CREA_TABLE(RESU=_F(RESULTAT=RESU,GROUP_MA='POUTRE', NOM_CHAM=('SIEF_ELGA'),
+                          TOUT_CMP='OUI',INST = 0.0))
+
+"""
+IMPR_TABLE(TABLE=TBEPS0)
+IMPR_TABLE(TABLE=TBEPSI)
+"""
+
+# Matrice de passage Axe_X vers Trisectrice
+import numpy as NP
+un3 = 1.0/pow(3.0,0.5)
+un2 = 1.0/pow(2.0,0.5)
+un6 = 1.0/pow(6.0,0.5)
+MatPass = NP.array( [[ un3, -un2,    -un6],
+                     [ un3,  un2,    -un6],
+                     [ un3,  0.0, 2.0*un6]] )
+#
+# Coordonnées des Points de Gauss  sur l'axe X
+LongPoutre = 2.0*pow(3.0,0.5)
+xpg = pow(3.0/5.0,0.5)
+Points={1: LongPoutre*(1.0-xpg)*0.5,
+        2: LongPoutre*0.5,
+        3: LongPoutre*(1.0+xpg)*0.5,}
+
+# Coordonnées des Sous-Points
+def CoordFibre(ifib):
+    Rint = Rext-Ep
+    # index des coordonnées
+    numAng = ((ifib-1)%(2*Nsect+1))/(2.0*Nsect)
+    numCou = ((ifib-1)//(2*Nsect+1))/(2.0*Ncou)
+    y =  (Rint+Ep*numCou)*NP.cos(2.0*NP.pi*numAng)
+    z = -(Rint+Ep*numCou)*NP.sin(2.0*NP.pi*numAng)
+    return y,z
+
+
+Nbfibre = (2*Ncou+1)*(2*Nsect+1)
+for ipt in [1,2,3]:
+    xx = Points[ipt]
+    for ifib in range(1,Nbfibre+1):
+        yy,zz = CoordFibre(ifib)
+        # Tuyau suivant l'axe X
+        motclef = {}
+        if ( abs(xx) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=xx, VALE_REFE=xx, NOM_PARA='COOR_X', TABLE=TBEPS0,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+        motclef = {}
+        if ( abs(yy) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=yy, VALE_REFE=yy, NOM_PARA='COOR_Y', TABLE=TBEPS0,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+        motclef = {}
+        if ( abs(zz) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=zz, VALE_REFE=zz, NOM_PARA='COOR_Z', TABLE=TBEPS0,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+        # Suivant la Trisectrice
+        xxt,yyt,zzt = NP.dot( MatPass, NP.array( [xx,yy,zz ] ) )
+        motclef = {}
+        if ( abs(xxt) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=xxt, VALE_REFE=xxt, NOM_PARA='COOR_X', TABLE=TBEPSI,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+        motclef = {}
+        if ( abs(yyt) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=yyt, VALE_REFE=yyt, NOM_PARA='COOR_Y', TABLE=TBEPSI,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+        motclef = {}
+        if ( abs(zzt) < 1.0E-16 ): motclef ={'ORDRE_GRANDEUR':1.0}
+        TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=zzt, VALE_REFE=zzt, NOM_PARA='COOR_Z', TABLE=TBEPSI,
+           FILTRE=(_F(NOM_PARA='POINT',      VALE_I= ipt,),
+                   _F(NOM_PARA='SOUS_POINT', VALE_I=ifib,),),
+        **motclef)
+
+FIN()

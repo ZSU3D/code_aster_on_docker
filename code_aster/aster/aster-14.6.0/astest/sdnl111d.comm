@@ -1,0 +1,166 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Etude du choc de deux poutres maillees 3D
+# en traction compression.
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI',),);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA=('POU1','POU2',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+MAIL=MODI_MAILLAGE(reuse =MAIL,
+                   MAILLAGE=MAIL,
+                   ORIE_PEAU_3D=(_F(GROUP_MA='CNT_POU1',),
+                                 _F(GROUP_MA='CNT_POU2',),),
+                   INFO=2,);
+
+MATER=DEFI_MATERIAU(ELAS=_F(E=2.E11,
+                            NU=0.3,
+                            RHO=7800.,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=(_F(GROUP_MA='POU1',
+                             MATER=MATER,),
+                          _F(GROUP_MA='POU2',
+                             MATER=MATER,),),);
+# *******************************************
+
+CONDLIM=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=(_F(TOUT='OUI',
+                                    DX=0.,
+                                    DY=0.,),
+                                 _F(GROUP_NO='CL_POU2',
+                                    DZ=0.,),),);
+
+VITINI=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                  OPERATION='AFFE',
+                  MAILLAGE=MAIL,
+                  AFFE=(
+                  _F(TOUT='OUI',
+                     NOM_CMP=('DX','DY','DZ',),
+                     VALE=(0.0,0.0,0.0,),),
+                  _F(GROUP_NO='POU1',
+                     NOM_CMP='DZ',
+                     VALE=-1.0,),
+                  _F(GROUP_NO='POU2',
+                     NOM_CMP='DZ',
+                     VALE=0.0,),),);
+# *******************************************
+
+CONTACT = DEFI_CONTACT(MODELE      = MODELE,
+                       FORMULATION = 'DISCRETE',
+                       ZONE =_F(
+                             ALGO_CONT = 'PENALISATION',
+                             E_N       = 1.E10,
+                             MAILLE_MAIT='M101',
+                             MAILLE_ESCL='M103',
+                           ),
+                      );
+
+
+# ************************************************************
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.,
+                      INTERVALLE=_F(JUSQU_A=1.E-3,
+                                    PAS=1.E-6,),);
+
+RESU=DYNA_NON_LINE(MODELE=MODELE,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(
+                          _F(CHARGE=CONDLIM,),),
+                   CONTACT  = CONTACT,
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                DEFORMATION='PETIT_REAC',),
+                   ETAT_INIT=_F(
+                   VITE=VITINI,),
+                   INCREMENT=_F(LIST_INST=L_INST,),
+                   SCHEMA_TEMPS=_F(SCHEMA='HHT',
+                                   FORMULATION='DEPLACEMENT',
+                                   ALPHA=-0.1,),
+                   NEWTON=_F(MATRICE='TANGENTE',),
+                   SOLVEUR=_F(
+                              METHODE='MULT_FRONT',),);
+#
+# TEST DE LA CONFORMITE AVEC LA SOLUTION DE REFERENCE ANALYTIQUE
+
+TEST_RESU(RESU=(_F(GROUP_NO='N1',
+                   INST=2.0E-4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-0.000105114567041,
+                   VALE_REFE=-1.05E-4,
+                   CRITERE='RELATIF',
+                   PRECISION=0.05, ),
+                _F(GROUP_NO='N1',
+                   INST=4.0E-4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-0.000155752195756,
+                   VALE_REFE=-1.55E-4,
+                   CRITERE='RELATIF',
+                   PRECISION=0.05, ),
+                _F(GROUP_NO='N1',
+                   INST=6.E-4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-5.57521924687E-05,
+                   VALE_REFE=-5.54E-05,
+                   CRITERE='RELATIF',
+                   PRECISION=0.05, ),
+                _F(GROUP_NO='N1',
+                   INST=8.0E-4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC= 9.52767736462E-05,
+                   VALE_REFE=9.92E-05,
+                   CRITERE='RELATIF',
+                   PRECISION=0.05, ),
+                _F(GROUP_NO='N1',
+                   INST=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC= 0.000295250402053,
+                   VALE_REFE=2.99E-4,
+                   CRITERE='RELATIF',
+                   PRECISION=0.05, ),
+                ),
+          )
+
+FIN();
+#

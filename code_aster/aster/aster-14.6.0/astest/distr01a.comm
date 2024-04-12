@@ -1,0 +1,120 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# Lance tel quel ce test effectue un cas de calcul (dont les valeurs
+# de F_Norm et F_Tang correspondent au cas theta=0).
+# Pour lancer l'etude parametrique, il faut dans le profil astk :
+#  - distr01a.comm en donnee, unite 1, type comm
+#  - distr01a.med en donnee, unite 20, type mmed
+#  - distr01a.51 ou distr01a.50, en donnee, unite quelconque, type distr
+#  - en resultat, type repe, un nom de repertoire ou seront ecrits les resultats
+# Dans le menu Options, indiquer 'distrib = oui'.
+#
+# On note ce repertoire "repe_resu" pour la suite.
+
+# Initialisation
+# Les valeurs de F_Norm et F_Tang seront remplacees par leurs valeurs
+# pour chaque cas de calcul ci-dessous.
+# On retrouvera le fichier de commandes utilise pour chaque cas de calcul
+# dans "repe_resu"/calc_NUMERO/command_0.comm
+# NUMERO etant l'occurence du jeu de parametres dans le fichier distr.
+F_Norm = 1.e6
+F_Tang = 0.
+
+# Dans la suite du jeu de commandes, on utilise les variables F_Norm et
+# F_Tang la ou on a besoin de ces parametres.
+
+MA=DEFI_MATERIAU(ELAS=_F(E=2.10e11, NU=0.3,),)
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',)
+
+MAIL=MODI_MAILLAGE(reuse=MAIL,
+                   MAILLAGE=MAIL,
+                   ORIE_PEAU_2D=_F(GROUP_MA=('Press',),),)
+
+MAIL=DEFI_GROUP(reuse=MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=_F(OPTION='NOEUD_ORDO',
+                                 GROUP_MA='Lsup',
+                                 NOM='Lsup'),)
+
+MODE=AFFE_MODELE(MAILLAGE=MAIL,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='C_PLAN',),)
+
+MATE=AFFE_MATERIAU(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI',
+                           MATER=MA,),)
+
+ENCAS=AFFE_CHAR_CINE(MODELE=MODE,
+                     MECA_IMPO=(_F(GROUP_MA='Encast',
+                                   DX=0.0,
+                                   DY=0.0,),),)
+
+CHAR=AFFE_CHAR_MECA(MODELE=MODE,
+                    FORCE_CONTOUR=_F(GROUP_MA='Press',
+                                     # Utilisation des variables
+                                     FX=F_Norm,
+                                     FY=F_Tang),)
+
+RESU=MECA_STATIQUE(MODELE=MODE,
+                   CHAM_MATER=MATE,
+                   EXCIT=(_F(CHARGE=CHAR,),
+                  _F(CHARGE=ENCAS),),)
+
+RESU=CALC_CHAMP(reuse=RESU,RESULTAT=RESU,CRITERES=('SIEQ_ELNO'),CONTRAINTE=('SIGM_ELNO'))
+
+
+RESU=CALC_CHAMP(reuse=RESU,
+             RESULTAT=RESU,
+             CONTRAINTE='SIGM_NOEU',CRITERES='SIEQ_NOEU')
+
+# Pour recuperer un fichier pour chaque cas de calcul, il est necessaire
+# de l'ecrire dans REPE_OUT. On retrouvera le fichier dans
+# "repe_resu"/calc_NUMERO/REPE_OUT/poutre.resu.med
+DEFI_FICHIER(UNITE=80, TYPE='BINARY',
+             FICHIER='./REPE_OUT/poutre.resu.med')
+
+IMPR_RESU(FORMAT='MED',
+          UNITE=80,
+          RESU=_F(MAILLAGE=MAIL,
+                  RESULTAT=RESU,
+                  NOM_CHAM=('SIEF_ELGA','SIEQ_NOEU','DEPL',),),)
+
+VMIS=POST_RELEVE_T(ACTION=_F(OPERATION='EXTRACTION',
+                             INTITULE='Contraintes',
+                             RESULTAT=RESU,
+                             NOM_CHAM='SIEQ_NOEU',
+                             GROUP_NO='Lsup',
+                             NOM_CMP='VMIS',),)
+
+# On retrouvera ce fichier dans "repe_resu"/calc_NUMERO/REPE_OUT/poutre.vmis
+DEFI_FICHIER(UNITE=38,FICHIER='./REPE_OUT/poutre.vmis')
+
+IMPR_TABLE(TABLE=VMIS,
+           UNITE=38,
+           FORMAT='ASTER',
+           NOM_PARA=('ABSC_CURV','VMIS'),)
+
+FIN()

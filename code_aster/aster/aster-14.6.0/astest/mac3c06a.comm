@@ -1,0 +1,73 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: pierre.badel at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTRANET'),IMPR_MACRO='OUI',PAR_LOT='NON')
+
+DAMAC1=LIRE_TABLE(UNITE=38,
+                  SEPARATEUR = '\t'
+)
+
+MA1=LIRE_MAILLAGE(FORMAT='MED',UNITE=20);
+
+# TEST ETAT INITIAL
+
+RESU_C1D = CALC_MAC3COEUR(TYPE_COEUR  = 'TEST',
+                          TABLE_N     =  DAMAC1,
+                          MAILLAGE_N  =  MA1, 
+                          ETAT_INITIAL = _F(
+                                           UNITE_THYC   = 32, 
+                                           NIVE_FLUENCE = 33))
+
+
+TAB_C1D = CREA_TABLE(RESU=_F(RESULTAT=RESU_C1D,
+                             NOM_CHAM='DEPL',
+                             INST=33.008,
+                             NOM_CMP=('DY','DZ'),
+                             GROUP_MA=('TG_B_B')))
+
+
+RESU_C2D = CALC_MAC3COEUR(TYPE_COEUR  = 'TEST',
+                          TABLE_N     =  DAMAC1,
+                          MAILLAGE_N  =  MA1, 
+                          ETAT_INITIAL = _F(
+                              MAINTIEN_GRILLE='OUI',
+                              UNITE_THYC   = 32, 
+                              NIVE_FLUENCE = 33))
+
+TAB_C2D = CREA_TABLE(RESU=_F(RESULTAT=RESU_C2D,
+                             NOM_CHAM='DEPL',
+                             INST=33.008,
+                             NOM_CMP=('DY','DZ'),
+                             GROUP_MA=('TG_B_B')))
+
+TEST_TABLE(VALE_CALC=0.0013152917993928775,
+           NOM_PARA='DY',
+           TYPE_TEST='MAX',
+           TABLE=TAB_C1D,
+           )
+
+TEST_TABLE(VALE_CALC=0.0013152917993928775,
+           NOM_PARA='DY',
+           TYPE_TEST='MAX',
+           TABLE=TAB_C2D,
+           )
+
+FIN()

@@ -1,0 +1,120 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F( NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+tfin = 0.5;
+
+pa = 0.002;
+
+fc = 15.0;
+
+om = ((2.0 * pi) * fc);
+
+E = 200.0E9;
+
+rho = 8000.0;
+
+nu = 0.3;
+
+
+MAIL=LIRE_MAILLAGE(UNITE=20,
+                   FORMAT='MED',);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(GROUP_MA='VOL',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=E,
+                          NU=nu,
+                          RHO=rho,),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='VOL',
+                            MATER=MAT,),);
+
+TAMAS=POST_ELEM(MASS_INER=_F(TOUT='OUI',),
+                MODELE=MODELE,
+                CHAM_MATER=CHMAT,);
+
+IMPR_TABLE(TABLE=TAMAS,);
+
+BLOCAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(GROUP_MA='ENCAS',
+                                   LIAISON='ENCASTRE',),);
+
+
+GRAV=AFFE_CHAR_MECA(MODELE=MODELE,
+                    PESANTEUR=_F(GRAVITE=300.,
+                                 DIRECTION=(-1.,0,1,),),);
+
+
+sinom = FORMULE(VALE='sin(om*INST)',
+                om=om,
+                NOM_PARA='INST',)
+
+bande = 1./(5.*pa)
+
+TRANSD = DYNA_LINE(TYPE_CALCUL="TRAN",
+                 BASE_CALCUL="PHYS",
+                 MODELE=MODELE,
+                 CHAM_MATER=CHMAT,
+                 CHARGE=BLOCAGE,
+                 EXCIT=_F(CHARGE=GRAV, FONC_MULT=sinom,),
+                 BANDE_ANALYSE=bande,
+                 SCHEMA_TEMPS=_F(SCHEMA ='NEWMARK'),
+                 INCREMENT=_F(INST_FIN=tfin,
+                               PAS=pa,),)
+
+
+DEPLPDZ=RECU_FONCTION(RESULTAT=TRANSD,
+                       NOM_CHAM='DEPL',
+                       NOM_CMP='DZ',
+                       GROUP_NO='P',);
+
+DEPLPDX=RECU_FONCTION(RESULTAT=TRANSD,
+                       NOM_CHAM='DEPL',
+                       NOM_CMP='DX',
+                       GROUP_NO='P',);
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=29,
+              COURBE=( _F(FONCTION=DEPLPDZ, MARQUEUR=0,),),);
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=30,
+              COURBE=( _F(FONCTION=DEPLPDX, MARQUEUR=0,),),);
+
+
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.14537012,
+                         VALE_PARA=0.05,
+                         FONCTION=DEPLPDZ,
+                         ),
+              ))
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=0.00017243164,
+                         VALE_PARA=0.05,
+                         FONCTION=DEPLPDX,
+                         ),
+              ))
+
+FIN();

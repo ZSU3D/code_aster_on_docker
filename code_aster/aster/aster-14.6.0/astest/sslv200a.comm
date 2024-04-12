@@ -1,0 +1,1352 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+# ========================================================================
+# TEST DE NON REGRESSION :
+# (les valeurs de reference ont ete obtenues par Code_Aster)
+#
+# - On utilise dans le maillage de nombreux types de mailles
+#   (pour valider le plus d'elements finis)
+#
+# - domaines testes :
+#      MECANIQUE LINEAIRE, MODELISATION='3D'
+# =========================================================================
+
+# ----------------------------------------------------------------------
+#    DEFINITION DU MODELE
+# ----------------------------------------------------------------------
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+DEFI_GROUP( reuse=MA, MAILLAGE=MA,
+                   CREA_GROUP_MA=_F(  NOM = 'GMX1', MAILLE = 'M109'),
+                   CREA_GROUP_NO=_F(  NOM = 'GNX1', NOEUD = 'N666')  )
+
+
+# MAILLAGE COMPORTANT TOUS LES TYPES D'ELEMENTS ISOPARAMETRIQUES 3D :
+#      TETRA4   PENTA6    HEXA8          PYRAM5
+#      TETRA10  PENTA15   HEXA20 HEXA27  PYRAM13
+
+MO=AFFE_MODELE(    MAILLAGE=MA,  VERI_JACOBIEN='OUI',
+                         AFFE=_F(  TOUT = 'OUI',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = '3D') )
+
+MOTH=AFFE_MODELE(    MAILLAGE=MA,  VERI_JACOBIEN='OUI',
+                           AFFE=_F(  TOUT = 'OUI',
+                                  PHENOMENE = 'THERMIQUE',
+                                  MODELISATION = '3D') )
+
+# ----------------------------------------------------------------------
+#    DEFINITION DE CHAMPS
+# ----------------------------------------------------------------------
+LR1=DEFI_LIST_REEL(         DEBUT=-0.5,
+                         INTERVALLE=_F(  JUSQU_A = 11.5,
+                                      NOMBRE = 2) )
+
+FO1=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=( -5.1, 1.05,
+                                4.8, 1.12,
+                               17.3, 1.14,   ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO2=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=( -8.1,  0.28,
+                               12.5,  0.33,
+                               25.7,  0.31,      ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO2_NU=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=( -8.1,  0.155652174,
+                               12.5,  0.185909619,
+                               25.7,  0.253593191,      ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO3=DEFI_FONCTION(    NOM_PARA='TEMP',
+                        VALE=( -5.1, 1.06,
+                                4.8, 1.11,
+                               17.3, 1.02,   ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO4=DEFI_FONCTION(    NOM_PARA='INST',
+                        VALE=( -1.5, 0.85,
+                                0.8, 0.98,
+                                8.5, 0.94,   ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO5=DEFI_FONCTION(    NOM_PARA='X',
+                        VALE=(  0.8, -0.91,
+                                1.5, -0.94,
+                                3.8, -0.89,  ),
+                         PROL_DROITE='CONSTANT',
+                        PROL_GAUCHE='LINEAIRE' )
+
+FO6=DEFI_FONCTION(    NOM_PARA='Y',
+                        VALE=( -2.1,  1.02,
+                                3.3,  0.98,
+                                8.9,  1.13,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE' )
+
+FO7=DEFI_FONCTION(    NOM_PARA='Z',
+                        VALE=(  0.8, -0.91,   1.5, -1.14,   3.8, -1.05,  ),
+                         PROL_DROITE='CONSTANT', PROL_GAUCHE='LINEAIRE' )
+FO7B=DEFI_FONCTION(    NOM_PARA='Z',
+                        VALE=(  0.8, -0.91E4,   1.5, -1.14E4,   3.8, -1.05E4,  ),
+                         PROL_DROITE='CONSTANT', PROL_GAUCHE='LINEAIRE' )
+
+FO8=DEFI_FONCTION(    NOM_PARA='INST',
+                        VALE=(  0.,  -4.91,
+                               11.2, -1.98,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='LINEAIRE' )
+
+FO9=DEFI_FONCTION(    NOM_PARA='X',
+                        VALE=( -5.2,  6.11,
+                                8.5,  6.04,  ),
+                         PROL_DROITE='CONSTANT',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO10=DEFI_FONCTION(    NOM_PARA='Y',
+                        VALE=( -0.5, -6.05,
+                               15.7, -5.88,  ),
+                         PROL_DROITE='CONSTANT',
+                        PROL_GAUCHE='LINEAIRE' )
+
+FO11=DEFI_FONCTION(    NOM_PARA='Z',
+                        VALE=( 1.8,   5.82,
+                               6.5,   6.06,
+                              11.8,   5.91,  ),
+                         PROL_DROITE='LINEAIRE',
+                        PROL_GAUCHE='CONSTANT' )
+
+FO12=DEFI_FONCTION(    NOM_PARA='INST',
+                        VALE=(  2.6,  11.6,
+                               19.2,  15.2,      ),
+                         PROL_DROITE='CONSTANT',
+                        PROL_GAUCHE='LINEAIRE' )
+
+FO13=DEFI_FONCTION(    NOM_PARA='INST',
+                         VALE=(  0.6,  0.94,
+                                37.3,  1.02,      ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='LINEAIRE' )
+
+FO14=DEFI_FONCTION(    NOM_PARA='INST',
+                         VALE=( -5.4,  0.91,
+                                31.4,  1.08,      ),
+                          PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE' )
+
+FO15=DEFI_FONCTION(    NOM_PARA='TEMP',
+                         VALE=( -1.1, 1.15,
+                                 7.8, 1.82,
+                                22.4, 1.41,   ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT' )
+
+FO16=DEFI_FONCTION(    NOM_PARA='TEMP',
+                         VALE=( -8.1,  0.19,
+                                12.5,  0.25,
+                                25.7,  0.34,      ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT' )
+
+FO17=DEFI_FONCTION(    NOM_PARA='TEMP',
+                         VALE=( 9.2,  2.2,
+                               11.4,  1.7,
+                               15.8,  2.4,    ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT' )
+
+FO18=DEFI_FONCTION(    NOM_PARA='TEMP',
+                         VALE=(  8.4, 5.15,
+                                19.8, 2.82,
+                                21.4, 4.74,   ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT' )
+
+FO19=DEFI_FONCTION(    NOM_PARA='TEMP',
+                         VALE=( -12.5, 5.2,
+                                  6.4, 6.8,
+                                 11.2, 3.7,   ),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT' )
+
+# ----------------------------------------------------------------------
+#    DEFINITION DES CARACTERISTIQUES ELEMENTAIRES : AXES LOCAUX
+# ----------------------------------------------------------------------
+CARA1=AFFE_CARA_ELEM(    MODELE=MO,MASSIF=(
+                           _F(
+       GROUP_MA = 'TOUT',
+
+                                    ANGL_REP = (21.4, 5.8, -16.7,)),
+                           _F(  GROUP_MA = ('GMA16', 'GMA17', 'GMA18',),
+                                    ANGL_AXE = (57.4, 22.7,),
+                                    ORIG_AXE = (1.1, 0.5, 0.6,))) )
+
+# ----------------------------------------------------------------------
+#    DEFINITION ET AFFECTATION DU MATERIAU
+# ----------------------------------------------------------------------
+MAT1=DEFI_MATERIAU(    ELAS=_F(  E = 1.2,
+                                NU = 0.3,
+                                RHO = 7800.,
+                                ALPHA = 1.),
+                         THER=_F(  RHO_CP = 1.4,
+                                LAMBDA = 0.8) )
+
+RHOF2=DEFI_CONSTANTE(VALE = 7820.0,)
+MAT2=DEFI_MATERIAU(    ELAS_FO=_F(  E = FO1,
+                                   NU = FO2,
+                                   RHO = RHOF2,
+                                   ALPHA = FO3,TEMP_DEF_ALPHA=2.9),
+                         THER=_F(  RHO_CP = 1.2,
+                                LAMBDA = 0.9) )
+
+MAT3=DEFI_MATERIAU(    ELAS_ISTR=_F(  E_L = 1.5,
+                                     E_N = 1.4,
+                                     NU_LT = 0.25,
+                                     NU_LN = 0.4,
+                                     G_LN = 3.1,
+                                     RHO = 8500.,
+                                     ALPHA_L = 2.1,
+                                     ALPHA_N = 0.8),
+                         THER=_F(  RHO_CP = 2.2,
+                                LAMBDA = 1.9) )
+
+RHOF4=DEFI_CONSTANTE(VALE = 6700.0,)
+MAT4=DEFI_MATERIAU(    ELAS_ISTR_FO=_F(  E_L = FO1,
+                                        E_N = FO15,
+                                        NU_LT = FO2,
+                                        NU_LN = FO16,
+                                        G_LN = FO18,
+                                        RHO = RHOF4,
+                                        ALPHA_L = FO3,
+                                        ALPHA_N = FO17,
+                                        TEMP_DEF_ALPHA=1.7),
+                         THER=_F(  RHO_CP = 2.7,
+                                LAMBDA = 0.4) )
+
+MAT5=DEFI_MATERIAU(    ELAS_ORTH=_F(  E_L = 1.6,
+                                     E_T = 1.8,
+                                     E_N = 2.8,
+                                     NU_LT = 0.177777778,
+                                     NU_LN = 0.3,
+                                     NU_TN = 0.4,
+                                     G_LT = 1.1,
+                                     G_LN = 2.2,
+                                     G_TN = 3.5,
+                                     RHO = 6820.,
+                                     ALPHA_L = 3.2,
+                                     ALPHA_T = 1.9,
+                                     ALPHA_N = 1.7,
+                                     XT = 1.2,
+                                     XC = 3.5,
+                                     YT = 2.7,
+                                     YC = 3.4,
+                                     S_LT = 2.6),
+                         THER=_F(  RHO_CP = 3.2,
+                                LAMBDA = 1.9) )
+
+RHOF6=DEFI_CONSTANTE(VALE = 5240.0,)
+MAT6=DEFI_MATERIAU(    ELAS_ORTH_FO=_F(  E_L = FO1,
+                                        E_T = FO15,
+                                        E_N = FO1,
+                                        NU_LT = FO2_NU,
+                                        NU_LN = FO16,
+                                        NU_TN = FO16,
+                                        G_LT = FO18,
+                                        G_LN = FO19,
+                                        G_TN = FO18,
+                                        RHO = RHOF6,
+                                        ALPHA_L = FO3,
+                                        ALPHA_T = FO17,
+                                        ALPHA_N = FO17,
+                                        TEMP_DEF_ALPHA=0.),
+                         THER=_F(  RHO_CP = 2.5,
+                                LAMBDA = 1.7) )
+
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MA,AFFE=(
+                          _F(  TOUT = 'OUI', MATER = MAT1, ),
+                          _F(  GROUP_MA = 'GMA0' , MATER = MAT2, ),
+                          _F(  GROUP_MA = 'GMA16', MATER = MAT3, ),
+                          _F(  GROUP_MA = 'GMA17', MATER = MAT4, ),
+                          _F(  GROUP_MA = 'GMA18', MATER = MAT5, ),
+                          _F(  GROUP_MA = 'GMA19', MATER = MAT6, )),
+                          )
+
+# DANS CHAQUE GROUP_MA, TOUS LES TYPES DE MAILLES SONT REPRESENTES
+
+# ----------------------------------------------------------------------
+#    AFFECTATION DES CHARGEMENTS ET DES CONDITIONS LIMITES
+# ----------------------------------------------------------------------
+CHTHF=AFFE_CHAR_THER_F(       MODELE=MOTH,TEMP_IMPO=(
+                             _F(  TOUT = 'OUI',
+                                         TEMP = FO13),
+                             _F(  NOEUD = ('N85', 'N109', 'N387', 'N473',),
+                                         TEMP = FO12)) )
+
+THLIN=THER_LINEAIRE(        MODELE=MOTH,
+                          CHAM_MATER=CHMAT,
+                           CARA_ELEM=CARA1,
+                           INCREMENT=_F(  LIST_INST = LR1),
+                               EXCIT=_F(  CHARGE = CHTHF) )
+
+#ENGENDRE_TEST (  CO = THLIN, )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=0,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THLIN,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=865.964161201,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THLIN,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=895.198134338,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=THLIN,
+                   NOM_CHAM='TEMP',
+                   VALE_CALC=934.727075086,
+                   ),
+                ),
+          )
+
+CMT=AFFE_MATERIAU(    MAILLAGE=MA,
+                    AFFE=(
+                          _F(  TOUT = 'OUI',       MATER = MAT1, ),
+                          _F(  GROUP_MA = 'GMA0' , MATER = MAT2, ),
+                          _F(  GROUP_MA = 'GMA16', MATER = MAT3, ),
+                          _F(  GROUP_MA = 'GMA17', MATER = MAT4, ),
+                          _F(  GROUP_MA = 'GMA18', MATER = MAT5, ),
+                          _F(  GROUP_MA = 'GMA19', MATER = MAT6, )),
+                    AFFE_VARC=(
+                        _F(NOM_VARC='TEMP',TOUT='OUI'       ,EVOL=THLIN,VALE_REF=1.8),
+                        _F(NOM_VARC='TEMP',GROUP_MA='GMA0'  ,EVOL=THLIN,VALE_REF=2.9),
+                        _F(NOM_VARC='TEMP',GROUP_MA='GMA16' ,EVOL=THLIN,VALE_REF=0.0),
+                        _F(NOM_VARC='TEMP',GROUP_MA='GMA17' ,EVOL=THLIN,VALE_REF=1.7),
+                        _F(NOM_VARC='TEMP',GROUP_MA='GMA18' ,EVOL=THLIN,VALE_REF=0.0),
+                        _F(NOM_VARC='TEMP',GROUP_MA='GMA19' ,EVOL=THLIN,VALE_REF=0.0),
+                          ))
+
+
+CHMEC=AFFE_CHAR_MECA(           MODELE=MO,
+                               VERI_NORM='NON',
+                               PESANTEUR=_F(GRAVITE=9.8,
+                                            DIRECTION=( 0.3,  0.1, -0.4,),),
+                                ROTATION=_F(VITESSE= 0.2,
+                                            AXE = (0.5, -0.2, 0.2,),),
+                           #TEMP_CALCULEE=THLIN,
+                           FORCE_INTERNE=(
+#  ----  MAILLES 3D
+                           _F(  GROUP_MA = 'GMA1',
+                                           FY = 0.51,
+                                           FZ = 0.70),
+                           _F(  MAILLE = ('M140', 'M192',),
+                                           FX = 0.84)),PRE_EPSI=(
+                           _F(  GROUP_MA = 'GMA3',
+                                       EPYZ = -1.8,
+                                       EPXY = 1.4),
+                           _F(  MAILLE = ('M7', 'M201', 'M178',),
+                                       EPXX = 2.2)),FACE_IMPO=(
+#  ----  MAILLES DE FACE 2D
+                           _F(  GROUP_MA = 'GMA5',
+                                       DX = -6.03,
+                                       DZ = -5.91),
+                           _F(  MAILLE = 'M267',
+                                       DNOR = -6.07)),FORCE_FACE=(
+                           _F(  GROUP_MA = 'GMA7',
+                                        FZ = -1.01),
+                           _F(  MAILLE = 'M471',
+                                        FY = -0.74)),PRES_REP=(
+                           _F(  GROUP_MA = 'GMA9',
+                                      PRES = 0.82),
+                           _F(  MAILLE = 'M257',
+                                      PRES = -1.07)),FORCE_ARETE=(
+#  ----  MAILLES ARETES 1D
+                           _F(  GROUP_MA = 'GMA11',
+                                         MX = 0.91,
+                                         MZ = -1.13),
+                           _F(  MAILLE = 'M540',
+                                         FX = 0.87)),
+#  ----  MAILLES DE TYPE QUELCONQUE
+                           LIAISON_GROUP=_F(  MAILLE_1 = 'M599',
+                                           GROUP_MA_2 = 'GMA13',
+                                           DDL_1 = 'DZ',
+                                           COEF_MULT_1 = 1.8,
+                                           DDL_2 = 'DY',
+                                           COEF_MULT_2 = 0.7,
+                                           COEF_IMPO = -5.22,),
+                          LIAISON_UNIF=(
+                           _F(  GROUP_MA = 'GMA14',
+                                          DDL = ('DX', 'DY',)),
+                           _F(  NOEUD = ('N34', 'N128',),
+                                          DDL = ('DX', 'DZ',))),LIAISON_SOLIDE=(
+                           _F(  MAILLE = ('M488', 'M598',),
+                                            NUME_LAGR = 'NORMAL'),
+                           _F(  GROUP_NO = ('GNO11', 'GNO12',),
+                                            NUME_LAGR = 'NORMAL')),DDL_IMPO=(
+#  ----  NOEUDS
+                           _F(  GROUP_NO = 'GNO1',
+                                      DX = 6.3),
+                           _F(  NOEUD = 'N620',
+                                      DY = 7.1,
+                                      DZ = -5.9)),LIAISON_DDL=(
+                           _F(  GROUP_NO = ('GNO3', 'GNO4',),
+                                         DDL = ('DX', 'DZ',),
+                                         COEF_MULT = (-1.2, 0.7, ),
+                                         COEF_IMPO = 5.9),
+                           _F(  NOEUD = ('N187', 'N666',),
+                                         DDL = ('DY', 'DY',),
+                                         COEF_MULT = (1.3,   1.1,),
+                                         COEF_IMPO = 6.1)),LIAISON_OBLIQUE=(
+                           _F(  GROUP_NO = 'GNO6',
+                                             ANGL_NAUT = ( 20.3, 15.8,
+                                                         -44.1, ),
+                                             DZ = 4.17),
+                           _F(  NOEUD = 'N73',
+                                             ANGL_NAUT = (18.7, 35.1,),
+                                             DZ = 5.95)),
+                           LIAISON_MAIL=_F(  GROUP_MA_MAIT = 'GMX1',
+                                             GROUP_NO_ESCL = 'GNX1',
+                                             DISTANCE_MAX = 2.9 , DISTANCE_ALARME = 2.88 ,),
+                           FORCE_NODALE=( _F(  GROUP_NO = 'GNO13',
+                                          FY = 0.87E4,
+                                          FZ = -0.92E4),
+                           _F(  NOEUD = 'N162',
+                                          FX = 0.86E4,
+                                          FY = 0.98E4,
+                                          ANGL_NAUT = (22.8, -56.1, 11.7,)))
+)
+
+CHMECF=AFFE_CHAR_MECA_F(         MODELE=MO,
+                                VERI_NORM='NON',FORCE_INTERNE=(
+#  ----  MAILLES 3D
+                              _F(  GROUP_MA = 'GMA2',
+                                              FY = FO4),
+                              _F(  MAILLE = ('M157', 'M184',),
+                                              FZ = FO5)),PRE_EPSI=(
+                              _F(  GROUP_MA = 'GMA4',
+                                          EPYY = FO8),
+                              _F(  MAILLE = ('M95', 'M206',),
+                                          EPXZ = FO8,
+                                          EPYZ = FO9)),FACE_IMPO=(
+#  ----  MAILLES DE BORD 2D
+                              _F(  GROUP_MA = 'GMA6',
+                                          DX = FO10),
+                              _F(  MAILLE = 'M326',
+                                          DNOR = FO11)),FORCE_FACE=(
+                              _F(  GROUP_MA = 'GMA8',
+                                           FZ = FO6),
+                              _F(  MAILLE = 'M436',
+                                           FY = FO4)),PRES_REP=(
+                              _F(  GROUP_MA = 'GMA10',
+                                         PRES = FO6),
+                              _F(  MAILLE = 'M363',
+                                         PRES = FO7)),FORCE_ARETE=(
+#  ----  MAILLES ARETE 1D
+                              _F(  GROUP_MA = 'GMA12',
+                                            FY = FO4,
+                                            FZ = FO5),
+                              _F(  MAILLE = 'M512',
+                                            MY = FO7)),LIAISON_UNIF=(
+#  ----  MAILLES DE TYPE QUELCONQUE
+                              _F(  MAILLE = 'M460',
+                                             DDL = 'DY'),
+                              _F(  GROUP_NO = 'GNO10',
+                                             DDL = ('DZ', 'DX',))),DDL_IMPO=(
+#  ----  NOEUDS
+                              _F(  GROUP_NO = 'GNO2',
+                                         DY = FO8),
+                              _F(  NOEUD = ('N115', 'N615',),
+                                         DX = FO11)),LIAISON_DDL=(
+                              _F(  GROUP_NO = 'GNO5',
+                                            DDL = ('DZ', 'DZ',),
+                                            COEF_MULT = (2.5,  -1.3,),
+                                            COEF_IMPO = FO10),
+                              _F(  NOEUD = ('N143', 'N655',),
+                                            DDL = ('DX', 'DZ',),
+                                            COEF_MULT = (1.4,   2.8,),
+                                            COEF_IMPO = FO9)),LIAISON_OBLIQUE=(
+                              _F(  GROUP_NO = 'GNO7',
+                                                ANGL_NAUT = (-25.4, 2.7,
+                                                              18.9, ),
+                                                DX = FO10),
+                              _F(  NOEUD = 'N69',
+                                                ANGL_NAUT = (12.3, 44.5,
+                                                             -9.6,  ),
+                                                DY = FO9)),
+                              LIAISON_GROUP=_F(  NOEUD_1 = ('N597', 'N601',
+                                                             'N604',),
+                                              GROUP_NO_2 = ('GNO8', 'GNO9',),
+                                              SANS_NOEUD = 'N622',
+                                              DDL_1 = ('DY', 'DZ',),
+                                              COEF_MULT_1 = (1.1,  -3.7,),
+                                              DDL_2 = 'DZ',
+                                              COEF_MULT_2 = 2.8,
+                                              COEF_IMPO = FO9),FORCE_NODALE=(
+                              _F(  GROUP_NO = 'GNO14',
+                                             FY = FO6),
+                              _F(  NOEUD = ('N113', 'N659',),
+                                             FZ = FO7,
+                                             ANGL_NAUT = FO12)) )
+
+CHCI=AFFE_CHAR_CINE(       MODELE=MO,MECA_IMPO=(
+                          _F(  GROUP_NO = 'GNO15',
+                                      DY = -5.2,
+                                      DZ = 6.1),
+                          _F(  NOEUD = ('N368', 'N669',),
+                                      DY = 0.0)) )
+
+CHCIF=AFFE_CHAR_CINE_F(       MODELE=MO,MECA_IMPO=(
+                             _F(  GROUP_NO = ('GNO16', 'GNO17',),
+                                         DZ = FO8,
+                                         DY = FO10),
+                             _F(  NOEUD = 'N261',
+                                         DY = FO9)) )
+
+# ----------------------------------------------------------------------
+#   COMMANDES GLOBALES DE MECANIQUE : STATIQUE LINEAIRE
+# ----------------------------------------------------------------------
+
+MSLIN=MECA_STATIQUE(        MODELE=MO,
+                            CARA_ELEM=CARA1,
+                           CHAM_MATER=CMT,EXCIT=(
+                           _F(  CHARGE = CHMEC,
+                                   FONC_MULT = FO13),
+                           _F(  CHARGE = CHCI,
+                                   FONC_MULT = FO14),
+                           _F(  CHARGE = CHMECF,
+                                   FONC_MULT = FO14),
+                           _F(  CHARGE = CHCIF,
+                                   FONC_MULT = FO13)),
+                           LIST_INST=LR1,
+                          )
+
+CALC_CHAMP(reuse=MSLIN,RESULTAT=MSLIN,LIST_INST=LR1,CRITERES=('SIEQ_ELNO','SIEQ_ELGA','EPEQ_ELNO','EPEQ_ELGA'),DEFORMATION=('EPSG_ELGA','EPSG_ELNO','EPME_ELNO','EPME_ELGA','EPSI_ELGA','EPSI_ELNO'),ENERGIE=('EPOT_ELEM'),CONTRAINTE=('SIGM_ELNO'))
+
+
+CALC_CHAMP( reuse=MSLIN,  RESULTAT=MSLIN,
+         CONTRAINTE='SIGM_NOEU',DEFORMATION='EPSI_NOEU',CRITERES=('SIEQ_NOEU','EPEQ_NOEU'),
+       )
+
+#ENGENDRE_TEST (  CO = MSLIN )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1168610669.37,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1184873016.01,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1201134353.24,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELGA',
+                   VALE_CALC=863885682.091,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELGA',
+                   VALE_CALC=875883032.185,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELGA',
+                   VALE_CALC=887879482.757,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELNO',
+                   VALE_CALC=888445008.461,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELNO',
+                   VALE_CALC=900781160.556,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_ELNO',
+                   VALE_CALC=913116288.633,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=244187421.899,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=247576514.906,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=250965356.907,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEF_ELGA',
+                   VALE_CALC=1591336075.24,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEF_ELGA',
+                   VALE_CALC=1613527336.45,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEF_ELGA',
+                   VALE_CALC=1635723057.61,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_ELNO',
+                   VALE_CALC=1625528782.01,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_ELNO',
+                   VALE_CALC=1648199082.68,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_ELNO',
+                   VALE_CALC=1670870686.73,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=415705283.547,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=421506776.634,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=427308147.456,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELGA',
+                   VALE_CALC=5218068526.68,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELGA',
+                   VALE_CALC=5290806372.06,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELGA',
+                   VALE_CALC=5363544115.22,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELNO',
+                   VALE_CALC=5284557575.55,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELNO',
+                   VALE_CALC=5358274565.14,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_ELNO',
+                   VALE_CALC=5431993273.02,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=676250449.355,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=685674997.812,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=695100550.641,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELGA',
+                   VALE_CALC=1610440536.98,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELGA',
+                   VALE_CALC=1632806922.53,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELGA',
+                   VALE_CALC=1655171325.72,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELNO',
+                   VALE_CALC=1632119288.59,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELNO',
+                   VALE_CALC=1654785931.96,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_ELNO',
+                   VALE_CALC=1677450651.53,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=143800929.148,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=145803124.676,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=147805162.568,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPOT_ELEM',
+                   VALE_CALC=3.89187947242E+12,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPOT_ELEM',
+                   VALE_CALC=4.00092694893E+12,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPOT_ELEM',
+                   VALE_CALC=4.1114745961E+12,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELGA',
+                   VALE_CALC=1.14619539312E+15,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELGA',
+                   VALE_CALC=1.17833991299E+15,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELGA',
+                   VALE_CALC=1.21092821486E+15,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELNO',
+                   VALE_CALC=1.40650227392E+15,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELNO',
+                   VALE_CALC=1.44600359626E+15,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPSG_ELNO',
+                   VALE_CALC=1.48605233944E+15,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELNO',
+                   VALE_CALC=888444887.264,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELNO',
+                   VALE_CALC=900781042.799,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELNO',
+                   VALE_CALC=913116172.204,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELGA',
+                   VALE_CALC=863885513.883,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELGA',
+                   VALE_CALC=875882871.434,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLIN,
+                   NOM_CHAM='EPME_ELGA',
+                   VALE_CALC=887879323.07,
+                   ),
+                ),
+          )
+
+# VALIDATION DE PROJ_CHAMP/METHODE:'COLLOCATION' EN 3D :
+
+MSLINP=PROJ_CHAMP(RESULTAT=MSLIN,     METHODE='AUTO',
+                     MODELE_1=MO,        MODELE_2=MO  )
+
+#ENGENDRE_TEST (  CO = MSLINP, )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1153938732.25,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1169990922.39,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='DEPL',
+                   VALE_CALC=1186041950.86,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=243895772.855,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=247280823.025,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPSI_NOEU',
+                   VALE_CALC=250665622.674,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=414632042.955,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=420418691.349,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM_ABS',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIGM_NOEU',
+                   VALE_CALC=426205220.764,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=674631798.32,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=684033728.048,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='SIEQ_NOEU',
+                   VALE_CALC=693436660.149,
+                   ),
+                _F(NUME_ORDRE=1,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=143918877.43,
+                   ),
+                _F(NUME_ORDRE=2,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=145922747.373,
+                   ),
+                _F(NUME_ORDRE=3,
+                   TYPE_TEST='SOMM',
+                   RESULTAT=MSLINP,
+                   NOM_CHAM='EPEQ_NOEU',
+                   VALE_CALC=147926460.352,
+                   ),
+                ),
+          )
+
+TABME0=MACR_LIGN_COUPE(   RESULTAT    = MSLIN,
+                   LIGN_COUPE  =   _F( NB_POINTS  = 10,
+                                       COOR_ORIG  = (0.53531E+01,0.77826E+01,0.99437E+00),
+                                       COOR_EXTR  = (0.22327E+01,0.69743E+01,0.18483E+01),
+                                       DISTANCE_MAX=0.001, ),
+                     )
+
+IMPR_TABLE ( TABLE = TABME0,
+             FORMAT='ASTER',
+             UNITE=39
+             )
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=39)
+
+TABME1=LIRE_TABLE( UNITE=39,
+                   FORMAT='ASTER',
+                   NUME_TABLE=1,
+                   SEPARATEUR=' ',)
+
+TEST_TABLE(
+           VALE_CALC=34637.5,
+           NOM_PARA='SIXX',
+           TABLE=TABME1,
+           FILTRE=(_F(NOM_PARA='ABSC_CURV',
+                      VALE=1.48204,),
+                   _F(NOM_PARA='INST',
+                      VALE=5.5,),
+                   ),
+           )
+
+# ----------------------------------------------------------------------
+
+CHAMNO1=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+                     NOM_CHAM='DEPL', RESULTAT=MSLIN,
+                       INST=0.7,
+                       INTERPOL='LIN'
+                        )
+
+CHAMNO2=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+                     NOM_CHAM='DEPL', RESULTAT=MSLIN,
+                         TYPE_MAXI='NORM_TRAN',
+                         TYPE_RESU='INST',
+                         LIST_INST=LR1    )
+
+CHAMEL1=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELGA_SIEF_R',
+                     NOM_CHAM='SIEF_ELGA', RESULTAT=MSLIN,
+                       INST=1.8,
+                       INTERPOL='LIN'
+                        )
+
+CHAMEL2=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELGA_EPSI_R',
+                     NOM_CHAM='EPSI_ELGA', RESULTAT=MSLIN,
+                       INST=4.1,
+                       INTERPOL='LIN'
+                        )
+
+CHAMEL3=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELNO_SIEF_R',
+                     NOM_CHAM='SIGM_ELNO', RESULTAT=MSLIN,
+                       INST=1.8,
+                       INTERPOL='LIN'
+                        )
+
+CHAMEL4=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELNO_EPSI_R',
+                     NOM_CHAM='EPSI_ELNO', RESULTAT=MSLIN,
+                       INST=4.1,
+                       INTERPOL='LIN'
+                        )
+
+CHAMEL5=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELNO_SIEF_R',
+                      NOM_CHAM='SIEQ_ELNO', RESULTAT=MSLIN,
+                        INST=3.4,
+                        INTERPOL='LIN' )
+
+CHAMEL6=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELGA_EPSI_R',
+                      NOM_CHAM='EPSI_ELGA', RESULTAT=MSLIN,
+                        TYPE_MAXI='MINI',
+                        TYPE_RESU='VALE',
+                         )
+
+CHAMEL7=CALC_CHAM_ELEM(    MODELE=MO,
+                              CARA_ELEM=CARA1,
+                             GROUP_MA='GMA20',
+                             OPTION='COOR_ELGA' )
+
+#ENGENDRE_TEST (  CO = (CHAMNO1, CHAMNO2 ), )
+#ENGENDRE_TEST (  CO = (CHAMEL1,CHAMEL2,CHAMEL3,CHAMEL4,CHAMEL5,CHAMEL6,CHAMEL7 ), )
+
+TEST_RESU(CHAM_NO=_F(
+                     TYPE_TEST='SOMM_ABS',
+                     CHAM_GD=CHAMNO1,
+                     VALE_CALC=1171863138.7,),
+          )
+
+TEST_RESU(CHAM_NO=_F(
+                     TYPE_TEST='SOMM_ABS',
+                     CHAM_GD=CHAMNO2,
+                    VALE_CALC=14704908.0152,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL1,
+                       VALE_CALC=1599842655.24,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL2,
+                       VALE_CALC=873083603.878,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL3,
+                       VALE_CALC=1634219063.93,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL4,
+                       VALE_CALC=897902718.301,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL5,
+                       VALE_CALC=5332473614.54,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL6,
+                       VALE_CALC=876695553.263,),
+          )
+
+TEST_RESU(CHAM_ELEM=_F(
+                       TYPE_TEST='SOMM_ABS',
+                       CHAM_GD=CHAMEL7,
+                       VALE_CALC=1341.37071944,),
+          )
+
+# --------------------------------------------------------------------
+
+TABLE1=POST_ELEM(        MODELE=MO,
+                        CHAM_MATER=CMT,
+                         CARA_ELEM=CARA1,
+                          RESULTAT=MSLIN,MASS_INER=(
+                         _F( GROUP_MA = 'GMA21'),
+                         _F( TOUT = 'OUI'),
+                         _F( MAILLE = 'M54')) )
+
+TABLE2=POST_ELEM(     RESULTAT=MSLIN,
+                              INST=5.5,
+                          ENER_POT=(_F( TOUT = 'OUI',),
+                                    _F(GROUP_MA = 'GMA21',),
+                                    _F(MAILLE = ('M44', 'M99',)) ))
+
+#ENGENDRE_TEST (  CO=(TABLE1,TABLE2), )
+
+TEST_TABLE(
+           VALE_CALC=733765.784495,
+           NOM_PARA='MASSE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=14.7697450264,
+           NOM_PARA='CDG_X',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=9.63679511985,
+           NOM_PARA='CDG_Y',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.80226321487,
+           NOM_PARA='CDG_Z',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=4218746.78428,
+           NOM_PARA='IX_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=7766205.29223,
+           NOM_PARA='IY_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=10596715.0516,
+           NOM_PARA='IZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=2199934.77786,
+           NOM_PARA='IXY_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=1424345.178,
+           NOM_PARA='IXZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=764048.044485,
+           NOM_PARA='IYZ_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=2823205.23357,
+           NOM_PARA='IX_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=8820599.70809,
+           NOM_PARA='IY_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=10937862.1864,
+           NOM_PARA='IZ_PRIN_G',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=73.2611518978,
+           NOM_PARA='ALPHA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=56.2888779538,
+           NOM_PARA='BETA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC=43.5742952121,
+           NOM_PARA='GAMMA',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE1,
+           )
+
+TEST_TABLE(
+           VALE_CALC_I=8,
+           NOM_PARA='NUME_ORDRE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE2,
+           )
+
+TEST_TABLE(
+           VALE_CALC=4.3383813107E+12,
+           NOM_PARA='TOTALE',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE2,
+           )
+
+TEST_TABLE(
+           VALE_CALC=108.434404479,
+           NOM_PARA='POUR_CENT',
+           TYPE_TEST='SOMM_ABS',
+           TABLE=TABLE2,
+           )
+
+LR3=DEFI_LIST_REEL(         DEBUT=0.,
+                         INTERVALLE=_F(  JUSQU_A = 10.,
+                                      NOMBRE = 5) )
+
+FO20=RECU_FONCTION(       RESULTAT=MSLIN,
+                            NOM_CHAM='SIGM_ELNO',
+                              MAILLE='M4',
+                            GROUP_NO='GNO4',
+                             NOM_CMP='SIXY',
+                           LIST_INST=LR3,
+                         INTERP_NUME='LIN',
+                            NOM_PARA='INST',
+                            NOM_RESU='VITE',
+                            INTERPOL=('LIN',  'LIN',),
+                          PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='CONSTANT'  )
+
+FO21=RECU_FONCTION(        CHAM_GD=CHAMEL2,
+                              MAILLE='M214',
+                               POINT=2,
+                             NOM_CMP='EPXX',
+                            INTERPOL=('LIN', 'LIN',),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT'  )
+
+FO22=RECU_FONCTION(        CHAM_GD=CHAMNO1,
+                             NOM_CMP='DZ',
+                               NOEUD='N341',
+                            INTERPOL=('LIN', 'LIN',),
+                          PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT'  )
+
+FO23=CALC_FONCTION( COMB=(   _F(  FONCTION = FO12,
+                                COEF = 5.1),
+                         _F(  FONCTION = FO13,
+                                COEF = -3.7),
+                         _F(  FONCTION = FO14,
+                                COEF = 0.8)),
+                            NOM_PARA='INST',
+                            NOM_RESU='VITE',
+                          PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE'  )
+
+FO24=CALC_FONCTION(    DERIVE=_F(  FONCTION = FO20) )
+
+FO25=CALC_FONCTION(    INTEGRE=_F(  FONCTION = FO23,
+                                   COEF = 1.4) )
+
+FO26=INFO_FONCTION(         MAX=_F(  FONCTION = FO23),  )
+
+FO27=CALC_FONCTION(    ENVELOPPE=_F(  FONCTION = ( FO12, FO13, FO14, ),
+                                     CRITERE = 'INF') )
+
+FO28=CALC_FONCTION(    ENVELOPPE=_F(  FONCTION = ( FO13, FO14, ),
+                                     CRITERE = 'SUP') )
+
+MATELEM1=CALC_MATR_ELEM(        OPTION='RIGI_MECA',
+                                  MODELE=MO,
+                              CHAM_MATER=CMT,
+                               CARA_ELEM=CARA1,
+                                 CHARGE=(CHMEC, CHMECF, ),
+                                    INST=2.9 )
+
+MATELEM2=CALC_MATR_ELEM(        OPTION='MASS_MECA',
+                                   MODELE=MO,
+                               CHAM_MATER=CMT,
+                                CARA_ELEM=CARA1,
+                                  CHARGE=(CHMEC, CHMECF, ),
+                                     INST=2.9 )
+
+FIN( )

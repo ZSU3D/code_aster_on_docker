@@ -1,0 +1,171 @@
+# -*- coding: utf-8 -*-
+
+import math
+import salome
+salome.salome_init()
+from salome.geom import geomBuilder
+import GEOM
+geompy = geomBuilder.New(salome.myStudy)
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+
+
+#############Chemin pour l'export du maillage resultat############
+ExportPATH="/home/PHIMECA/maillages/"
+##################################################################
+
+#===================================================
+#                  PARAMETRES
+#                  ----------
+#===================================================
+
+tol3d = 1.e-6;
+
+#  dimensions
+#----------------
+Rext    = 0.2  ;
+Ep      = 0.02 ;
+Rm      = Rext - (Ep/2.) ;
+RC      = 0.6  ;
+LG      = 3.0  ;
+
+#  Vecteurs utiles
+#------------------
+vx = geompy.MakeVectorDXDYDZ(100., 0., 0.)
+vy = geompy.MakeVectorDXDYDZ(0., 100., 0.)
+vz = geompy.MakeVectorDXDYDZ(0., 0., 100.)
+
+# axe de rotation pour generer le coude
+p1_tmp = geompy.MakeVertex(RC,LG,0.)
+p2_tmp = geompy.MakeVertex(RC,LG,10.)
+v_rot = geompy.MakeVector(p1_tmp, p2_tmp)
+# axe du cylindre haut
+m4 = geompy.MakeVertex(0,LG+RC,0);
+m5 = geompy.MakeVertex(LG,LG+RC,0);
+axe = geompy.MakeLineTwoPnt(m4, m5)
+
+#===================================================
+#                  GEOMETRIE
+#                  ---------
+#===================================================
+
+#  Arc de base de la coque
+#---------------------------
+P1 = geompy.MakeVertex(   Rm, 0,  0);
+P2 = geompy.MakeVertex(    0, 0, Rm);
+P3 = geompy.MakeVertex(-1*Rm, 0,  0);
+arc1 = geompy.MakeArc(P1, P2, P3)
+
+m1 = geompy.MakeVertex(   0,  LG,   Rm);
+
+#  Extrusion selon l'axe Y
+#---------------------------
+S1 = geompy.MakePrismVecH(arc1, vy, LG)
+
+#  Revolution
+#---------------------------
+edge_tmp=geompy.GetEdgeNearPoint(S1,m1)
+coude = geompy.MakeRevolution(edge_tmp, v_rot, -math.pi/2)
+
+#  Extrusion selon l'axe X
+#---------------------------
+m2 = geompy.MakeRotation(m1, v_rot, -math.pi/2)
+edge_tmp=geompy.GetEdgeNearPoint(coude,m2)
+S2 = geompy.MakePrismVecH(edge_tmp, vx, LG)
+
+
+# Création de la géométrie générale
+#------------------------------------
+GeoCoude = geompy.MakeCompound([S1,coude,S2])
+
+# Affichage dans l'arbre
+#---------------------------
+id_GeoCoude = geompy.addToStudy(GeoCoude,"GeoCoude")
+
+# Création des groupes
+#---------------------------
+
+AI1= geompy.GetSame(GeoCoude,P1)
+geompy.addToStudyInFather( GeoCoude, AI1,  "AI1" )
+
+BASE = geompy.GetSame(GeoCoude,arc1)
+geompy.addToStudyInFather( GeoCoude, BASE, "BASE" )
+
+# on recupere le bord EFOND par ses deux points extremites
+PEF1=geompy.MakeVertex(RC+LG,RC+LG+Rm,0.)
+PEF2=geompy.MakeVertex(RC+LG,RC+LG-Rm,0.)
+EFOND=geompy.GetEdge(GeoCoude,PEF1,PEF2)
+geompy.addToStudyInFather( GeoCoude, EFOND, "EFOND" )
+
+SYMETRIE = geompy.CreateGroup(GeoCoude, geompy.ShapeType["EDGE"])
+edges_on_pln = geompy.GetShapesOnPlaneWithLocation(GeoCoude, geompy.ShapeType["EDGE"],vz, P1, GEOM.ST_ON)
+geompy.UnionList(SYMETRIE,edges_on_pln)
+geompy.addToStudyInFather( GeoCoude, SYMETRIE, "SYMETRIE" )
+
+TUYAU = geompy.CreateGroup(GeoCoude, geompy.ShapeType["FACE"])
+face = geompy.SubShapeAll(GeoCoude, geompy.ShapeType["FACE"])
+geompy.UnionList(TUYAU,face)
+geompy.addToStudyInFather( GeoCoude, TUYAU, "TUYAU" )
+
+
+HypCirconference = geompy.GetSame(GeoCoude,arc1)
+geompy.addToStudyInFather(GeoCoude,HypCirconference,"HypCirconference")
+
+#===================================================
+#                  MAILLAGE
+#                  --------
+#===================================================
+#
+
+maillageCoude = smesh.Mesh(GeoCoude, "MeshCoude")
+
+# Algorithmes et hypotheses globales
+# ----------------------------------
+
+# 1D
+numberOfSegments = 15
+algo = maillageCoude.Segment()
+algo.NumberOfSegments(numberOfSegments)
+algo.Propagation()
+
+# 2D
+maillageCoude.Quadrangle()
+
+# 1D
+nbSegCirconf = 10
+
+algo2 = maillageCoude.Segment(HypCirconference)
+algo2.NumberOfSegments(nbSegCirconf)
+algo2.Propagation()
+
+
+# Calcul
+# ------
+maillageCoude.Compute()
+
+
+# Création des groupes du maillage
+#---------------------------------
+maillageCoude.Group(AI1, "AI1" )
+maillageCoude.Group(BASE, "BASE" )
+maillageCoude.Group(EFOND, "EFOND" )
+maillageCoude.Group(SYMETRIE, "SYMETRIE" )
+maillageCoude.Group(TUYAU, "TUYAU" )
+
+geompy.addToStudy(m1,"m1")
+filter = smesh.GetCriterion(SMESH.NODE, SMESH.FT_BelongToGeom, SMESH.FT_EqualTo, m1)
+N_TEST = maillageCoude.MakeGroupByCriterion("N_TEST",filter)
+
+
+########Export du maillage au format MMED########
+maillageCoude.ExportMED( r''+ExportPATH+'forma02c.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+
+# Mise à jour de l'arbre
+#---------------------------
+# Si on a une interface graphique...
+if salome.sg.hasDesktop():
+   gg = salome.ImportComponentGUI("GEOM")
+   gg.createAndDisplayFitAllGO(id_GeoCoude)
+   salome.sg.updateObjBrowser(1)

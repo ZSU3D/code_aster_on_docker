@@ -1,0 +1,421 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      PAR_LOT = 'OUI')
+
+E       = 30000.
+NU      = 0.2
+sc      = 3.
+Gf      = 0.1
+D       = 50.
+p       = 5.
+
+# For a ratio fc/ft=10
+sig0_ft = 0.3076969929996482
+gamma0  = 28.540432560041864
+
+# For the given gamma0 in confined tension:
+x = 3.2647646494492157
+
+ft = sc/x/sig0_ft
+fc = 10*ft
+
+
+# Closed-form solution for a = 0.2 in confined tension
+# ----------------------------------------------------
+
+lbd = E*NU/(1+NU)/(1-2*NU)
+mu  = 0.5*E/(1+NU)
+Ec = lbd + 2*mu
+
+wy  = 0.5*sc**2/Ec
+m   = 0.75*Gf/D/wy
+k   = wy*m
+
+a   = 0.2
+Aa  = (1-a)**2/((1-a)**2+m*a*(1+p*a))
+Da  = m*(a-1)*(a+1+2*p*a)/( (1-a)**2 + m*a*(1+p*a) )**2
+
+eps = (-2*k/Ec/Da)**0.5
+sig = Ec*Aa*eps
+
+
+
+# Stiffness recovery in compression
+# ----------------------------------------------------
+
+eps_comp = - 2*sc/Ec
+gam = -E/fc/log(0.9) 
+Sprim    = (2*eps_comp-1/gam)*exp(1/(gam*eps_comp))
+sig_comp = Ec*(Aa*eps_comp+0.5*(1-Aa)*Sprim)
+
+
+# Orientation en biais de la sollicitation
+
+nx =  1/14**0.5
+ny =  2/14**0.5
+nz =  3/14**0.5
+
+
+# -----------------------------------------------------
+#                 MAILLAGE ET MODELE
+# -----------------------------------------------------
+
+MA  =  LIRE_MAILLAGE(FORMAT = 'MED')
+
+MO = AFFE_MODELE(
+  MAILLAGE = MA,
+  AFFE     = _F(
+    GROUP_MA     = 'MATIERE',
+    PHENOMENE    = 'MECANIQUE',
+    MODELISATION = '3D_GRAD_VARI'
+    ),
+  )
+
+
+# -----------------------------------------------------
+#                     MATERIAU
+# -----------------------------------------------------
+
+BETON = DEFI_MATER_GC(
+  ENDO_FISS_EXP = _F(
+    E  = E,
+    NU = NU,
+    FT = ft,
+    GF = Gf,
+    FC = fc,
+    P  = p,
+    LARG_BANDE = 2*D,
+    ),
+  )
+    
+CHMAT = AFFE_MATERIAU(
+  MAILLAGE = MA,
+  AFFE = _F(
+    GROUP_MA = 'MATIERE',
+    MATER    =  BETON
+    ),
+  )
+
+
+# -----------------------------------------------------
+#                CHARGEMENT ET INSTANTS
+# -----------------------------------------------------
+
+dx = {}
+dy = {}
+dz = {}
+for i in [0,1,2]:
+  for j in [0,1,2]:
+    for k in [0,1,2]:
+      dx[i*100+j*10+k] = eps*(nx*i+ny*j+nz*k)*nx
+      dy[i*100+j*10+k] = eps*(nx*i+ny*j+nz*k)*ny
+      dz[i*100+j*10+k] = eps*(nx*i+ny*j+nz*k)*nz
+
+      
+TRACTION = AFFE_CHAR_MECA(
+  MODELE = MO,
+  DDL_IMPO = (
+    _F(GROUP_NO='000',DX=dx[  0],DY=dy[  0],DZ=dz[  0]),
+    _F(GROUP_NO='100',DX=dx[100],DY=dy[100],DZ=dz[100]),
+    _F(GROUP_NO='200',DX=dx[200],DY=dy[200],DZ=dz[200]),
+    _F(GROUP_NO='210',DX=dx[210],DY=dy[210],DZ=dz[210]),
+    _F(GROUP_NO='220',DX=dx[220],DY=dy[220],DZ=dz[220]),
+    _F(GROUP_NO='120',DX=dx[120],DY=dy[120],DZ=dz[120]),
+    _F(GROUP_NO='020',DX=dx[ 20],DY=dy[ 20],DZ=dz[ 20]),
+    _F(GROUP_NO='010',DX=dx[ 10],DY=dy[ 10],DZ=dz[ 10]),
+    _F(GROUP_NO='001',DX=dx[  1],DY=dy[  1],DZ=dz[  1]),
+    _F(GROUP_NO='201',DX=dx[201],DY=dy[201],DZ=dz[201]),
+    _F(GROUP_NO='221',DX=dx[221],DY=dy[221],DZ=dz[221]),
+    _F(GROUP_NO='021',DX=dx[ 21],DY=dy[ 21],DZ=dz[ 21]),
+    _F(GROUP_NO='002',DX=dx[  2],DY=dy[  2],DZ=dz[  2]),
+    _F(GROUP_NO='102',DX=dx[102],DY=dy[102],DZ=dz[102]),
+    _F(GROUP_NO='202',DX=dx[202],DY=dy[202],DZ=dz[202]),
+    _F(GROUP_NO='212',DX=dx[212],DY=dy[212],DZ=dz[212]),
+    _F(GROUP_NO='222',DX=dx[222],DY=dy[222],DZ=dz[222]),
+    _F(GROUP_NO='122',DX=dx[122],DY=dy[122],DZ=dz[122]),
+    _F(GROUP_NO='022',DX=dx[ 22],DY=dy[ 22],DZ=dz[ 22]),
+    _F(GROUP_NO='012',DX=dx[ 12],DY=dy[ 12],DZ=dz[ 12]),
+    ),
+  )
+
+
+INSTANTS = DEFI_LIST_REEL(  
+  DEBUT = 0,                
+  INTERVALLE = (            
+    _F(JUSQU_A = 100, NOMBRE = 100)
+    )                       
+  )                         
+                            
+
+EVOL = STAT_NON_LINE(
+  MODELE     = MO,
+  CHAM_MATER = CHMAT,
+  EXCIT      = _F(CHARGE = TRACTION, TYPE_CHARGE = 'FIXE_PILO'),
+  PILOTAGE   = _F(
+    TYPE           = 'PRED_ELAS',
+    SELECTION      = 'MIXTE',
+    COEF_MULT      =  10,
+    ETA_PILO_R_MIN =   0,
+    ETA_PILO_R_MAX =  10,
+    ETA_PILO_MAX   =   1,
+    PROJ_BORNES    = 'OUI',
+    ),
+  COMPORTEMENT = _F(RELATION  = 'ENDO_FISS_EXP'),
+  INCREMENT = _F(LIST_INST = INSTANTS),
+  NEWTON    = _F(MATRICE='TANGENTE', REAC_ITER = 1),
+  CONVERGENCE = _F(
+    SIGM_REFE      = ft,
+    VARI_REFE      = 1.,
+    LAGR_REFE      = Gf/D,
+    RESI_REFE_RELA = 1.E-5,
+    ITER_GLOB_MAXI = 15,
+    ),
+  SOLVEUR   = _F(
+    METHODE     = 'MUMPS',
+   
+    ),
+  ) 
+
+tfin = 2.
+
+# -----------------------------------------------------
+#    EXTRAPOLATION DES VARIABLES INTERNES AUX NOEUDS
+# -----------------------------------------------------
+
+EVOL=CALC_CHAMP(reuse =EVOL,
+                RESULTAT=EVOL,
+                VARI_INTERNE=('VARI_ELNO','VARI_NOEU'),
+                );
+
+
+# -----------------------------------------------------
+#     EXTRACTION SUR LA FACE DROITE DU QUADGRANGLE
+# -----------------------------------------------------
+
+RESU = POST_RELEVE_T(
+  ACTION = _F(
+    INTITULE  = 'RESULTAT',
+    OPERATION = 'EXTRACTION',
+    RESULTAT  =  EVOL,
+    NOM_CHAM  = 'VARI_NOEU',
+    NOM_CMP   = 'V1',
+    GROUP_NO  = ('200','210','220'),
+    ),
+  )
+
+  
+IMPR_TABLE(TABLE=RESU)
+
+# -----------------------------------------------------
+#      COMPARAISON AVEC LES VALEURS DE REFERENCE
+# -----------------------------------------------------
+
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.199999999922,
+           VALE_REFE=0.2,
+           NOM_PARA='V1',
+           TABLE=RESU,
+           FILTRE=(_F(NOM_PARA='INST',
+                      VALE=tfin,),
+                   _F(NOM_PARA='COOR_Y',
+                      VALE=0,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.199999999922,
+           VALE_REFE=0.2,
+           NOM_PARA='V1',
+           TABLE=RESU,
+           FILTRE=(_F(NOM_PARA='INST',
+                      VALE=tfin,),
+                   _F(NOM_PARA='COOR_Y',
+                      VALE=1,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.199999999922,
+           VALE_REFE=0.2,
+           NOM_PARA='V1',
+           TABLE=RESU,
+           FILTRE=(_F(NOM_PARA='INST',
+                      VALE=tfin,),
+                   _F(NOM_PARA='COOR_Y',
+                      VALE=2,),
+                   ),
+           )
+
+
+# ------------------------------------------------------------
+# TESTS DES POST-TRAITEMENTS EN DEFORMATIONS ET EN CONTRAINTES
+# ------------------------------------------------------------
+
+EVOL=CALC_CHAMP(reuse =EVOL,
+                RESULTAT=EVOL,
+                CONTRAINTE  = ('SIGM_ELGA','SIGM_ELNO','SIEF_ELNO','SIEF_NOEU'),
+                DEFORMATION = ('EPSI_ELGA','EPSI_ELNO','EPSI_NOEU','EPSG_ELGA','EPSG_ELNO','EPSG_NOEU'),
+                CRITERES    = ('EPEQ_ELGA','EPEQ_ELNO','EPEQ_NOEU','SIEQ_ELGA','SIEQ_ELNO','SIEQ_NOEU'),
+                );
+
+
+EPEQ = POST_RELEVE_T(
+  ACTION = _F(
+    INTITULE  = 'RESULTAT',
+    OPERATION = 'EXTRACTION',
+    RESULTAT  =  EVOL,
+    NOM_CHAM  = 'EPEQ_NOEU',
+    NOM_CMP   = 'PRIN_3',
+    GROUP_NO  = '200',
+    INST      = tfin,
+    ),
+  )
+  
+SIEQ = POST_RELEVE_T(
+  ACTION = _F(
+    INTITULE  = 'RESULTAT',
+    OPERATION = 'EXTRACTION',
+    RESULTAT  =  EVOL,
+    NOM_CHAM  = 'SIEQ_NOEU',
+    NOM_CMP   = 'VMIS',
+    GROUP_NO  = '200',
+    INST      = tfin,
+    ),
+  )
+  
+EPSG = POST_RELEVE_T(
+  ACTION = _F(
+    INTITULE  = 'RESULTAT',
+    OPERATION = 'EXTRACTION',
+    RESULTAT  =  EVOL,
+    NOM_CHAM  = 'EPSG_NOEU',
+    NOM_CMP   = 'EPXX',
+    GROUP_NO  = '200',
+    INST      = tfin,
+    ),
+  )
+  
+epeq = eps
+sieq = 2*mu*Aa*eps
+epsg = (eps+0.5*eps**2)*nx*nx
+
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.000286,
+           VALE_REFE=epeq,
+           NOM_PARA='PRIN_3',
+           TABLE=EPEQ,
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.900000000616,
+           VALE_REFE=sieq,
+           NOM_PARA='VMIS',
+           TABLE=SIEQ,
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=2.04314927143E-05,
+           VALE_REFE=epsg,
+           NOM_PARA='EPXX',
+           TABLE=EPSG,
+           )
+
+
+# -----------------------------------------------------------------
+# Compression phase
+# -----------------------------------------------------------------
+
+
+RAMPE = DEFI_FONCTION(
+  NOM_PARA = 'INST',
+  VALE     = (0,1, 1,eps_comp/eps),
+  )
+
+  
+INSTANT2 = DEFI_LIST_REEL(  
+  DEBUT = 0,                
+  INTERVALLE = (            
+    _F(JUSQU_A = 1, NOMBRE = 5)
+    )                       
+  )                         
+
+                            
+EVOL2 = STAT_NON_LINE(
+  ETAT_INIT  = _F(EVOL_NOLI=EVOL, INST=tfin),
+  MODELE     = MO,
+  CHAM_MATER = CHMAT,
+  EXCIT      = _F(CHARGE = TRACTION, FONC_MULT=RAMPE),
+  COMPORTEMENT = _F(RELATION  = 'ENDO_FISS_EXP'),
+  INCREMENT = _F(LIST_INST = INSTANT2, INST_INIT=0),
+  NEWTON    = _F(MATRICE='TANGENTE', REAC_ITER = 1),
+  CONVERGENCE = _F(
+    SIGM_REFE      = ft,
+    VARI_REFE      = 1.,
+    LAGR_REFE      = Gf/D,
+    RESI_REFE_RELA = 1.E-5,
+    ITER_GLOB_MAXI = 15,
+    ),
+  SOLVEUR   = _F(
+    METHODE     = 'MUMPS',
+   
+    ),
+  ) 
+
+CALC_CHAMP(reuse = EVOL2,
+  RESULTAT = EVOL2,
+  FORCE    = 'FORC_NODA',
+  )
+
+ENER = POST_ELEM(
+  RESULTAT = EVOL2,
+  TRAV_EXT = _F(),
+  )
+  
+
+# -----------------------------------------------------
+#      COMPARAISON AVEC LES VALEURS DE REFERENCE
+# -----------------------------------------------------
+
+volu = 8.0  # element volume
+wref = 0.5*sig_comp*eps_comp*volu
+
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           VALE_CALC=0.0032667506819,
+           VALE_REFE=wref,
+           NOM_PARA='TRAV_ELAS',
+           TABLE=ENER,
+           FILTRE =_F(NOM_PARA='INST', VALE=1),
+           )
+
+
+
+
+FIN()

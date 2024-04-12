@@ -1,0 +1,147 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mickael.abbas at edf.fr
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+),DEBUG=_F(SDVERI='OUI'))
+
+
+# LECTURE DU MAILLAGE
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAIL=MODI_MAILLAGE(reuse =MAIL,
+                   MAILLAGE=MAIL,
+                   ORIE_PEAU_2D=_F(GROUP_MA='haut',),);
+
+# AFFECTATION DU MODELE (CONTRAINTES PLANES)
+MODE=AFFE_MODELE(MAILLAGE=MAIL,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='C_PLAN',),);
+
+# DEFINITION DU MATERIAU
+ACIER=DEFI_MATERIAU(ELAS=_F(E=200000.0,
+                    NU=0.3,),);
+
+CHMATE=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=_F(TOUT='OUI',
+                           MATER=ACIER,),);
+
+# CONDITIONS DE SYMETRIE
+CHSYME=AFFE_CHAR_CINE(MODELE=MODE,
+                      MECA_IMPO=(_F(GROUP_MA='bas',
+                                 DY=0.0,),
+                                 _F(GROUP_MA='gauche',
+                                 DX=0.0,),),
+                                );
+
+# CHARGEMENT EN FORCE
+CHFORC=AFFE_CHAR_MECA(MODELE=MODE,
+                      FORCE_CONTOUR=_F(GROUP_MA='haut',
+                                       FY=1.,),);
+
+
+# RAMPE APPLICATION CHARGEMENT
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',VALE=(0.0,0.0,
+                           1000.,1000.,
+                           ),);
+
+# DISCRETISATION EN TEMPS
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=10.0,NOMBRE=1,),);
+DEFLIST =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = L_INST,),)
+
+
+# CALCUL
+RESU=STAT_NON_LINE(MODELE=MODE,
+                   CHAM_MATER=CHMATE,
+                   EXCIT=(_F(CHARGE=CHSYME,),
+                          _F(CHARGE=CHFORC,
+                             FONC_MULT=RAMPE,),),
+                   COMPORTEMENT=_F(RELATION='ELAS',),
+                   INCREMENT=_F(LIST_INST=DEFLIST,INST_FIN=10.),);
+
+# INTERPOLATION DES CONTRAINTES AUX NOEUDS
+RESU=CALC_CHAMP(reuse=RESU,RESULTAT=RESU,CONTRAINTE=('SIGM_ELNO'))
+
+
+RESU=CALC_CHAMP(reuse =RESU,
+             RESULTAT=RESU,
+             CONTRAINTE='SIGM_NOEU');
+
+# INTERPOLATION DES CONTRAINTES EQUIVALENTES AUX NOEUDS
+RESU=CALC_CHAMP(reuse=RESU,RESULTAT=RESU,CRITERES=('SIEQ_ELGA','SIEQ_ELNO'))
+
+
+RESU=CALC_CHAMP(reuse =RESU,
+             RESULTAT=RESU,
+             CRITERES='SIEQ_NOEU');
+
+# IMPRESSION DES RESULTATS
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(RESULTAT=RESU,),);
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='B',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=30.6077958737,
+                  VALE_REFE=30.0,
+                  CRITERE='RELATIF',
+                  PRECISION=2.1E-2,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-9.9967257536,
+                  VALE_REFE=-10.0,
+                  CRITERE='RELATIF',
+                  PRECISION=0.02,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='B',
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=30.6077958737,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  GROUP_NO='A',
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_NOEU',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-9.9967257536,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+FIN();

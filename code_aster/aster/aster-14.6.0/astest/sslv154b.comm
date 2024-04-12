@@ -1,0 +1,333 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+      DEBUG=_F(SDVERI='OUI'))
+
+# MODELISATION B : X-FEM
+
+# parametres utiles
+#------------------
+
+# angle d'inclinaison de la force imposee
+alpha = pi / 4.0
+
+# valeur nominale de la force imposee
+sig = 1000000.
+
+# rayon de la fissure
+a = 2
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+ 
+MA=DEFI_GROUP( reuse=MA,
+               MAILLAGE=MA,
+               CREA_GROUP_NO=_F(GROUP_MA='FACE_AV',),
+               CREA_GROUP_MA=_F(  NOM = 'CUBE',
+                                  TOUT = 'OUI',
+                                  TYPE_MAILLE='3D',
+                                 ),);
+  
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=_F(GROUP_MA=('FACE_SUP','FACE_INF'),),);
+           
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('CUBE','FACE_SUP','FACE_INF','FACE_LAD','FACE_AV','FACE_LAG',),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),)
+
+# fissure X-FEM
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA, 
+                    #TYPE_ENRI_FOND='TOPOLOGIQUE',
+                    NB_COUCHES=5,
+                    DEFI_FISS=_F(FORM_FISS='ELLIPSE',
+                                 DEMI_GRAND_AXE=a,
+                                 DEMI_PETIT_AXE=a,
+                                 CENTRE=(0.,0.,0.,),
+                                 VECT_X=(1.,0.,0.,),
+                                 VECT_Y=(0.,1.,0.,),
+                                 ),
+                    )
+
+# elements X-FEM
+MOX=MODI_MODELE_XFEM(MODELE_IN=MO,
+                     FISSURE=FISS,);
+
+# charge X-FEM specifique
+
+nu = 0.3
+MAT=DEFI_MATERIAU(ELAS=_F(E=2.E11,
+                          NU=nu),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),)
+
+SYMETR=AFFE_CHAR_MECA(MODELE=MOX,
+                      DDL_IMPO=(_F(GROUP_NO='D1',
+                                   DX=0,
+                                   DZ=0,),
+                                _F(GROUP_NO='D2',
+                                   DZ=0,),
+                                _F(GROUP_NO='FACE_AV',
+                                   DY=0.,H1Y=0.),
+                                  ),
+                      #FACE_IMPO=_F(GROUP_MA='FACE_AV',DY=0.,),
+                      );
+
+PRESSION=AFFE_CHAR_MECA(MODELE=MOX,
+                        FORCE_FACE=(_F(GROUP_MA='FACE_SUP', FX= cos(alpha)*sin(alpha)*sig, FZ= sin(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_INF', FX=-cos(alpha)*sin(alpha)*sig, FZ=-sin(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_LAG', FX=-cos(alpha)*cos(alpha)*sig, FZ=-cos(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_LAD', FX= cos(alpha)*cos(alpha)*sig, FZ= cos(alpha)*sin(alpha)*sig ),
+                                    )
+                        )
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.,
+                      INTERVALLE=_F(JUSQU_A=1.,
+                                    NOMBRE=1))
+
+RESU=MECA_STATIQUE(MODELE=MOX,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=SYMETR),
+                          _F(CHARGE=PRESSION),
+                          ),
+                   INST=1.,
+                   )
+
+
+k1ref = 2/pi * sig*sin(alpha)**2 * sqrt(pi*a)
+
+angle = 0
+k2ref_0 = 4./(pi*(2.-nu)) * sig*sin(alpha)*cos(alpha) * cos(angle) * sqrt(pi*a)
+
+angle = pi/2.
+k3ref_90 = 4.*(1 - nu)/(pi*(2.-nu)) * sig*sin(alpha)*cos(alpha) * sin(angle) * sqrt(pi*a)
+
+# Methode G-theta
+CG=CALC_G(THETA=_F(FISSURE=FISS,
+                   NB_POINT_FOND=21,
+                   R_INF=0.1,
+                   R_SUP=0.5,),
+          RESULTAT=RESU,
+          LISSAGE=_F(LISSAGE_THETA='LAGRANGE',
+                     LISSAGE_G='LAGRANGE',),
+          OPTION='CALC_K_G')
+
+
+# Extrapolation des sauts de deplacements
+PK=POST_K1_K2_K3(FISSURE=FISS,
+                 NB_POINT_FOND=21,
+                 RESULTAT=RESU,
+                 ABSC_CURV_MAXI=0.5,
+                 INST=1.)
+                
+# formule pour le calcul de l'angle en degre
+ANGLE = FORMULE(VALE='ABSC_CURV/a * 180./pi',
+                a=a,
+                NOM_PARA='ABSC_CURV',)
+
+# ajout de la colonne angle dans chaque table
+CG=CALC_TABLE(TABLE=CG,
+              reuse=CG,
+              ACTION=_F(OPERATION='OPER',
+                        FORMULE=ANGLE,
+                        NOM_PARA='ANGLE',))
+
+PK=CALC_TABLE(TABLE=PK,
+              reuse=PK,
+              ACTION=_F(OPERATION='OPER',
+                        FORMULE=ANGLE,
+                        NOM_PARA='ANGLE'))
+
+# impression de chaque table
+IMPR_TABLE(TABLE=CG)
+IMPR_TABLE(TABLE=PK)
+
+PK_K1 = RECU_FONCTION(TABLE=PK, PARA_X='ABSC_CURV', PARA_Y='K1',)
+PK_K2 = RECU_FONCTION(TABLE=PK, PARA_X='ABSC_CURV', PARA_Y='K2',)
+PK_K3 = RECU_FONCTION(TABLE=PK, PARA_X='ABSC_CURV', PARA_Y='K3',)
+
+def K1_ana(x):
+   return 7.9788456080286519E5
+
+def K2_ana(x):
+   return cos(x/a)*9.3868771859160636E5
+
+def K3_ana(x):
+   return -sin(x/a)*6.5708140301412437E5
+
+s_deb = 0.
+s_fin = 6.28278
+npt_s = 20
+s_tab = [s_deb + ipt*(s_fin-s_deb)/npt_s for ipt in range(npt_s+1)]
+K1_tab = [K1_ana(s) for s in s_tab]
+K2_tab = [K2_ana(s) for s in s_tab]
+K3_tab = [K3_ana(s) for s in s_tab]
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=31,
+              COURBE=(_F(FONCTION=PK_K1,
+                         LEGENDE='K1 / POST_K1_K2_K3',
+                         MARQUEUR=1,
+                         COULEUR=1),
+                      _F(ABSCISSE=s_tab,
+                         ORDONNEE=K1_tab,
+                         LEGENDE='Reference K1',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                     ),
+              TITRE='sslv154b / stress intensity factor',
+              LEGENDE_X='s',
+              LEGENDE_Y='K1',
+             )
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=32,
+              COURBE=(_F(FONCTION=PK_K2,
+                         LEGENDE='K2 / POST_K1_K2_K3 / SGFEM',
+                         MARQUEUR=1,
+                         COULEUR=1),
+                      _F(ABSCISSE=s_tab,
+                         ORDONNEE=K2_tab,
+                         LEGENDE='Reference K2',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                     ),
+              TITRE='sslv154b / stress intensity factor',
+              LEGENDE_X='s',
+              LEGENDE_Y='K2',
+             )
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=33,
+              COURBE=(_F(FONCTION=PK_K3,
+                         LEGENDE='K3 / POST_K1_K2_K3 / SGFEM',
+                         MARQUEUR=1,
+                         COULEUR=1),
+                      _F(ABSCISSE=s_tab,
+                         ORDONNEE=K3_tab,
+                         LEGENDE='Reference K3',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                     ),
+              TITRE='sslv154b / stress intensity factor',
+              LEGENDE_X='s',
+              LEGENDE_Y='K3',
+             )
+
+# TEST DE CALC_G
+#---------------
+
+# test de KI sur tout le fond de fissure
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.059999999999999998,
+           VALE_CALC=833867.1122742076,
+           VALE_REFE=7.9788456080286519E5,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=CG,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=797960.398579377,
+           VALE_REFE=7.9788456080286519E5,
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=CG,)
+
+# test de KII au premier point du fond
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.14000000000000001,
+           VALE_CALC=812763.9379267446,
+           VALE_REFE=9.3868771859160636E5,
+           NOM_PARA='K2',
+           TABLE=CG,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=1,),
+           )
+
+# test de KIII au milieu du fond (angle = 90)
+# le signe n'est pas important, mais on ne peut pas tester |K3|
+# il se trouve que le K3 de CALC_G est de signe oppose a celui de POST_K
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.1,
+           VALE_CALC=595043.689807905,
+           VALE_REFE=6.5708140301412437E5,
+           NOM_PARA='K3',
+           TABLE=CG,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# TEST DE POST_K
+#---------------
+
+# test de KI sur tout le fond de fissure
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=794475.6144449393,
+           VALE_REFE=7.9788456080286519E5,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=PK,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.03,
+           VALE_CALC=781691.0098895981,
+           VALE_REFE=7.9788456080286519E5,
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=PK,)
+
+# test de KII au premier point du fond
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=922299.4910485385,
+           VALE_REFE=9.3868771859160636E5,
+           NOM_PARA='K2',
+           TABLE=PK,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=1,),
+           )
+
+# test de KIII au milieu du fond (angle = 90)
+# le signe n'est pas important, mais on ne peut pas tester |K3|
+# il se trouve que le K3 de CALC_G est de signe oppose a celui de POST_K
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=-662691.538736281,
+           VALE_REFE=-6.5708140301412437E5,
+           NOM_PARA='K3',
+           TABLE=PK,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+FIN();

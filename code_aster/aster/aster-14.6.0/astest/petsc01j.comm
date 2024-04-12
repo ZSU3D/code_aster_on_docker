@@ -1,0 +1,193 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Ce test utilise Mumps comme préconditionneur depuis PETSc.
+# Penser à reconstruire PETSc en cas de changement de version de MUMPS.
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), PAR_LOT='NON',
+      # SUPERVIS_1 : a cause de PAR_LOT='NON' necessaire pour recuperer la valeur de reference.
+      IGNORE_ALARM=('SUPERVIS_1'),);
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),
+               );
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=202702.7,
+                          NU=0.3,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),);
+
+CHA1=AFFE_CHAR_MECA(MODELE=MO,
+                    DDL_IMPO=(_F(GROUP_NO='GRNO1',
+                                 DZ=0.0,),
+                              _F(GROUP_NO='GRNO8',
+                                 DY=0.0,),),);
+
+
+CHA2=AFFE_CHAR_CINE(MODELE=MO,
+                    MECA_IMPO=_F(GROUP_NO='GRNO7',
+                                 DX=0.0,
+                                 DY=0.01,),);
+# REFERENCE = calcul MUMPS
+VECREF=MECA_STATIQUE(MODELE=MO,
+                    CHAM_MATER=CHMAT,
+                    EXCIT=(_F(CHARGE=CHA1,),
+                           _F(CHARGE=CHA2,),),
+                    SOLVEUR=_F(METHODE='MUMPS'),);
+
+TREF=POST_RELEVE_T(  ACTION=_F(  INTITULE = 'XX1', NOEUD = ('NO2958', 'NO2974'), OPERATION = 'EXTRACTION',
+                                RESULTAT = VECREF, NUME_ORDRE=1, NOM_CHAM='DEPL', NOM_CMP = ('DX','DY','DZ') ))
+
+#
+VECAS=MECA_STATIQUE(MODELE=MO,
+                    CHAM_MATER=CHMAT,
+                    EXCIT=(_F(CHARGE=CHA1,),
+                           _F(CHARGE=CHA2,),),
+                    SOLVEUR=_F(METHODE='PETSC',
+                               PRE_COND='BLOC_LAGR',
+                               ALGORITHME='FGMRES',
+                               RESI_RELA=1.E-07),);
+VECAS2=MECA_STATIQUE(INFO=2, MODELE=MO,
+                    CHAM_MATER=CHMAT,
+                    EXCIT=(_F(CHARGE=CHA1,),
+                           _F(CHARGE=CHA2,),),
+                    SOLVEUR=_F(METHODE='PETSC',
+                               PRE_COND='BLOC_LAGR',
+                               ALGORITHME='GMRES',
+                               RESI_RELA=1.E-07),);
+#
+TEST_RESU(RESU=(_F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.0100000000439,
+                   VALE_REFE=TREF['DY',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.000102958209453,
+                   VALE_REFE=TREF['DZ',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.0100000000439,
+                   VALE_REFE=TREF['DY',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   NOEUD='NO2974',
+                   VALE_CALC=0.00430057930822,
+                   VALE_REFE=TREF['DX',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2974',
+                   VALE_CALC=0.00928897504797,
+                   VALE_REFE=TREF['DY',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+               _F(RESULTAT=VECAS,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   NOEUD='NO2974',
+                   VALE_CALC=-2.91729396912E-05,
+                   VALE_REFE=TREF['DZ',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+               ),);
+#
+TEST_RESU(RESU=(_F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.0100000000108,
+                   VALE_REFE=TREF['DY',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.000102958205751,
+                   VALE_REFE=TREF['DZ',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2958',
+                   VALE_CALC=0.0100000000108,
+                   VALE_REFE=TREF['DY',1],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   NOEUD='NO2974',
+                   VALE_CALC=0.00430057989223,
+                   VALE_REFE=TREF['DX',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+                _F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   NOEUD='NO2974',
+                   VALE_CALC=0.00928897521706,
+                   VALE_REFE=TREF['DY',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+               _F(RESULTAT=VECAS2,
+                   NUME_ORDRE=1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   NOEUD='NO2974',
+                   VALE_CALC=-2.91729293048E-05,
+                   VALE_REFE=TREF['DZ',2],
+                   PRECISION=1.E-06,
+                   REFERENCE='AUTRE_ASTER',),
+               ),);
+
+FIN();

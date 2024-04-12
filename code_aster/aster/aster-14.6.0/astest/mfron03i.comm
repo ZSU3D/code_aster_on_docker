@@ -1,0 +1,595 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: david.haboussa at edf.fr
+# Comparaison entre la loi MonoDDCC_Irra (MFront) et la loi MONOCRISTAL
+# (ECOULEMENT='MONO_DD_CC_IRRA') (Code_Aster) sur un point materiel
+# Validation basée sur rho_5 et rho_8 en testant le maximum de la différence
+# entre Code_Aster et MFront
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+
+CREA_LIB_MFRONT(UNITE_MFRONT=38,UNITE_LIBRAIRIE=41)
+
+from numpy.linalg import norm
+from numpy import *
+
+TEMP= 250.0
+Cmm = 1000.0
+CMPa= Cmm*Cmm
+
+E=(236-0.0459*TEMP)*1.e9/CMPa  # Pa
+Nu=0.35
+Mu=E/2./(1.+Nu)
+
+
+
+tau_f  = 20.e6 /CMPa   # Pa
+tau_0  = 363.e6 /CMPa  # Pa
+rho_ini= 1.E11  /Cmm /Cmm  # en m**-2
+y_at   = 1.e-9  *Cmm  # m
+N      = 20.
+gamma0 = 1.E-3    # s**-1
+GH     = 1.e11    # s**-1
+b      = 2.48e-10 * Cmm # m
+DeltaG0= 0.84     # eV
+epsi_1 = 1.e-5    # s**-1
+D      = 10.e-9*Cmm   # m
+beta   = 0.2
+d_lat  = 1. * Cmm  # m
+K_f    = 30.
+K_self = 100.
+k_b      = 8.62E-5  # "Constante de Boltzmann, en eV/K"
+
+l_c = 500.*b*(TEMP/300.)**2
+a_irr= 0.3
+xi_irr = 4.
+
+a_coli=0.7
+a_ncol=0.1
+a_self=0.1024
+alpha_self=sqrt(a_self)
+
+rho_ini=rho_ini*b*b
+RHO_0  = rho_ini    # en m**-2
+
+E_L=E
+G=Mu
+
+#RHO_TOT : densité globale sur tous les systemes de glissement (parametre utilisateur)
+RHO_TOT=1.2E12    # en m**-2 pour comparaison avec ssnd110b
+#RHO_0 : densité par systeme de glissement
+RHO_0_A  = RHO_TOT/12    # en m**-2
+#RHOREF : densité mobile par systeme de glissement, egale a RHO_0 en general
+RHOREF = RHO_0_A    # en m**-2
+
+ACIERDDI=DEFI_MATERIAU(
+                  ELAS=_F( E=E, NU=Nu, ALPHA=0.),
+                  MFRONT=_F(LISTE_COEF=(E_L ,E_L ,E_L,Nu,Nu,Nu,G,G,G,b,GH,DeltaG0,tau_0,tau_f,gamma0,N,rho_ini,D,d_lat,y_at,K_f,K_self ,k_b,epsi_1,G, a_irr,xi_irr,a_self,a_coli,a_ncol,a_ncol,a_ncol,a_ncol,
+                                        ),)
+                                ,)
+
+ACIERDDA=DEFI_MATERIAU(
+                  ELAS_ORTH=_F(  E_L = E,
+                                E_T = E,
+                                E_N = E,
+                                NU_LT = Nu,
+                                NU_LN = Nu,
+                                NU_TN = Nu,
+                                G_LT = Mu,
+                                G_LN = Mu,
+                                G_TN = Mu,),
+
+                      MONO_DD_CC_IRRA=_F(
+                                    B       =b,
+                                    GH       =GH,
+                                    DELTAG0 =DeltaG0,
+                                    TAU_0   =tau_0,
+                                    TAU_F   =tau_f,
+                                    GAMMA0  =gamma0,
+                                    N       =N,
+                                    RHO_MOB =RHOREF,
+                                    D       =D,
+                                    D_LAT   =d_lat,
+                                    Y_AT    =y_at,
+                                    K_F     =K_f,
+                                    K_SELF  =K_self,
+                                    K_BOLTZ =k_b,
+                                    H1      =a_self,
+                                    H2      =a_coli,
+                                    H3      =a_ncol,
+                                    H4      =a_ncol,
+                                    H5      =a_ncol,
+                                    H6      =a_ncol,
+                                    A_IRRA=0.3,
+                                    XI_IRRA=4.,
+                                    DEPDT=1.E-4,
+                                    MU_MOY = Mu,
+                                     ),
+                    );
+
+# DD_CC
+COMPODDA=DEFI_COMPOR(MONOCRISTAL=_F(MATER=ACIERDDA,
+                                    ECOULEMENT='MONO_DD_CC_IRRA',
+                                    ELAS='ELAS',
+                                    FAMI_SYST_GLIS='CUBIQUE1',
+                                    ),);
+
+
+# LOI DE COMPORTEMENT DD_CC en Explicite
+LISTARCH=DEFI_LIST_REEL(DEBUT=0.0,
+                       INTERVALLE=(
+                                   _F(JUSQU_A=1.,
+                                      NOMBRE=100,),
+                                  ),
+                      );
+
+LINSTDD=DEFI_LIST_REEL(DEBUT=0.0,
+                       INTERVALLE=(
+                                   _F(JUSQU_A=1.,
+                                      NOMBRE=100,),
+                                  ),
+                      );
+
+LIS2DD=DEFI_LIST_INST(INFO=1,
+                        DEFI_LIST=_F(LIST_INST=LINSTDD),
+                        ECHEC=_F(SUBD_NIVEAU=20,
+                                 SUBD_PAS=10),
+                        );
+
+# vecteurs direction de chargement
+l_orient=[[0.,0.,1.],[0.,1.,1.],[1.,1.,1.],[1.,5.,9.],[0.,1.,2.],[-1.,2.,5.]]
+l_norm=[l_orient[i]/norm(l_orient[i],2) for i in range(0,len(l_orient))]
+
+# parametres de chargement
+# numero du vecteur de chargement
+
+ori = 3
+SIGMA0=100.e6/CMPa
+
+##chargement
+S1=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][0]*l_norm[ori][0]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+S2=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][1]*l_norm[ori][1]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+S3=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][2]*l_norm[ori][2]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+S4=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][0]*l_norm[ori][1]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+S5=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][0]*l_norm[ori][2]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+S6=DEFI_FONCTION(NOM_PARA='INST',
+                   VALE=(0.0,0.0,1.0,SIGMA0*l_norm[ori][1]*l_norm[ori][2]),
+                   PROL_DROITE='LINEAIRE',
+                   PROL_GAUCHE='LINEAIRE',);
+
+
+# densites de dislocation initiales : variables internes de 0 a 44
+avari = zeros(18+12)
+for i in range(12):
+  avari[6+i]=RHO_0
+for i in range(12):
+  avari[6+12+i]=RHO_0
+
+lvari=list(avari)
+
+# densites de dislocation initiales : variables internes de 0 a 44
+avaria = zeros(57+12)
+for i in range(12):
+  avaria[6+i*3]=RHO_0_A
+for i in range(12):
+  avaria[6+12*3+i]=RHO_0_A
+
+lvaria=list(avaria)
+
+TIMP=DEFI_FONCTION(
+                      NOM_PARA='INST',  NOM_RESU='TEMP',
+                       VALE=(  0. , TEMP, 1. , TEMP)
+                        )
+
+
+# DD_CFC  en IMPLICITE
+
+
+
+LINSTDDI=DEFI_LIST_REEL(DEBUT=0.0,
+                       INTERVALLE=(
+                                   _F(JUSQU_A=1.,
+                                      NOMBRE=500,),
+                                  ),
+                      );
+
+LIS2DDI=DEFI_LIST_INST(INFO=1,
+                        DEFI_LIST=_F(LIST_INST=LINSTDDI),
+                        ECHEC=_F(SUBD_NIVEAU=20,
+                                 SUBD_PAS=10),
+                        );
+
+IMPLDDA=SIMU_POINT_MAT(INFO=1,
+                      MATER=ACIERDDA,
+                      COMPORTEMENT=(_F(RELATION='MONOCRISTAL',
+                                    COMPOR=COMPODDA,
+                                    ALGO_INTE='NEWTON_PERT',
+                                    ITER_INTE_MAXI=100,
+                                    TOUT='OUI',),),
+                      INCREMENT=(_F(LIST_INST=LIS2DDI,),),
+                      NEWTON=(_F(REAC_ITER=1,
+                                 #PREDICTION='EXTRAPOLE',
+                                 ),),
+                      CONVERGENCE=(_F(ITER_GLOB_MAXI=10,),),
+                      VARI_INIT=_F(VALE=lvaria,
+                                  ),
+                      SIGM_IMPOSE=(
+                                   _F(SIXX=S1,SIYY=S2,SIZZ=S3,SIXY=S4,SIXZ=S5,SIYZ=S6),
+                                  ),
+                      ARCHIVAGE=_F(LIST_INST=LISTARCH),
+                      SUPPORT='POINT',
+                      AFFE_VARC=_F(  NOM_VARC='TEMP',
+                                     VALE_FONC=TIMP,
+                                     VALE_REF=TEMP),
+                       );
+
+IMPR_TABLE(TABLE=IMPLDDA)
+
+epsXXA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPXX',
+                   INTERPOL='LIN');
+
+epsYYA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPYY',
+                   INTERPOL='LIN');
+
+epsZZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPZZ',
+                   INTERPOL='LIN');
+
+epsXYA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPXY',
+                   INTERPOL='LIN');
+
+epsXZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPXZ',
+                   INTERPOL='LIN');
+
+epsYZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='EPYZ',
+                   INTERPOL='LIN');
+
+
+sigXXA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIXX',
+                   INTERPOL='LIN');
+
+sigYYA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIYY',
+                   INTERPOL='LIN');
+
+sigZZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIZZ',
+                   INTERPOL='LIN');
+
+sigXYA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIXY',
+                   INTERPOL='LIN');
+
+sigXZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIXZ',
+                   INTERPOL='LIN');
+
+sigYZA=RECU_FONCTION(TABLE=IMPLDDA,
+                   PARA_X='INST',
+                   PARA_Y='SIYZ',
+                   INTERPOL='LIN');
+
+epsDIRA=CALC_FONCTION(COMB=(_F(FONCTION = epsXXA,
+                              COEF= l_norm[ori][0]*l_norm[ori][0],),
+                           _F(FONCTION = epsYYA,
+                              COEF= l_norm[ori][1]*l_norm[ori][1],),
+                           _F(FONCTION = epsZZA,
+                              COEF= l_norm[ori][2]*l_norm[ori][2],),
+                           _F(FONCTION = epsXYA,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][1],),
+                           _F(FONCTION = epsXZA,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][2],),
+                           _F(FONCTION = epsYZA,
+                              COEF= 2*l_norm[ori][1]*l_norm[ori][2],),
+                           ),
+                    );
+
+
+sigDIRA=CALC_FONCTION(COMB=(_F(FONCTION = sigXXA,
+                              COEF= l_norm[ori][0]*l_norm[ori][0],),
+                           _F(FONCTION = sigYYA,
+                              COEF= l_norm[ori][1]*l_norm[ori][1],),
+                           _F(FONCTION = sigZZA,
+                              COEF= l_norm[ori][2]*l_norm[ori][2],),
+                           _F(FONCTION = sigXYA,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][1],),
+                           _F(FONCTION = sigXZA,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][2],),
+                           _F(FONCTION = sigYZA,
+                              COEF= 2*l_norm[ori][1]*l_norm[ori][2],),
+                           ),
+                    );
+
+
+IMPLDDM=SIMU_POINT_MAT(INFO=1,
+                      MATER=ACIERDDI,
+                      COMPORTEMENT=_F(RELATION='MFRONT',
+                                      NOM_ROUTINE='astermonoddcc_irra',
+                                      UNITE_LIBRAIRIE=41,
+                                      RESI_INTE_MAXI=1e-9,
+                                            ),
+                      INCREMENT=(_F(LIST_INST=LIS2DDI,),),
+                      NEWTON=(_F(REAC_ITER=1,
+                                 PREDICTION='EXTRAPOLE',
+                                 ),),
+                      CONVERGENCE=(_F(ITER_GLOB_MAXI=10,),),
+                      VARI_INIT=_F(VALE=lvari,
+                                  ),
+                      SIGM_IMPOSE=(
+                                   _F(SIXX=S1,SIYY=S2,SIZZ=S3,SIXY=S4,SIXZ=S5,SIYZ=S6),
+                                  ),
+                      ARCHIVAGE=_F(LIST_INST=LISTARCH),
+                      SUPPORT='POINT',
+                      AFFE_VARC=_F(  NOM_VARC='TEMP',
+                                     VALE_FONC=TIMP,
+                                     VALE_REF=TEMP),
+                       );
+
+
+IMPR_TABLE(TABLE=IMPLDDM)
+
+epsXXM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPXX',
+                   INTERPOL='LIN');
+
+epsYYM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPYY',
+                   INTERPOL='LIN');
+
+epsZZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPZZ',
+                   INTERPOL='LIN');
+
+epsXYM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPXY',
+                   INTERPOL='LIN');
+
+epsXZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPXZ',
+                   INTERPOL='LIN');
+
+epsYZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='EPYZ',
+                   INTERPOL='LIN');
+
+
+sigXXM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIXX',
+                   INTERPOL='LIN');
+
+sigYYM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIYY',
+                   INTERPOL='LIN');
+
+sigZZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIZZ',
+                   INTERPOL='LIN');
+
+sigXYM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIXY',
+                   INTERPOL='LIN');
+
+sigXZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIXZ',
+                   INTERPOL='LIN');
+
+sigYZM=RECU_FONCTION(TABLE=IMPLDDM,
+                   PARA_X='INST',
+                   PARA_Y='SIYZ',
+                   INTERPOL='LIN');
+
+
+epsDIRM=CALC_FONCTION(COMB=(_F(FONCTION = epsXXM,
+                              COEF= l_norm[ori][0]*l_norm[ori][0],),
+                           _F(FONCTION = epsYYM,
+                              COEF= l_norm[ori][1]*l_norm[ori][1],),
+                           _F(FONCTION = epsZZM,
+                              COEF= l_norm[ori][2]*l_norm[ori][2],),
+                           _F(FONCTION = epsXYM,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][1],),
+                           _F(FONCTION = epsXZM,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][2],),
+                           _F(FONCTION = epsYZM,
+                              COEF= 2*l_norm[ori][1]*l_norm[ori][2],),
+                           ),
+                    );
+
+
+sigDIRM=CALC_FONCTION(COMB=(_F(FONCTION = sigXXM,
+                              COEF= l_norm[ori][0]*l_norm[ori][0],),
+                           _F(FONCTION = sigYYM,
+                              COEF= l_norm[ori][1]*l_norm[ori][1],),
+                           _F(FONCTION = sigZZM,
+                              COEF= l_norm[ori][2]*l_norm[ori][2],),
+                           _F(FONCTION = sigXYM,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][1],),
+                           _F(FONCTION = sigXZM,
+                              COEF= 2*l_norm[ori][0]*l_norm[ori][2],),
+                           _F(FONCTION = sigYZM,
+                              COEF= 2*l_norm[ori][1]*l_norm[ori][2],),
+                           ),
+                    );
+
+
+DEFI_FICHIER(UNITE = 28,
+          FICHIER = 'REPE_OUT/sig-eps.dat');
+IMPR_FONCTION(
+            FORMAT='XMGRACE',
+            PILOTE='',
+            COURBE=(_F(FONC_X=epsDIRM,
+                        FONC_Y=sigDIRM,
+                        COULEUR= 0,
+                        LEGENDE= 'SIGdir MFront',),
+                    _F(FONC_X=epsDIRA,
+                        FONC_Y=sigDIRA,
+                        COULEUR= 1,
+                        LEGENDE= 'SIGdir Aster',),),
+            UNITE=28,
+            TITRE='SIGdir = f(Edir)');
+
+DEFI_FICHIER(UNITE = 28,ACTION = 'LIBERER');
+
+gamma=[None]*13
+rhom=[None]*13
+rhoas=[None]*13
+rhoa=[None]*13
+
+systemm=['', '1 MFront', '2 MFront', '3 MFront', '4 MFront', '5 MFront', '6 MFront', '7 MFront', '8 MFront', '9 MFront', '10 MFront', '11 MFront', '12 MFront']
+
+systema=['', '1 Aster', '2 Aster', '3 Aster', '4 Aster', '5 Aster', '6 Aster', '7 Aster', '8 Aster', '9 Aster', '10 Aster', '11 Aster', '12 Aster']
+
+DEFI_FICHIER(UNITE = 30,
+             FICHIER = 'REPE_OUT/rho_eps.dat');
+
+for i in range(1,13):
+
+    rhom[i]=RECU_FONCTION(TABLE=IMPLDDM,
+                          PARA_X='INST',
+                          PARA_Y='V'+str(6+i),
+                          INTERPOL='LIN');
+
+    rhoas[i]=RECU_FONCTION(TABLE=IMPLDDA,
+                         PARA_X='INST',
+                        PARA_Y='V'+str(7+3*(i-1)),
+                        INTERPOL='LIN');
+
+    rhoa[i]=CALC_FONCTION(COMB=_F(FONCTION=rhoas[i],
+                                  COEF=b*b/Cmm/Cmm,),);
+    IMPR_FONCTION(
+                FORMAT='XMGRACE',
+                PILOTE='',
+                LEGENDE_X='\\f{Symbol}e\\f{}\sll',
+                LEGENDE_Y='\\f{Symbol}r',
+                COURBE=(_F(FONC_X=epsDIRM,
+                           FONC_Y=rhom[i],
+                           COULEUR = i,
+                           MARQUEUR = 0,
+                           LEGENDE= str(systemm[i]),),
+                        _F(FONC_X=epsDIRA,
+                           FONC_Y=rhoa[i],
+                           COULEUR = i+14,
+                           MARQUEUR = 1,
+                           LEGENDE= str(systemm[i]),),  ),
+                UNITE=30,);
+
+DEFI_FICHIER(UNITE = 30,ACTION = 'LIBERER');
+
+# tests explicite et implicite
+
+# densites de dislocation
+
+sys1=8
+sys2=5
+
+# DIFF DES COURBES OBTENUES AVEC LES DEUX METHODES
+DIF1=CALC_FONCTION(COMB=(_F( FONCTION = rhoa_8, COEF =  1.),
+                         _F( FONCTION = rhom_8, COEF = -1.),
+                         ) );
+
+TDIF1=CREA_TABLE(FONCTION= _F(FONCTION = DIF1,PARA = ('INST','NEUT1')),);
+
+TRHO1=CREA_TABLE(FONCTION= _F(FONCTION = rhoa_8,PARA = ('INST','RHO_8')),);
+
+DIF2=CALC_FONCTION(COMB=(_F( FONCTION = rhoa_5, COEF =  1.),
+                         _F( FONCTION = rhom_5, COEF = -1.),
+                         ) );
+
+TDIF2=CREA_TABLE(FONCTION= _F(FONCTION = DIF2,PARA = ('INST','NEUT1')),);
+
+TRHO2=CREA_TABLE(FONCTION= _F(FONCTION = rhoa_5,PARA = ('INST','RHO_5')),);
+
+def ecart_relatif(diff, ref):
+    if abs(ref) == 0 :
+       err=diff
+    else :
+       err=diff/ref
+    return err
+
+TEST1=CALC_TABLE(TABLE=TDIF1,ACTION= _F(OPERATION='COMB',TABLE= TRHO1, NOM_PARA ='INST'))
+TEST2=CALC_TABLE(TABLE=TDIF2,ACTION= _F(OPERATION='COMB',TABLE= TRHO2, NOM_PARA ='INST'))
+
+ecarela1 = FORMULE(VALE='ecart_relatif(NEUT1,RHO_8)',
+                   ecart_relatif=ecart_relatif,
+                   NOM_PARA=['NEUT1', 'RHO_8'],)
+ecarela2 = FORMULE(VALE='ecart_relatif(NEUT1,RHO_5)',
+                   ecart_relatif=ecart_relatif,
+                   NOM_PARA=['NEUT1', 'RHO_5'],)
+
+TEST1=CALC_TABLE(TABLE=TEST1,reuse=TEST1,ACTION= _F(OPERATION='OPER',FORMULE=ecarela1, NOM_PARA ='ECART'))
+TEST2=CALC_TABLE(TABLE=TEST2,reuse=TEST2,ACTION= _F(OPERATION='OPER',FORMULE=ecarela2, NOM_PARA ='ECART'))
+
+IMPR_TABLE(TABLE=TEST1)
+IMPR_TABLE(TABLE=TEST2)
+
+TEST_TABLE(TABLE=TEST1,NOM_PARA='ECART',
+           FILTRE=_F(NOM_PARA='ECART',CRIT_COMP='MAXI_ABS'),
+           CRITERE='ABSOLU',REFERENCE='AUTRE_ASTER',
+           VALE_REFE=0.,PRECISION=1E-3,VALE_CALC=-0.000188633992665)
+
+TEST_TABLE(TABLE=TEST2,NOM_PARA='ECART',
+           FILTRE=_F(NOM_PARA='ECART',CRIT_COMP='MAXI_ABS'),
+           CRITERE='ABSOLU',REFERENCE='AUTRE_ASTER',
+           VALE_REFE=0.,PRECISION=1E-4,VALE_CALC=-8.78516411706E-05)
+
+FIN()

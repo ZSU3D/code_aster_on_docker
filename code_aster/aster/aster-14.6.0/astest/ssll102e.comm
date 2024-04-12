@@ -1,0 +1,78 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#       LA POUTRE EST ENCASTREE A UNE EXTREMITE ET SOUMISE A UN
+#       EFFORT TRANCHANT UNITAIRE SELON Z A L'AUTRE EXTREMITE.
+#       CET EFFORT TRANCHANT EST MODELISE PAR UNE DENSITE DE FORCE
+#       LINEIQUE APPLIQUEE SUR L'ARETE SUPERIEURE DE LA FACE EXTREMITE.
+# ----------------------------------------------------------------------
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+M=LIRE_MAILLAGE(FORMAT='MED',   )
+
+M=DEFI_GROUP( reuse=M,       MAILLAGE=M,
+                      CREA_GROUP_NO=_F( GROUP_MA = 'SURF1')
+                   )
+
+MO=AFFE_MODELE(            MAILLAGE=M,
+                                   
+                                  AFFE=_F(  TOUT = 'OUI',
+                                         PHENOMENE = 'MECANIQUE',
+                                         MODELISATION = '3D'))
+
+MA=DEFI_MATERIAU(            ELAS=_F(  E = 2.E11,
+                                         NU = 0.3,
+                                         ALPHA = 0.))
+
+CM=AFFE_MATERIAU(        MAILLAGE=M,
+                                  AFFE=_F(  TOUT = 'OUI',
+                                         MATER = MA))
+
+CH=AFFE_CHAR_MECA(         MODELE=MO,
+                           FORCE_ARETE=_F(  GROUP_MA = 'L2',  FZ = -5.),
+
+
+                        DDL_IMPO=_F(  GROUP_NO = 'SURF1',  DX = 0., DY = 0., DZ = 0.)
+            )
+
+RESU1=MECA_STATIQUE(     MODELE=MO,
+                         CHAM_MATER=CM,
+                         EXCIT=_F(  CHARGE = CH)
+                        )
+
+DEP1=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+NOM_CHAM='DEPL', RESULTAT=RESU1,
+                     NUME_ORDRE=1       )
+
+#
+
+TEST_RESU(CHAM_NO=_F(NOEUD='N62',
+                     REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DZ',
+                     PRECISION=6.0000000000000001E-3,
+                     CHAM_GD=DEP1,
+                     VALE_CALC=-7.95230729E-07,
+                     VALE_REFE=-7.9999999999999996E-07,),
+          )
+
+#-----------------------------------------------------------------
+
+FIN()
+#

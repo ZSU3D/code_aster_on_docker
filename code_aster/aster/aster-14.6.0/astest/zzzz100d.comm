@@ -1,0 +1,899 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mathieu.courtois at edf.fr
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'), PAR_LOT='NON')
+
+#--------------------------------------------------------
+#
+INCLUDE(UNITE=20, ALARME='NON')
+
+#
+#--------------------------------------------------------
+#
+INLBNS=INFO_FONCTION(  NOCI_SEISME=_F(FREQ_FOND=2.0,
+                             FONCTION = LBNS,
+                             PESANTEUR = 9.81,
+                             AMOR_REDUIT = 0.05E0)
+                       )
+
+#
+INLBNS11=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             PESANTEUR = 9.81,
+                             OPTION = 'INTE_ARIAS')
+                       )
+
+#
+INLBNS12=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'MAXI')
+                       )
+
+#
+INLBNS13=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'ACCE_SUR_VITE')
+                       )
+
+INLBNS14=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'VITE_ABSO_CUMU')
+                       )
+
+#
+INLBNS15=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             PESANTEUR = 9.81,
+                             OPTION = 'POUV_DEST')
+                       )
+
+#
+INLBNS16=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             PESANTEUR = 9.81,
+                             OPTION = 'DUREE_PHAS_FORT')
+                       )
+
+#
+INLBNS17=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'INTE_SPEC',
+                             AMOR_REDUIT = 0.05E0)
+                       )
+
+INLBNS18=INFO_FONCTION(    NOCI_SEISME=_F(FREQ_FOND=2.0,
+                                FONCTION = LBNS,
+                                INST_INIT = 10.,
+                                INST_FIN = 12.,
+                                CRITERE = 'ABSOLU',
+                                PRECISION = 2.E-5,
+                                COEF = 0.42,
+                                PESANTEUR = 9.81,
+                                FREQ_INIT = 0.23,
+                                FREQ_FIN = 13.21,
+                                FREQ_PAS=0.1,
+                                RATIO=0.4,
+                                AMOR_REDUIT = 0.03,
+                                NORME = 1.0,
+                                BORNE_INF = 0.45,
+                                BORNE_SUP = 0.55)
+                       )
+
+
+INLBNS19=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'ASA',RATIO=0.4,
+                             FREQ_FOND = 2.0,  NORME = 9.81,
+                             AMOR_REDUIT = 0.05,),
+                       )
+
+INLBNS20=INFO_FONCTION(    NOCI_SEISME=_F(
+                             FONCTION = LBNS,
+                             OPTION = 'ASA',RATIO=0.4,
+                             FREQ_FOND = 2.0,
+                             AMOR_REDUIT = 0.03,),
+                       )
+
+IMPR_TABLE (TABLE=INLBNS20,    UNITE=8,);
+IMPR_TABLE (TABLE=INLBNS19,    UNITE=8,);
+IMPR_TABLE (TABLE=INLBNS18,    UNITE=8,);
+IMPR_TABLE (TABLE=INLBNS,    UNITE=8,);
+
+#
+SPEC_H=LIRE_FONCTION(  UNITE=18,
+                       TYPE='NAPPE',
+                       INDIC_PARA=[1,1],
+                       NOM_PARA='AMOR',
+                       NOM_PARA_FONC='FREQ',
+                       NOM_RESU='ACCE',
+                       INDIC_ABSCISSE=[2,1],
+                       DEFI_FONCTION=(_F(INDIC_RESU=[2,2]  ),
+                                      _F(INDIC_RESU=[2,3]  ),
+                                      _F(INDIC_RESU=[2,4]  ),),
+                       INTERPOL='LOG',
+                       INTERPOL_FONC='LOG',
+                       PROL_DROITE='CONSTANT',
+                       PROL_GAUCHE='CONSTANT',
+                       PROL_DROITE_FONC='CONSTANT',
+                       PROL_GAUCHE_FONC='CONSTANT',
+                       TITRE='SRO_H ACCE'
+                             )
+
+#
+INH=INFO_FONCTION(
+                       NOCI_SEISME=_F(
+                                SPEC_OSCI = SPEC_H,
+                                NATURE = 'ACCE',
+                                AMOR_REDUIT = 0.05E0)
+                     )
+
+INH1=INFO_FONCTION(
+                        NOCI_SEISME=_F(
+                                SPEC_OSCI = SPEC_H,
+                                NATURE = 'ACCE',
+                                AMOR_REDUIT = 0.05E0,
+                                INST_INIT = 10.,
+                                INST_FIN = 12.,
+                                CRITERE = 'ABSOLU',
+                                PRECISION = 2.E-5,
+                                COEF = 0.42,
+                                FREQ_INIT = 0.23,
+                                FREQ_FIN = 13.21,
+                                NORME = 1.0,
+                                BORNE_INF = 0.45,
+                                BORNE_SUP = 0.55)
+                       )
+
+#
+#--------------------------------------------------------
+#
+
+TEST_TABLE(VALE_CALC=2.27664335192,
+           NOM_PARA='ASA',
+           TABLE=INLBNS,)
+
+
+TEST_TABLE(VALE_CALC=1.0,
+           NOM_PARA='ACCE_MAX',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=0.2290566,
+           NOM_PARA='VITE_MAX',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=1.342452707,
+           NOM_PARA='DEPL_MAX',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=0.25820588277262,
+           NOM_PARA='INTE_ARIAS',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=0.20982638451852,
+           NOM_PARA='POUV_DEST',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=4.3657331855969,
+           NOM_PARA='ACCE_SUR_VITE',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=4.4337451,
+           NOM_PARA='VITE_ABSO_CUMU',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=14.83,
+           NOM_PARA='DUREE_PHAS_FORT',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=0.58453122117572,
+           NOM_PARA='INTE_SPECT',
+           TABLE=INLBNS,)
+
+#
+TEST_TABLE(VALE_CALC=0.25820588277262,
+           NOM_PARA='INTE_ARIAS',
+           TABLE=INLBNS11,)
+
+#
+TEST_TABLE(VALE_CALC=1.0,
+           NOM_PARA='ACCE_MAX',
+           TABLE=INLBNS12,)
+
+#
+TEST_TABLE(VALE_CALC=0.2290566,
+           NOM_PARA='VITE_MAX',
+           TABLE=INLBNS12,)
+
+#
+TEST_TABLE(VALE_CALC=1.342452707,
+           NOM_PARA='DEPL_MAX',
+           TABLE=INLBNS12,)
+
+#
+TEST_TABLE(VALE_CALC=4.3657331855969,
+           NOM_PARA='ACCE_SUR_VITE',
+           TABLE=INLBNS13,)
+
+#
+TEST_TABLE(VALE_CALC=4.4337451,
+           NOM_PARA='VITE_ABSO_CUMU',
+           TABLE=INLBNS14,)
+
+#
+TEST_TABLE(VALE_CALC=0.20982638451852,
+           NOM_PARA='POUV_DEST',
+           TABLE=INLBNS15,)
+
+#
+TEST_TABLE(VALE_CALC=14.83,
+           NOM_PARA='DUREE_PHAS_FORT',
+           TABLE=INLBNS16,)
+
+#
+TEST_TABLE(VALE_CALC=0.58453122117572,
+           NOM_PARA='INTE_SPECT',
+           TABLE=INLBNS17,)
+
+TEST_TABLE(VALE_CALC=0.23207373618,
+           NOM_PARA='ASA',
+           TABLE=INLBNS19,)
+
+TEST_TABLE(VALE_CALC= 2.67207522502  ,
+           NOM_PARA='ASA',
+           TABLE=INLBNS20,)
+
+
+TEST_TABLE(VALE_CALC=0.44113,
+           NOM_PARA='ACCE_MAX',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=0.39326085000000,
+           NOM_PARA='VITE_MAX',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=4.95142093875,
+           NOM_PARA='DEPL_MAX',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=0.010615822131433,
+           NOM_PARA='INTE_ARIAS',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=0.32833873149333,
+           NOM_PARA='POUV_DEST',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=1.1217236600084,
+           NOM_PARA='ACCE_SUR_VITE',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=0.28587220000000,
+           NOM_PARA='VITE_ABSO_CUMU',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=0.04,
+           NOM_PARA='DUREE_PHAS_FORT',
+           TABLE=INLBNS18,)
+
+#
+TEST_TABLE(VALE_CALC=1.3188654188755,
+           NOM_PARA='INTE_SPECT',
+           TABLE=INLBNS18,)
+
+TEST_TABLE(VALE_CALC=1.4901373393162,
+           NOM_PARA='INTE_SPECT',
+           TABLE=INH,)
+
+TEST_TABLE(VALE_CALC=1.8537566366423,
+           NOM_PARA='INTE_SPECT',
+           TABLE=INH1,)
+
+#
+#--------------------------------------------------------
+#
+#
+# VALIDATION CORR_ACCE
+#
+#------------------ ------------------ ------------------ ------------------
+# ------------------ TEST METHODE='POLYNOME' ----------------------------
+# CAS ANALYTIQUE
+
+TINIT=0.
+TFIN=20.
+PAS=0.1
+A1=1.
+A0=2.
+
+LIST=DEFI_LIST_REEL(  DEBUT=TINIT,
+                         INTERVALLE=_F(  JUSQU_A = TFIN, PAS = PAS) )
+
+DROITE = FORMULE(VALE='A1*INST + A0 ',
+                 A1=A1,
+                 A0=A0,
+                 NOM_PARA='INST',)
+
+ACCE=CALC_FONC_INTERP(FONCTION=DROITE,    LIST_PARA=LIST,
+NOM_PARA='INST',
+                            NOM_RESU='ACCE',
+                            PROL_GAUCHE='EXCLU',  PROL_DROITE='EXCLU',
+#                            INTERPOL='INT',
+                           INTERPOL='LIN',
+                            TITRE=' CORR_ACCE '    )
+
+# ------------------ TEST CORR_DEPL = 'NON' (DEFAUT)-------------------
+
+ACCE1=CALC_FONCTION(CORR_ACCE=_F(  FONCTION = ACCE, METHODE="POLYNOME"),
+                       )
+
+RMS1=INFO_FONCTION( RMS=_F(  FONCTION = ACCE1)
+                         )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-10,
+           VALE_CALC= 5.6843418860808E-14,
+           VALE_REFE=0.0,
+           NOM_PARA='RMS',
+           TABLE=RMS1,)
+
+ACCE2=CALC_FONCTION(CORR_ACCE=_F(  FONCTION = LBNS, CORR_DEPL = 'NON',METHODE="POLYNOME",),
+                       )
+
+RMS2=INFO_FONCTION( RMS=_F(  FONCTION = ACCE2)
+                         )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.22780739567036,
+           NOM_PARA='RMS',
+           TABLE=RMS2,
+           )
+
+# ------------------ TEST CORR_DEPL = 'OUI' ----------------------------
+
+ACCE3=CALC_FONCTION(CORR_ACCE=_F(  FONCTION = ACCE, CORR_DEPL = 'OUI', METHODE="POLYNOME",),
+                       )
+
+RMS3=INFO_FONCTION( RMS=_F(  FONCTION = ACCE3)
+                         )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC= 2.406296799622E-11,
+           VALE_REFE=0.0,
+           PRECISION=1.E-10,
+           NOM_PARA='RMS',
+           TABLE=RMS3,)
+
+ACCE4=CALC_FONCTION(CORR_ACCE=_F(  FONCTION = LBNS, CORR_DEPL = 'OUI',METHODE="POLYNOME",),
+                       )
+
+RMS4=INFO_FONCTION( RMS=_F(  FONCTION = ACCE4)
+                         )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.22430890104018,
+           NOM_PARA='RMS',
+           TABLE=RMS4,
+           )
+
+#
+
+#------------------ ------------------ ------------------ ------------------
+# ------------------ TEST METHODE='FILTRAGE' ----------------------------
+
+SRO_NGA=DEFI_FONCTION(  NOM_PARA='FREQ',  INTERPOL='LOG',PROL_DROITE='CONSTANT',
+                          VALE=(0.1000,  0.0080, 0.1333,  0.0127,0.2000, 0.0245,0.2500, 0.0303, 0.3333,  0.0414,0.5000, 0.0666,
+                                0.6667, 0.0922,1.0000,  0.1415,1.3333,  0.1843,2.0000,  0.2650, 2.5000,  0.3033, 3.3333,
+                                0.3430, 4.0000,  0.3647,5.0000, 0.3916,6.6667, 0.3807,10.0000, 0.3183,12.5000, 0.2648,20.0000,
+                                0.2056,25.0000, 0.1901,33.3333, 0.1719, 50.0000, 0.1618,  100.0000, 0.1593,
+) )
+
+
+L_FREQ1 = DEFI_LIST_REEL(DEBUT=35.,
+              INTERVALLE=(_F(JUSQU_A=45, PAS=1.0,),), );
+
+L_FREQ2 = DEFI_LIST_REEL(DEBUT=0.1, INTERVALLE=(_F(JUSQU_A=1.0, PAS=0.01,),_F(JUSQU_A=60.0, PAS=0.1,),) );
+
+amor=0.05
+TSM=10.00
+tini=2.5
+fco=0.01
+fc=0.05
+
+ACCE1a=GENE_ACCE_SEISME( INFO =2,
+              INIT_ALEA=200000,
+              PAS_INST = 0.01, PESANTEUR =9.81,DUREE_PHASE_FORTE =TSM, NB_TIRAGE = 1,
+              NB_POIN = 2**11, FREQ_FILTRE = 0.0, FREQ_CORNER = fco,
+              SPEC_UNIQUE  = _F(SPEC_OSCI  =SRO_NGA, AMOR_REDUIT=amor, METHODE='NIGAM',
+                                       LIST_FREQ = L_FREQ2, ),
+               MODULATION      = _F(TYPE="GAMMA",INST_INI=tini, ),)
+
+ACCE1b=GENE_ACCE_SEISME( INFO =2,
+              INIT_ALEA=200000,
+              PAS_INST = 0.01, PESANTEUR =9.81,DUREE_PHASE_FORTE =TSM, NB_TIRAGE = 1,
+              NB_POIN = 2**11, FREQ_FILTRE = fc , FREQ_CORNER = fco,
+              SPEC_UNIQUE  = _F(SPEC_OSCI  =SRO_NGA, AMOR_REDUIT=amor, METHODE='NIGAM',
+                                       LIST_FREQ = L_FREQ2, ),
+               MODULATION      = _F(TYPE="GAMMA",INST_INI=tini, ),)
+
+
+
+FONCT1a=RECU_FONCTION(  TABLE=ACCE1a,
+                        FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',
+                                       VALE_I = 1),
+                        NOM_PARA_TABL='FONCTION',)
+
+FONCT1b=RECU_FONCTION(  TABLE=ACCE1b,
+                        FILTRE=_F(  NOM_PARA = 'NUME_ORDRE',
+                                       VALE_I = 1),
+                        NOM_PARA_TABL='FONCTION',)
+
+SRO1a=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONCT1a, LIST_FREQ = L_FREQ1, METHODE='NIGAM',
+                      NORME=9.81, AMOR_REDUIT=(amor,),),);
+SRO1aa=CALC_FONCTION(SPEC_OSCI=_F(TYPE_RESU='FONCTION', FONCTION=FONCT1a, LIST_FREQ = L_FREQ1, METHODE='NIGAM',
+                      NORME=9.81, AMOR_REDUIT=(amor,),),);
+SRO1b=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONCT1b, LIST_FREQ = L_FREQ1, METHODE='NIGAM',
+                      NORME=9.81, AMOR_REDUIT=(amor,),),);
+
+
+F_VITE1a=CALC_FONCTION( INTEGRE=_F(  FONCTION = FONCT1a) )
+F_DEPL1a=CALC_FONCTION( INTEGRE=_F(  FONCTION = F_VITE1a) )
+
+F_VITE1b=CALC_FONCTION( INTEGRE=_F(  FONCTION = FONCT1b) )
+F_DEPL1b=CALC_FONCTION( INTEGRE=_F(  FONCTION = F_VITE1b) )
+
+
+FONCT1c=CALC_FONCTION( CORR_ACCE=  _F(FONCTION = FONCT1a, FREQ_FILTRE=fc, METHODE="FILTRAGE") )
+
+F_VITE1c=CALC_FONCTION( INTEGRE=_F(  FONCTION = FONCT1c) )
+F_DEPL1c=CALC_FONCTION( INTEGRE=_F(  FONCTION = F_VITE1c) )
+SRO1c=CALC_FONCTION(SPEC_OSCI=_F(FONCTION=FONCT1c, LIST_FREQ = L_FREQ1, METHODE='HARMO',
+                      NORME=9.81, AMOR_REDUIT=(amor,),),);
+
+
+TEST_FONCTION(VALEUR=( _F(VALE_CALC=7.030576587190E-03   ,  #signal corrige sans derive ,
+                         NOM_PARA=('INST',), VALE_PARA=(20.,),FONCTION=F_DEPL1c,),
+
+                        _F(VALE_CALC= 0.24400584598532,  #signal avec derive ,
+                         NOM_PARA=('INST',), VALE_PARA=(20.), FONCTION=F_DEPL1a,),
+
+                        _F(VALE_CALC=   7.030576587190E-03      , #signal gene_acce_seisme sans derive
+                         NOM_PARA=('INST',), VALE_PARA=(20.,),FONCTION=F_DEPL1b,),
+
+                        _F(VALE_CALC=   0.19026617203663     ,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 40.0),
+                         FONCTION=SRO1c,),
+                        _F(VALE_CALC= 0.18201100855587  ,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 40.0),
+                         FONCTION=SRO1a,),
+                        _F(VALE_CALC=  0.18057487228632  ,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 40.0),
+                         FONCTION=SRO1b,),
+
+
+),);
+
+# on verifie que la sd produit est bien une fonction avec TYPE_RESU="FONCTION"
+TA_SRO1a = CREA_TABLE(FONCTION=_F(FONCTION=SRO1aa))
+
+TEST_TABLE(VALE_CALC=0.18201100855587,
+           NOM_PARA='ACCE',
+           TABLE=TA_SRO1a,
+           FILTRE=_F(NOM_PARA='FREQ',
+                     VALE = 40.0,
+           ))
+
+
+# TEST PROL_SPEC_OSCI
+##--------------------------------------------------------
+
+import numpy as np
+
+liste_freq = [0.25, 0.8,2.5,5.0,8.0,30.,33.,]
+sro_sms = np.array([0.02, 0.066, 0.21, 0.22, 0.23, 0.1, 0.1,])
+
+
+sro_dsms = np.array(liste_freq)**(-2) * np.array(sro_sms ) / 9.81
+
+SRO_ACCE  = DEFI_FONCTION ( NOM_RESU  = 'ACCE',  NOM_PARA    = 'FREQ',
+            PROL_GAUCHE = 'CONSTANT',  PROL_DROITE  = 'CONSTANT',
+            ABSCISSE        = liste_freq,
+            ORDONNEE     = sro_sms);
+
+SRO_DEPL  = DEFI_FONCTION ( NOM_RESU    = 'ACCE',  NOM_PARA    = 'FREQ',
+            PROL_GAUCHE = 'CONSTANT',  PROL_DROITE  = 'CONSTANT',
+            ABSCISSE        = liste_freq,
+            ORDONNEE     = sro_dsms);
+
+dmax = 3.4 / 100. # (max  = 3.4cm)
+SRO_CORR = CALC_FONCTION ( PROL_SPEC_OSCI =_F( FONCTION = SRO_ACCE, NORME = 9.81, DEPL_MAX = dmax ),);
+
+TEST_FONCTION(VALEUR=( _F(VALE_CALC= 0.00   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.0,),FONCTION = SRO_CORR,),
+                       _F(VALE_CALC= 7.193198614409E-03   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.1,),FONCTION = SRO_CORR,),
+                      _F(VALE_CALC= 0.02   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.25,),FONCTION = SRO_CORR,),
+
+),);
+
+liste_freq, sro_d = SRO_CORR.Valeurs()
+sro_cd = np.array(liste_freq[1:])**(-2) * np.array(sro_d[1:]) / 9.81
+SRO_DC  = DEFI_FONCTION ( NOM_RESU    = 'ACCE',  NOM_PARA    = 'FREQ',
+            PROL_GAUCHE = 'CONSTANT',  PROL_DROITE  = 'CONSTANT',
+            ABSCISSE        = liste_freq[1:],
+            ORDONNEE     = sro_cd);
+
+TEST_FONCTION(VALEUR=( _F(VALE_CALC= dmax   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.0,),FONCTION = SRO_DC,),
+                       _F(VALE_CALC= dmax   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.1,),FONCTION = SRO_DC,),
+                      _F(VALE_CALC= 0.03261977573904   ,
+                         NOM_PARA=('FREQ',), VALE_PARA=(0.25,),FONCTION = SRO_DC,),
+
+),);
+
+
+
+
+##--------------------------------------------------------
+# ------------------ TEST DSP ----------------------------
+FCOUP = 60.
+TSM = 10.
+FMAX=60.
+
+SRO_7 = [ 0.2, 9.75E-3, 0.51, 6.45E-2, 4.58, 5.74E-1, 14.0, 5.74E-1, 40., 2.5E-1, 60., 2.5E-1]
+
+SRO_EUR=DEFI_FONCTION(NOM_PARA='FREQ',
+                  VALE=SRO_7,
+                  #INTERPOL='LOG',
+                  PROL_DROITE='CONSTANT',PROL_GAUCHE='CONSTANT',);
+
+amort = 0.07
+
+import numpy as NP
+from math import pi
+
+amortn = 0.05
+
+L_FREQ = DEFI_LIST_REEL(DEBUT=0.1,
+              INTERVALLE=(_F(JUSQU_A=5.0, PAS=0.1,), _F(JUSQU_A=10., PAS=0.5,),
+                           _F(JUSQU_A=20.0, PAS=1.0,), _F(JUSQU_A=50.0, PAS=2.0,),
+                           _F(JUSQU_A=60.0, PAS=2.0,),
+                        ) );
+
+
+
+NGA_DSP = CALC_FONCTION(DSP=_F(FONCTION=SRO_NGA,
+          LIST_FREQ = L_FREQ ,
+          FREQ_COUP=FCOUP, AMOR_REDUIT=amortn,
+          DUREE=TSM, NORME=9.81,
+          FRACT=0.5,),
+          INTERPOL='LIN',)
+
+EUR_DSP = CALC_FONCTION(DSP=_F(FONCTION=SRO_EUR,
+          FREQ_PAS = 0.1 ,
+          FREQ_COUP=FCOUP, AMOR_REDUIT=amort,
+          DUREE=TSM, NORME=9.81,
+          FRACT=0.5,),
+          INTERPOL='LIN',)
+
+
+SRON = CALC_FONCTION( SPEC_OSCI=_F(  FONCTION =NGA_DSP, DUREE=TSM, NATURE_FONC     ='DSP',
+                            NATURE = 'ACCE', METHODE='RICE', AMOR_REDUIT =  amortn ,
+                            NORME = 9.81, LIST_FREQ = L_FREQ ,))
+
+SROE = CALC_FONCTION( SPEC_OSCI=_F(  FONCTION =EUR_DSP, DUREE=TSM, NATURE_FONC     ='DSP',
+                            NATURE = 'ACCE', METHODE='RICE', AMOR_REDUIT =  amort ,
+                            NORME = 9.81, LIST_FREQ = L_FREQ ,))
+
+
+F_DSP = CALC_FONCTION(COMB_C=(_F(FONCTION=EUR_DSP,
+         COEF_C = 1.+0.j), ),)
+
+##
+#IMPR_FONCTION(UNITE=29,
+#              FORMAT='XMGRACE',
+#              COURBE=_F(FONCTION=NGA_DSP,),)
+##
+#
+#IMPR_FONCTION(UNITE=30,
+#              FORMAT='XMGRACE',ECHELLE_X ='LOG', ECHELLE_Y ='LOG',
+#              COURBE=(_F(FONCTION=SRO_EUR,MARQUEUR =0,LEGENDE = 'SRO EUR '),_F(FONCTION=SRO_NGA,MARQUEUR =0,LEGENDE = 'SRO NGA '),
+#                       _F(FONCTION=SRON,MARQUEUR =0,LEGENDE = 'DSP2SRO NGA'), _F(FONCTION=SROE,MARQUEUR =0,LEGENDE = 'DSP2SRO EUR'),
+#                              ),            )
+
+#
+DEF_SPEC=DEFI_INTE_SPEC(DIMENSION=1,
+                        PAR_FONCTION=_F(NUME_ORDRE_I=1,
+                                        NUME_ORDRE_J=1,
+                                        FONCTION=F_DSP,),);
+
+POST_DSP=POST_DYNA_ALEA(INTERSPECTRE=_F(
+                        INTE_SPEC=DEF_SPEC,
+                        OPTION = 'TOUT'), INFO=2,);
+
+TRAJ=GENE_FONC_ALEA(INTE_SPEC=DEF_SPEC,
+                    FREQ_INIT=0.0, FREQ_FIN=FCOUP,
+                    NB_POIN=2**12, INFO=2,);
+
+FTRAJ=RECU_FONCTION(INTE_SPEC=TRAJ,
+                      NUME_ORDRE = 1 )
+
+RMS=INFO_FONCTION(RMS=_F(FONCTION=FTRAJ,),INFO=2);
+ECT=INFO_FONCTION(ECART_TYPE=_F(FONCTION=FTRAJ,),INFO=2);
+
+#
+#
+#
+##------------TESTS--------------------------------------------
+sigma=7.91845E-01
+m0=0.6394
+m1=34.19
+m2=2841.8
+frapp=10.61
+
+TEST_TABLE(CRITERE='RELATIF',
+            REFERENCE='SOURCE_EXTERNE',PRECISION=1.E-3,VALE_REFE=sigma,
+           VALE_CALC=0.79190006472530,
+           NOM_PARA='ECART',
+           TABLE=POST_DSP,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE_I',
+                      VALE_I=1,),
+                   _F(NOM_PARA='NUME_ORDRE_J',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           VALE_CALC=9.8571964660693,
+           NOM_PARA='FREQ_APPAR',
+           TABLE=POST_DSP,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE_I',
+                      VALE_I=1,),
+                   _F(NOM_PARA='NUME_ORDRE_J',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           VALE_CALC=0.62710571251193,
+           NOM_PARA='LAMBDA_00',
+           TABLE=POST_DSP,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE_I',
+                      VALE_I=1,),
+                   _F(NOM_PARA='NUME_ORDRE_J',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           VALE_CALC=31.317117860375,
+           NOM_PARA='LAMBDA_01',
+           TABLE=POST_DSP,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE_I',
+                      VALE_I=1,),
+                   _F(NOM_PARA='NUME_ORDRE_J',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           VALE_CALC=2405.5108436427,
+           NOM_PARA='LAMBDA_02',
+           TABLE=POST_DSP,
+           FILTRE=(_F(NOM_PARA='NUME_ORDRE_I',
+                      VALE_I=1,),
+                   _F(NOM_PARA='NUME_ORDRE_J',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE( REFERENCE='SOURCE_EXTERNE',
+           PRECISION=1.E-3 ,  VALE_REFE= sigma,
+           VALE_CALC=0.79190285665231,
+           NOM_PARA='ECART_TYPE',
+           TABLE=ECT,)
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',PRECISION=1.E-3 ,VALE_REFE= sigma,
+           VALE_CALC=0.79190285669405,
+           NOM_PARA='RMS',
+           TABLE=RMS,)
+
+
+
+TEST_FONCTION(VALEUR=(   _F(VALE_CALC=0.31829528014329, VALE_REFE=0.3183,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 10.0),
+                         FONCTION=SRON, REFERENCE='AUTRE_ASTER',),
+
+                        _F(VALE_CALC=0.19029030011293   ,   VALE_REFE=0.20346056    ,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 25.0),
+                         FONCTION=SRON, REFERENCE='AUTRE_ASTER',PRECISION=0.1 ,),
+
+                        _F(VALE_CALC= 0.26481450690087   ,  VALE_REFE=0.2650  ,
+                         NOM_PARA=('AMOR', 'FREQ'), VALE_PARA=(0.05, 2.0),
+                         FONCTION=SRON, REFERENCE='AUTRE_ASTER',),
+                         ),)
+
+# FIN VALIDATION DSP
+##--------------------------------------------------------
+
+# VALIDATION DE L'INTERPOLATION DES ACCELEROGRAMMES : INTERPOL_FFT
+# ----------------------------------------------------------------
+
+INCLUDE(UNITE=11,   INFO=1)
+# (voir zzzz100b)
+FREQ11=49.916805324459233
+FREQ12=119.80033277870216
+
+# nombre de valeurs impair
+
+INTX=CALC_FONCTION( INTERPOL_FFT=_F( FONCTION = X, PAS_INST = 5.E-4, ) )
+
+FFINTX=CALC_FONCTION( FFT=_F( FONCTION = INTX, METHODE='COMPLET',) )
+
+
+INTY=CALC_FONCTION( INTERPOL_FFT=_F( FONCTION = Y, PAS_INST = 7.E-4, PRECISION=1E-3) )
+
+FFINTY=CALC_FONCTION( FFT=_F( FONCTION = INTY, METHODE='COMPLET',   ) )
+#
+# nombre de valeurs pair (avec debut du signal en temps non en zero)
+
+XFF1P=CALC_FONCTION( FFT=_F( FONCTION = XP, METHODE='COMPLET',) )
+INTXP=CALC_FONCTION( INTERPOL_FFT=_F( FONCTION = XP, PAS_INST = 5.E-4) )
+
+FFINTXP=CALC_FONCTION( FFT=_F( FONCTION = INTXP, METHODE='COMPLET',) )
+
+YFF1P=CALC_FONCTION( FFT=_F( FONCTION = YP, METHODE='COMPLET',) )
+
+INTYP=CALC_FONCTION( INTERPOL_FFT=_F( FONCTION = YP, PAS_INST = 7.E-4,) )
+
+FFINTYP=CALC_FONCTION( FFT=_F( FONCTION = INTYP, METHODE='COMPLET',) )
+
+
+# Valeurs pour METHODE='COMPLET' (Matlab)
+
+# signaux impairs
+
+# on normalise par DT_OLD/DT_NEW
+
+
+dt_calc = 0.000500833333333
+coef_x = 0.001/dt_calc
+#FFX_F11B=coef_x*FFX_F11 (voir zzzz100b)
+FFX_F11B=coef_x*46.773788670759131-coef_x*295.81845952473248j,
+#FFX_F12B=coef_x*FFX_F12
+FFX_F12B=coef_x*107.56095648453922-coef_x*272.16663185073367j,
+
+dt_calc = 0.000698837209302
+coef_y = 0.001/dt_calc
+#FFY_F11B=coef_y*FFY_F11
+FFY_F11B=- coef_y*5.3909464299143508- coef_y*312.17287961881800j,
+#FFY_F12B=coef_y*FFY_F12
+FFY_F12B=coef_y*103.55711676347113-coef_y*268.47490307166413j,
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC_C=FFX_F11B,
+                         VALE_REFE_C=FFX_F11B,
+                         VALE_PARA=FREQ11,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTX,),
+                      _F(VALE_CALC_C=FFX_F12B,
+                         VALE_REFE_C=FFX_F12B,
+                         VALE_PARA=FREQ12,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTX,),
+                      _F(VALE_CALC_C=FFY_F11B,
+                         VALE_REFE_C=FFY_F11B,
+                         VALE_PARA=FREQ11,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTY,),
+                      _F(VALE_CALC_C=FFY_F12B,
+                         VALE_REFE_C=FFY_F12B,
+                         VALE_PARA=FREQ12,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTY,),
+                      ),
+              )
+
+
+# signaux pairs
+
+
+dt_calc = 0.0005
+coef_x = 0.001/dt_calc
+#FFX_F11B=coef_x*FFX_F11 (voir zzzz100b)
+FFX_F11B=coef_x*46.773788670759131-coef_x*295.81845952473248j,
+#FFX_F12B=coef_x*FFX_F12
+FFX_F12B=coef_x*107.56095648453922-coef_x*272.16663185073367j,
+
+dt_calc = 0.000700934579439
+coef_y = 0.001/dt_calc
+#FFY_F11B=coef_y*FFY_F11
+FFY_F11B=- coef_y*5.3909464299143508- coef_y*312.17287961881800j,
+#FFY_F12B=coef_y*FFY_F12
+FFY_F12B=coef_y*103.55711676347113-coef_y*268.47490307166413j,
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC_C=88.07756-271.0748j,
+                         VALE_PARA=FREQ11,
+                         FONCTION=XFF1P,),
+                      _F(VALE_CALC_C=180.7614-192.4914j,
+                         VALE_PARA=FREQ12,
+                         FONCTION=XFF1P,),
+                      _F(VALE_CALC_C=coef_x*(88.07756-271.0748j),
+                         VALE_REFE_C=coef_x*(88.07756-271.0748j),
+                         VALE_PARA=FREQ11,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTXP,),
+                      _F(VALE_CALC_C=coef_x*(180.7614-192.4914j),
+                         VALE_REFE_C=coef_x*(180.7614-192.4914j),
+                         VALE_PARA=FREQ12,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTXP,),
+                      ),
+              )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC_C=38.99211-295.1141j,
+                         VALE_PARA=FREQ11,
+                         FONCTION=YFF1P,),
+                      _F(VALE_CALC_C=190.3513-188.4763j,
+                         VALE_PARA=FREQ12,
+                         FONCTION=YFF1P,),
+                      _F(VALE_CALC_C=(coef_y*38.99211-coef_y*295.1141j,),
+                         VALE_REFE_C=(coef_y*38.99211-coef_y*295.1141j,),
+                         VALE_PARA=FREQ11,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTYP,),
+                      _F(VALE_CALC_C=(coef_y*190.3513-coef_y*188.4763j,),
+                         VALE_REFE_C=(coef_y*190.3513-coef_y*188.4763j,),
+                         VALE_PARA=FREQ12,
+                         REFERENCE='AUTRE_ASTER',
+                         PRECISION=1.0000000000000001E-05,
+                         FONCTION=FFINTYP,),
+                      ),
+              )
+
+
+
+#
+FIN()

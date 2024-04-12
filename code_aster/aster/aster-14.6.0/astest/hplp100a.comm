@@ -1,0 +1,347 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',   )
+
+DEFI_GROUP(reuse = MA, MAILLAGE=MA, CREA_GROUP_NO=_F(NOM='GN3', NOEUD='N3'))
+
+
+# -------------------------------------------------------------- #
+#                       DEBUT DU THERMIQUE                       #
+# -------------------------------------------------------------- #
+
+MOTH=AFFE_MODELE(         MAILLAGE=MA,
+
+                              AFFE=_F(  TOUT = 'OUI',
+                                      PHENOMENE = 'THERMIQUE',
+                                      MODELISATION = 'PLAN') )
+
+MATH=DEFI_MATERIAU(         THER=_F(  RHO_CP = 0.,
+                                     LAMBDA = 1.0))
+
+CMTH=AFFE_MATERIAU(       MAILLAGE=MA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = MATH) )
+
+CHTH=AFFE_CHAR_THER(       MODELE=MOTH,TEMP_IMPO=(
+                         _F( GROUP_NO = 'GRNM1',TEMP = -100.),
+                         _F( GROUP_NO = 'GRNM3',TEMP = 100.)) )
+
+METH=CALC_MATR_ELEM(         MODELE=MOTH,
+                               CHARGE=CHTH,
+                           CHAM_MATER=CMTH,
+                              OPTION='RIGI_THER')
+
+VETH=CALC_VECT_ELEM(        CHARGE=CHTH,
+                              OPTION='CHAR_THER' )
+
+NUTH=NUME_DDL(           MATR_RIGI=METH )
+
+KTH=ASSE_MATRICE(        MATR_ELEM=METH,
+                            NUME_DDL=NUTH )
+
+FTH=ASSE_VECTEUR(        VECT_ELEM=VETH,
+                            NUME_DDL=NUTH )
+
+KTH=FACTORISER(     reuse=KTH,     MATR_ASSE=KTH  )
+
+TEMP=RESOUDRE(           MATR=KTH,
+                             CHAM_NO=FTH          )
+
+# -------------------------------------------------------------- #
+#                       FIN DU THERMIQUE                         #
+# -------------------------------------------------------------- #
+
+MO=AFFE_MODELE(            MAILLAGE=MA,
+
+                                AFFE=_F(  TOUT = 'OUI',
+                                       PHENOMENE = 'MECANIQUE',
+                                       MODELISATION = 'D_PLAN'))
+
+MAT=DEFI_MATERIAU(            ELAS=_F(  E = 20000.,
+                                       NU = 0.3,
+                                       ALPHA = 0.000005) )
+
+CM=AFFE_MATERIAU(        MAILLAGE=MA,
+                    AFFE=_F(  TOUT = 'OUI', MATER = MAT ),
+                    AFFE_VARC=_F(NOM_VARC='TEMP',TOUT='OUI',CHAM_GD=TEMP,VALE_REF=0.),
+                                  )
+
+CH=AFFE_CHAR_MECA(           MODELE=MO,
+                         #TEMP_CALCULEE=TEMP,
+                         DDL_IMPO=(
+                              _F(  GROUP_NO = 'GRNM2', DY = 0.),
+                              _F(  NOEUD = 'N695', DX = 0.),
+                              _F(  GROUP_NO = 'GRNM4', DY = 0.)))
+
+ME=CALC_MATR_ELEM(         MODELE=MO,
+                              CHARGE=CH,
+                          CHAM_MATER=CM,
+                             OPTION='RIGI_MECA'   )
+
+# prise en compte des variables de commande
+
+LIST1=DEFI_LIST_REEL(DEBUT=0.0,
+                    INTERVALLE=_F(JUSQU_A=1.0,
+                                  NOMBRE=1,),);
+
+CONT1=CALCUL(OPTION=('FORC_VARC_ELEM_P'),
+            MODELE=MO,
+            CHAM_MATER=CM,
+            INCREMENT=_F(LIST_INST=LIST1,
+                         NUME_ORDRE=1),
+            EXCIT=_F(CHARGE=CH),
+            COMPORTEMENT=_F(RELATION='ELAS',),
+            );
+
+VE=EXTR_TABLE(TYPE_RESU='VECT_ELEM_DEPL_R',
+                 TABLE=CONT1,
+                 NOM_PARA='NOM_SD',
+                 FILTRE=_F(NOM_PARA='NOM_OBJET',
+                           VALE_K='FORC_VARC_ELEM_P'),)
+
+NU=NUME_DDL(            MATR_RIGI=ME           )
+
+K=ASSE_MATRICE(        MATR_ELEM=ME,
+                            NUME_DDL=NU )
+
+F=ASSE_VECTEUR(        VECT_ELEM=VE,
+                            NUME_DDL=NU )
+
+K=FACTORISER(      reuse=K,     MATR_ASSE=K  )
+
+DEP=RESOUDRE(           MATR=K,
+                             CHAM_NO=F  )
+
+RESU=CREA_RESU(  OPERATION='AFFE',
+                 TYPE_RESU='EVOL_ELAS',
+                 NOM_CHAM='DEPL',
+                      AFFE=_F(  CHAM_GD = DEP,
+                                INST=0.,
+                                MODELE=MO,
+                                CHAM_MATER = CM)     )
+
+
+FOND=DEFI_FOND_FISS( MAILLAGE=MA,
+                     FOND_FISS=_F( GROUP_NO = 'GN3'),
+                     SYME='OUI',
+                     LEVRE_SUP=_F(MAILLE='M388'))
+G1=CALC_G(
+                 RESULTAT=RESU,
+                 THETA=_F(
+                          R_INF=10.,
+                          R_SUP=40.,
+                          FOND_FISS=FOND,),
+                 EXCIT=_F(CHARGE=CH,),)
+
+GK1=CALC_G(        RESULTAT=RESU,
+                   THETA=_F(R_INF = 10.,
+                              R_SUP = 40.,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G')
+
+G2=CALC_G(        RESULTAT=RESU,
+                  THETA=_F(
+                           R_INF=15.,
+                           R_SUP=45.,
+                           FOND_FISS=FOND,),
+                  EXCIT=_F(CHARGE=CH,),)
+
+GK2=CALC_G(          RESULTAT=RESU,
+                     THETA=_F(R_INF = 15.,
+                              R_SUP = 45.,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G')
+
+G3=CALC_G(         RESULTAT=RESU,
+                   THETA=_F(
+                            R_INF=5.0,
+                            R_SUP=47.,
+                            FOND_FISS=FOND,),
+                   EXCIT=_F(CHARGE=CH,),)
+
+GK3=CALC_G(          RESULTAT=RESU,
+                     THETA=_F(R_INF = 5.0,
+                              R_SUP = 47.,
+                              FOND_FISS=FOND),
+                     EXCIT=_F(CHARGE=CH,),
+                     OPTION='CALC_K_G')
+
+G4=CALC_G(        RESULTAT=RESU,
+                  NUME_ORDRE=1,
+                  THETA=_F(
+                           R_INF=3.0,
+                           R_SUP=48.,
+                           FOND_FISS=FOND,),
+                  EXCIT=_F(CHARGE=CH,),)
+
+GK4=CALC_G(         RESULTAT=RESU,
+                    NUME_ORDRE=1,
+                    THETA=_F(R_INF = 3.0,
+                              R_SUP = 48.,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G')
+
+
+GK5=CALC_G(         RESULTAT=RESU,
+                    NUME_ORDRE=1,
+                    THETA=_F( FOND_FISS=FOND,
+                             ),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G')
+
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.360203432692,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G1,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.360202303083,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=GK1,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.359636575533,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G_IRWIN',
+           TABLE=GK1,)
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=88.9050086393,
+           VALE_REFE=92.566000000000003,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+
+           NOM_PARA='K2',
+           TABLE=GK1,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.3601150977,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G2,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.360144061822,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=GK2,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.35958185368,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G_IRWIN',
+           TABLE=GK2,)
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=88.8982445444,
+           VALE_REFE=92.566000000000003,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+
+           NOM_PARA='K2',
+           TABLE=GK2,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.360144312104,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G3,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.360194362854,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=GK3,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.359614458429,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G_IRWIN',
+           TABLE=GK3,)
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=88.9022748358,
+           VALE_REFE=92.566000000000003,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+
+           NOM_PARA='K2',
+           TABLE=GK3,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.361844542614,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=GK5,)
+
+TEST_TABLE(PRECISION=0.080000000000000002,
+           VALE_CALC=0.361357632422,
+           VALE_REFE=0.38985999999999998,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G_IRWIN',
+           TABLE=GK5,)
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=89.1174841841,
+           VALE_REFE=92.566000000000003,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK5,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.,
+
+           NOM_PARA='K2',
+           TABLE=GK5,)
+
+FIN( )
+#

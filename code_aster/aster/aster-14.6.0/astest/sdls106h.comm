@@ -1,0 +1,421 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#######################################################################
+
+#        CALCUL DIRECT
+
+#        VALIDATION DES DEFORMEES MODALES AVEC MACR_LIGNE_COUPE
+
+#######################################################################
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), 
+      DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MAILLA=LIRE_MAILLAGE( FORMAT='MED' )
+
+MODELE=AFFE_MODELE( MAILLAGE=MAILLA,
+                    AFFE=_F( GROUP_MA = 'TOUT_MA',
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = 'DKT'))
+
+#
+MATER=DEFI_MATERIAU(  ELAS=_F( E = 2.1E11,  NU = 0.30,  RHO = 7800.0))
+
+#
+CHAMAT=AFFE_MATERIAU(  MAILLAGE=MAILLA,
+                              AFFE=_F( GROUP_MA = 'TOUT_MA',
+                                    MATER = MATER))
+
+#
+PARAM=AFFE_CARA_ELEM(  MODELE=MODELE,
+                            COQUE=_F( EPAIS = 0.01,
+                                   GROUP_MA = 'TOUT_MA'))
+
+#
+CHARGE=AFFE_CHAR_MECA(  MODELE=MODELE,DDL_IMPO=(
+               _F( GROUP_NO = 'BLOQUE', DX = 0.0, DY = 0.0, DZ = 0.0 )))
+
+
+#
+ASSEMBLAGE(MODELE=MODELE,
+           CHAM_MATER=CHAMAT,
+           CARA_ELEM=PARAM,
+           CHARGE=CHARGE,
+           NUME_DDL=CO('NUM_DDL'),
+           MATR_ASSE=(_F(MATRICE=CO('MATASSR'),
+                         OPTION='RIGI_MECA',),
+                      _F(MATRICE=CO('MATASSM'),
+                         OPTION='MASS_MECA',),),);
+
+
+# CALCUL DES MODES EN DEUX BANDES
+SOLVEURL='MUMPS'
+MODES_1=CALC_MODES(MATR_RIGI=MATASSR,
+                   MATR_MASS=MATASSM,
+                   OPTION='BANDE',
+                    SOLVEUR=_F(METHODE=SOLVEURL),
+                   CALC_FREQ=_F(FREQ=( 0.,40.), ),
+                   )
+
+MODES_2=CALC_MODES(MATR_RIGI=MATASSR,
+                   MATR_MASS=MATASSM,
+                   OPTION='BANDE',
+                    SOLVEUR=_F(METHODE=SOLVEURL),
+                   CALC_FREQ=_F(FREQ=( 40.,100.), ),
+                   AMELIORATION='NON',
+                   )
+MODES_2a=CALC_MODES(MATR_RIGI=MATASSR,
+                    MATR_MASS=MATASSM,
+                    OPTION='BANDE',
+                    SOLVEUR=_F(METHODE=SOLVEURL),
+                    CALC_FREQ=_F(FREQ=( 40.,100.), ),
+                    AMELIORATION='OUI',
+# SEUIL ARTIFICIELLEMENT TRES PETIT POUR RENDRE EFFECTIVE L'AMELIORATION
+                    VERI_MODE=_F(SEUIL=1.E-11),
+                    )
+
+#
+MODES_1=NORM_MODE( reuse=MODES_1, MODE=MODES_1,
+                   NORME='TRAN',
+                   MODE_SIGNE=_F( GROUP_NO ='P',
+                                  NOM_CMP = 'DZ',
+                                  SIGNE = 'POSITIF'))
+
+MODES_2=NORM_MODE( reuse=MODES_2, MODE=MODES_2,
+                   NORME='TRAN',
+                   MODE_SIGNE=_F( GROUP_NO ='P',
+                                  NOM_CMP = 'DZ',
+                                  SIGNE = 'POSITIF'))
+
+MODES_2a=NORM_MODE(reuse=MODES_2a, MODE=MODES_2a,
+                   NORME='TRAN',
+                   MODE_SIGNE=_F( GROUP_NO ='P',
+                                  NOM_CMP = 'DZ',
+                                  SIGNE = 'POSITIF'))
+
+
+
+# VALIDATION DES DEFORMEES MODALES
+# AVEC L'OPERATEUR MACR_LIGNE_COUPE, SELON DIFFERENTES LIGNES
+
+from math import pi, sqrt
+a = 2.            # longueur de la plaque
+b = 1.5           # largeur
+h = 0.01          # épaisseur
+E = 2.1e11
+nu = 0.3
+gamma = 7800.*h   # masse surfacique
+
+
+
+# VALEURS DE REFERENCE ANALYTIQUE
+# LES COUPLES [i,j] SONT LE NOMBRE DE DEMI-ONDES LE LONG DU GRAND AXE
+# ET DU PETIT AXE POUR CHAQUE DEFORMEE MODALE (DANS L'ORDRE CROISSANT
+# DES MODES)
+c_ij = [ [1,1], [2,1], [1,2], [3,1], [2,2], [3,2] ]
+
+
+#  - FREQUENCES PROPRES ANALYTIQUES
+f_an = []
+for nm in range(0, len(c_ij)):
+   i = float( c_ij[nm][0] )
+   j = float( c_ij[nm][1] )
+   lambda_2 = pi**2*(i**2 + j**2*(a/b)**2)
+   f_an.append( lambda_2/(2*pi*a**2) * sqrt(E*h**3/(12*gamma*(1-nu**2))) )
+
+
+# RECUPERATION DE LA DEFORMEE DU TROISIEME MODE, SUIVANT TROIS LIGNES DE COUPE
+nb_points = 10
+MLCDIAG3=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_MODE= 3,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -1.5, -0.5 ),
+                                         COOR_EXTR= (  0.5,  1. ), ),)
+
+MLC_X3=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_MODE= 3,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -1.5, 0.25 ),
+                                         COOR_EXTR= (  0.5, 0.25 ), ),)
+MLC_X3a=MACR_LIGN_COUPE( RESULTAT= MODES_2a,
+                      NOM_CHAM= 'DEPL',
+                      NUME_ORDRE= 1,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -1.5, 0.25 ),
+                                         COOR_EXTR= (  0.5, 0.25 ), ),)
+
+MLC_Y3=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_MODE= 3,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -0.5, -0.5 ),
+                                         COOR_EXTR= ( -0.5,  1. ), ),)
+
+
+IMPR_TABLE( TABLE=MLCDIAG3 )
+
+IMPR_TABLE( TABLE=MLC_X3 )
+IMPR_TABLE( TABLE=MLC_X3a )
+
+IMPR_TABLE( TABLE=MLC_Y3 )
+
+
+
+# LECTURE DES VALEURS DE NON REGRESSION POUR LES TEST_*
+INCLUDE(UNITE=38)
+
+
+
+# VALIDATION DE LA DEFORMEE DU TROISIEME MODE
+i = float( c_ij[3-1][0] )
+j = float( c_ij[3-1][1] )
+
+for np in range(0,nb_points) :
+   # valeur analytique le long de la diagonale
+   x = float(np) / (nb_points-1) * a
+   y = float(np) / (nb_points-1) * b
+   val_an = - sin(i*pi*x/a) * sin(j*pi*y/b)
+   critere = 'RELATIF'
+   if (val_an < 1.e-12):  # si valeur de référence très petite, il faut tester en absolu
+      critere = 'ABSOLU'
+
+   TEST_TABLE(
+      TABLE=MLCDIAG3,
+      NOM_PARA='DZ',
+      FILTRE=(
+         _F(NOM_PARA='ABSC_CURV', CRIT_COMP='EQ', VALE= sqrt(x**2 + y**2) )
+      ),
+      VALE_CALC=diag3_nonreg[np],
+      VALE_REFE=val_an,
+      REFERENCE='ANALYTIQUE',
+      PRECISION=1.e-2,
+      CRITERE=critere
+      )
+
+   # valeur analytique le long de la ligne milieu parallèle à Y
+   x = a / 2.
+   y = float(np) / (nb_points-1) * b
+   val_an = - sin(i*pi*x/a) * sin(j*pi*y/b)
+   critere = 'RELATIF'
+   if (val_an < 1.e-12):  # si valeur de référence très petite, il faut tester en absolu
+      critere = 'ABSOLU'
+
+   TEST_TABLE(
+      TABLE=MLC_Y3,
+      NOM_PARA='DZ',
+      FILTRE=(
+         _F(NOM_PARA='ABSC_CURV', CRIT_COMP='EQ', VALE= y )
+      ),
+      VALE_CALC=y3_nonreg[np],
+      VALE_REFE=val_an,
+      REFERENCE='ANALYTIQUE',
+      PRECISION=1.e-2,
+      CRITERE=critere
+      )
+
+   # valeur analytique le long de la ligne milieu parallèle à X : 0
+TEST_TABLE(
+      TABLE=MLC_X3,
+      NOM_PARA='DZ',
+      TYPE_TEST='SOMM_ABS',
+      VALE_CALC=x3_nonreg,
+      VALE_REFE=0.,
+      REFERENCE='ANALYTIQUE',
+      CRITERE='ABSOLU',
+      )
+
+# On teste l'amélioration (très légère dans ce cas-test)
+# on le voit surtout sur les composantes dont la valeur analytique est nulle, par exemple DRZ
+TEST_TABLE(
+      TABLE=MLC_X3,
+      NOM_PARA='DRZ',
+      TYPE_TEST='SOMM_ABS',
+      VALE_CALC=x3_nonreg_rz,
+      VALE_REFE=0.,
+      REFERENCE='ANALYTIQUE',
+      CRITERE='ABSOLU',
+      )
+TEST_TABLE(
+      TABLE=MLC_X3a,
+      NOM_PARA='DRZ',
+      TYPE_TEST='SOMM_ABS',
+      VALE_CALC=x3_nonreg_ameliore_rz,
+      VALE_REFE=0.,
+      REFERENCE='ANALYTIQUE',
+      CRITERE='ABSOLU',
+      ORDRE_GRANDEUR=1.e-20,
+      )
+
+
+
+
+# RECUPERATION DE LA DEFORMEE DU QUATRIEME MODE, SUIVANT TROIS LIGNES DE COUPE
+nb_points = 10
+MLCDIAG4=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_ORDRE= 2,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -1.5, -0.5 ),
+                                         COOR_EXTR= (  0.5,  1. ), ),)
+
+MLC_X4=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_ORDRE= 2,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -1.5, 0.25 ),
+                                         COOR_EXTR= (  0.5, 0.25 ), ),)
+
+MLC_Y4=MACR_LIGN_COUPE( RESULTAT= MODES_2,
+                      NOM_CHAM= 'DEPL',
+                      NUME_ORDRE= 2,
+                      LIGN_COUPE=   _F( NB_POINTS= nb_points,
+                                         COOR_ORIG= ( -0.5, -0.5 ),
+                                         COOR_EXTR= ( -0.5,  1. ), ),)
+
+
+IMPR_TABLE( TABLE=MLCDIAG4 )
+
+IMPR_TABLE( TABLE=MLC_X4 )
+
+IMPR_TABLE( TABLE=MLC_Y4 )
+
+
+# VALIDATION DE LA DEFORMEE DU QUATRIEME MODE
+i = c_ij[4-1][0]
+j = c_ij[4-1][1]
+
+for np in range(0,nb_points) :
+   # valeur analytique le long de la diagonale
+   x = float(np) / (nb_points-1) * a
+   y = float(np) / (nb_points-1) * b
+   val_an = sin(i*pi*x/a) * sin(j*pi*y/b)
+   critere = 'RELATIF'
+   if (val_an < 1.e-12):  # si valeur de référence très petite, il faut tester en absolu
+      critere = 'ABSOLU'
+
+   TEST_TABLE(
+      TABLE=MLCDIAG4,
+      NOM_PARA='DZ',
+      FILTRE=(
+         _F(NOM_PARA='ABSC_CURV', CRIT_COMP='EQ', VALE= sqrt(x**2 + y**2) )
+      ),
+      VALE_CALC=diag4_nonreg[np],
+      VALE_REFE=val_an,
+      REFERENCE='ANALYTIQUE',
+      PRECISION=1.e-2,
+      CRITERE=critere
+      )
+
+   # valeur analytique le long de la ligne milieu parallèle à X
+   x = float(np) / (nb_points-1) * a
+   y = b / 2.
+   val_an = sin(i*pi*x/a) * sin(j*pi*y/b)
+   critere = 'RELATIF'
+   if (val_an < 1.e-12):  # si valeur de référence très petite, il faut tester en absolu
+      critere = 'ABSOLU'
+
+   TEST_TABLE(
+      TABLE=MLC_X4,
+      NOM_PARA='DZ',
+      FILTRE=(
+         _F(NOM_PARA='ABSC_CURV', CRIT_COMP='EQ', VALE= x )
+      ),
+      VALE_CALC=x4_nonreg[np],
+      VALE_REFE=val_an,
+      REFERENCE='ANALYTIQUE',
+      PRECISION=1.e-2,
+      CRITERE=critere
+      )
+
+
+   # valeur analytique le long de la ligne milieu parallèle à Y
+   x = a / 2.
+   y = float(np) / (nb_points-1) * b
+   val_an = sin(i*pi*x/a) * sin(j*pi*y/b)
+   critere = 'RELATIF'
+   if (val_an < 1.e-12):  # si valeur de référence très petite, il faut tester en absolu
+      critere = 'ABSOLU'
+
+   TEST_TABLE(
+      TABLE=MLC_Y4,
+      NOM_PARA='DZ',
+      FILTRE=(
+         _F(NOM_PARA='ABSC_CURV', CRIT_COMP='EQ', VALE= y )
+      ),
+      VALE_CALC=y4_nonreg[np],
+      VALE_REFE=val_an,
+      REFERENCE='ANALYTIQUE',
+      PRECISION=1.e-2,
+      CRITERE=critere
+      )
+
+
+
+
+# VALIDATION DES FREQUENCES PROPRES
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES_1,
+                   VALE_CALC=f_nonreg[0],
+                   VALE_REFE=f_an[0],
+                   CRITERE='RELATIF',
+                   PRECISION=5.e-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES_1,
+                   VALE_CALC=f_nonreg[1],
+                   VALE_REFE=f_an[1],
+                   CRITERE='RELATIF',
+                   PRECISION=5.e-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES_2,
+                   VALE_CALC=f_nonreg[2],
+                   VALE_REFE=f_an[2],
+                   CRITERE='RELATIF',
+                   PRECISION=5.e-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES_2,
+                   VALE_CALC=f_nonreg[3],
+                   VALE_REFE=f_an[3],
+                   CRITERE='RELATIF',
+                   PRECISION=5.e-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES_2,
+                   VALE_CALC=f_nonreg[4],
+                   VALE_REFE=f_an[4],
+                   CRITERE='RELATIF',
+                   PRECISION=5.e-3,),
+                ),
+          )
+
+
+FIN()

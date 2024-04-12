@@ -1,0 +1,203 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET') )
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',)
+
+#
+# DEFINITION DES GROUPES DE NOEUDS
+MAIL=DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,CREA_GROUP_NO=(
+                       _F(  GROUP_MA = 'APPUI'),
+                       _F(  GROUP_MA = 'BORD_CH'),
+                       _F(  GROUP_MA = 'LEF'))
+                   )
+
+#
+# DEFINITION DU MODELE
+MODELE=AFFE_MODELE(    MAILLAGE=MAIL,
+                         AFFE=_F(  TOUT = 'OUI',
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = 'AXIS')  )
+
+#
+# DEFINITION DU MATERIAU
+ACIER=DEFI_MATERIAU(    ELAS=_F(  E = 2.1E11,  NU = 0.3,
+                                 ALPHA = 1.E-5,  RHO = 7800.)
+                      )
+
+#
+# ATTRIBUTION DU MATERIAU
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MAIL,
+                          AFFE=_F(  TOUT = 'OUI',
+                                 MATER = ACIER)  )
+
+#
+# DEFINITION DES CONDITIONS AUX LIMITES ET CHARGEMENTS
+CLIM=AFFE_CHAR_MECA(     MODELE=MODELE,
+                           DDL_IMPO=_F(  GROUP_NO = 'APPUI',  DY = 0.)
+                        )
+
+#
+F_X1=DEFI_FONCTION(    NOM_PARA='X',
+                         VALE=( 0.99,  0.,    1.01,  500000., )
+                     )
+
+F_X2=DEFI_FONCTION(    NOM_PARA='X',
+                         VALE=( 0.99,  500000.,    1.01,  0., )
+                     )
+
+CHARGT1=AFFE_CHAR_MECA_F(    MODELE=MODELE,
+                             FORCE_CONTOUR=_F(  GROUP_MA = 'BORD_CH',
+                                             FY = F_X1)
+                          )
+
+CHARGT2=AFFE_CHAR_MECA_F(    MODELE=MODELE,
+                             FORCE_CONTOUR=_F(  GROUP_MA = 'BORD_CH',
+                                             FY = F_X2)
+                          )
+
+#
+# RESOLUTION
+DEF1=MECA_STATIQUE(    MODELE=MODELE,
+                        CHAM_MATER=CHMAT,EXCIT=(
+                        _F(  CHARGE = CLIM),
+                              _F(  CHARGE = CHARGT1))
+                    )
+
+DEF2=MECA_STATIQUE(    MODELE=MODELE,
+                        CHAM_MATER=CHMAT,EXCIT=(
+                        _F(  CHARGE = CLIM),
+                              _F(  CHARGE = CHARGT2))
+                    )
+
+#
+# RECUPERATION DU CHAMP DE DEPLACEMENTS
+U1=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+NOM_CHAM='DEPL', RESULTAT=DEF1,
+                 NUME_ORDRE=1
+                  )
+
+#
+U2=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+NOM_CHAM='DEPL', RESULTAT=DEF2,
+                 NUME_ORDRE=1
+                  )
+
+#
+# TEST_RESU DEPLACEMENTS
+#
+TEST_RESU(CHAM_NO=(_F(NOEUD='N51',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=-3.58333333334E-07,
+                      VALE_REFE=-3.5830000000000003E-07,),
+                   _F(NOEUD='N202',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=-3.58333345338E-07,
+                      VALE_REFE=-3.5830000000000003E-07,),
+                   _F(NOEUD='N503',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=-1.01160298531E-06,
+                      VALE_REFE=-1.012E-06,),
+                   _F(NOEUD='N51',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=-3.55952380953E-07,
+                      VALE_REFE=-3.559E-07,),
+                   _F(NOEUD='N202',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=-3.55952368946E-07,
+                      VALE_REFE=-3.559E-07,),
+                   _F(NOEUD='N503',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DX',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=2.97317271027E-07,
+                      VALE_REFE=2.973E-07,),
+                   ),
+          )
+
+#
+TEST_RESU(CHAM_NO=(_F(NOEUD='N452',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=4.89633630892E-06,
+                      VALE_REFE=4.8960000000000002E-06,),
+                   _F(NOEUD='N504',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=4.65828082264E-06,
+                      VALE_REFE=4.6580000000000001E-06,),
+                   _F(NOEUD='N503',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U1,
+                      VALE_CALC=4.77741724506E-06,
+                      VALE_REFE=4.7770000000000002E-06,),
+                   _F(NOEUD='N452',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=4.62747321488E-06,
+                      VALE_REFE=4.6269999999999999E-06,),
+                   _F(NOEUD='N504',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=4.86552870117E-06,
+                      VALE_REFE=4.865E-06,),
+                   _F(NOEUD='N503',
+                      REFERENCE='ANALYTIQUE',
+                      NOM_CMP='DY',
+                      PRECISION=1.E-3,
+                      CHAM_GD=U2,
+                      VALE_CALC=4.74639227875E-06,
+                      VALE_REFE=4.746E-06,),
+                   ),
+          )
+
+#
+FIN( )
+#
+#

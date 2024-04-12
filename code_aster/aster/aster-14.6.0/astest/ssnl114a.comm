@@ -1,0 +1,123 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA2=LIRE_MAILLAGE(FORMAT='MED',)
+
+M1=DEFI_MATERIAU(
+         ELAS=_F(  E = 5.700000E+10, ALPHA = 2.300000E-05,
+        RHO = 2.844230E+03, NU=0.),
+        CABLE=_F(),)
+
+MO2=AFFE_MODELE(   MAILLAGE=MA2,
+             AFFE=_F(  GROUP_MA = ( 'P0101010', 'O0101010', 'P0101011', ),
+           PHENOMENE = 'MECANIQUE',
+         MODELISATION = 'CABLE'))
+
+CARA2=AFFE_CARA_ELEM(    MODELE=MO2,
+         CABLE=_F(  GROUP_MA = ( 'P0101010', 'P0101011','O0101010',  ),
+        SECTION = 2.278300E-04, N_INIT=5000.0)
+                        )
+
+CHDDL2=AFFE_CHAR_MECA(    MODELE=MO2,
+            DDL_IMPO=_F(  GROUP_NO = ( 'ZFIXES', ),
+          DX = 0.0, DY = 0.0, DZ = 0.0))
+
+CHTN2=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R', MAILLAGE=MA2,
+           AFFE=_F(  TOUT = 'OUI', NOM_CMP = 'TEMP', VALE = 39.26))
+
+CHTN0=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R', MAILLAGE=MA2,
+           AFFE=_F(  TOUT = 'OUI', NOM_CMP = 'TEMP', VALE = 0.0))
+
+RESUTHER=CREA_RESU(OPERATION='AFFE', TYPE_RESU='EVOL_THER',    NOM_CHAM='TEMP',AFFE=(
+ _F( INST = -1., CHAM_GD = CHTN0),
+# MONTEE EN TEMPERATURE PROGRESSIVE
+ _F( INST = 0., CHAM_GD = CHTN0),
+ _F( INST = 1., CHAM_GD = CHTN2))
+                   )
+
+CHPES2=AFFE_CHAR_MECA(    MODELE=MO2,
+                   PESANTEUR=_F(GRAVITE=9.81,
+                                DIRECTION=(0.0,0.0,-1.0,), ),)
+
+L_INST0=DEFI_LIST_REEL(    DEBUT=-1.000000E+00,
+         INTERVALLE=_F( JUSQU_A = 1.000000E+00, NOMBRE = 2))
+
+CHM2=AFFE_MATERIAU(    MAILLAGE=MA2,AFFE=(
+             _F(  GROUP_MA = (   'O0101010', ),  MATER = M1),
+             _F(  GROUP_MA = (   'P0101010', 'P0101011', ), MATER = M1)),
+             AFFE_VARC =_F(TOUT='OUI', VALE_REF=0.,EVOL=RESUTHER, NOM_VARC='TEMP',),
+             )
+
+RESU1=STAT_NON_LINE(
+                            MODELE=MO2,
+                        CHAM_MATER=CHM2,
+                         CARA_ELEM=CARA2,EXCIT=(
+                             _F(
+                CHARGE = CHDDL2), _F(
+                CHARGE = CHPES2,
+                TYPE_CHARGE = 'SUIV'), ),
+                         INCREMENT=_F(
+                LIST_INST = L_INST0,
+                NUME_INST_FIN = 2),
+                         COMPORTEMENT=_F(
+                GROUP_MA = (
+                  'P0101010',  'P0101011',
+                  'O0101010',  ),
+                RELATION = 'CABLE',
+                DEFORMATION = 'GROT_GDEP'),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.00E-07,
+                ITER_GLOB_MAXI = 50),
+                            NEWTON=_F(
+                REAC_ITER = 1)
+              )
+
+RESU1=CALC_CHAMP(reuse=RESU1,CONTRAINTE=('SIEF_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=RESU1)
+
+
+# SOLUTION ANALYTIQUE : FORTRAN DANS SSNL114.38
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   RESULTAT=RESU1,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N36',
+                   NOM_CMP='DZ',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=-6.352,
+                   VALE_CALC=-6.3535641112445,
+                   PRECISION=1.E-3,
+                   ),
+                _F(NUME_ORDRE=2,
+                   RESULTAT=RESU1,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N36',
+                   NOM_CMP='DZ',
+                   REFERENCE='ANALYTIQUE',
+                   VALE_REFE=-8.195,
+                   VALE_CALC=-8.1944853679427,
+                   PRECISION=1.E-3,
+                   ),
+                ),
+          )
+
+FIN( )
+#

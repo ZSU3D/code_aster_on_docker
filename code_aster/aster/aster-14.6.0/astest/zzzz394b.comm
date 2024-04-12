@@ -1,0 +1,157 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+
+BETON=DEFI_MATERIAU(ELAS=_F(E = 1.E9,NU = 0.3,),)
+
+MATAF=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(MAILLE = 'M1',
+                             MATER = BETON,)))
+
+LEMOD=AFFE_MODELE(MAILLAGE=MA,     
+                  AFFE=(_F(MAILLE = 'M1',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = 'DKTG',)))
+
+
+LACAR=AFFE_CARA_ELEM(MODELE=LEMOD,
+                     COQUE=(_F(MAILLE = 'M1',
+                               EPAIS = .2,
+                               ANGL_REP = (0.0, 0.0,),),),)
+
+
+ZCHM=AFFE_CHAR_MECA(MODELE=LEMOD,
+                    DDL_IMPO=(_F(NOEUD = ('N1',),
+                                 DX = 0., 
+                                 DY=0., DZ = 0., 
+                                 ),
+                              _F(NOEUD = ('N2','N3',),
+                                 DZ = 0., 
+                                 ),
+                              _F(NOEUD = ('N4'),
+                                 DX = 0., 
+                                 ),
+                             ),
+                    PRE_EPSI = _F(MAILLE = 'M1',
+                                  EXX     = 1.E-3,
+                                  EYY     = 2.E-3,
+                                  EXY     = 3.E-3,
+                                  KXX     = 4.E-3,
+                                  KYY     = 5.E-3,
+                                  KXY     = 6.E-3,
+                                  )
+
+            )
+#
+# ----------------------------------------------
+# CALCUL
+# ----------------------------------------------
+#
+
+
+ZLIST=DEFI_LIST_REEL(   DEBUT=0.,
+             INTERVALLE=_F( JUSQU_A = 1.0,  NOMBRE = 1, )
+           )
+
+LEDEP=STAT_NON_LINE(MODELE=LEMOD,
+                    CHAM_MATER=MATAF,
+                    CARA_ELEM=LACAR,
+                    EXCIT=_F(CHARGE = ZCHM,),
+                    COMPORTEMENT=_F(RELATION = 'ELAS',),
+                    INCREMENT=_F(LIST_INST = ZLIST,),
+                   )
+
+
+LEDEP=CALC_CHAMP(reuse =LEDEP,
+                 RESULTAT=LEDEP,
+                 DEFORMATION=('DEGE_ELGA'),
+                 );
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=LEDEP, INST = 1.0, NOM_CHAM=('DEGE_ELGA')))
+
+TEST_RESU(RESU=(_F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='EXX',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=1E-3,
+                   VALE_REFE=1E-3,),
+                _F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='EYY',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=2E-3,
+                   VALE_REFE=2E-3,),
+                _F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='EXY',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=3E-3,
+                   VALE_REFE=3E-3,),
+                _F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='KXX',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=4E-3,
+                   VALE_REFE=4E-3,),
+                _F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='KYY',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=5E-3,
+                   VALE_REFE=5E-3,),
+                _F(MAILLE='M1',
+                   POINT = 1,
+                   CRITERE='RELATIF',
+                   INST = 1.0,
+                   REFERENCE='ANALYTIQUE',
+                   NOM_CMP='KXY',
+                   RESULTAT=LEDEP,
+                   NOM_CHAM='DEGE_ELGA',
+                   VALE_CALC=6E-3,
+                   VALE_REFE=6E-3,),
+               ),
+          )
+
+
+FIN()
+#

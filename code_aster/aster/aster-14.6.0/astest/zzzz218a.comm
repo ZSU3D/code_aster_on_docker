@@ -1,0 +1,436 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: marina.bottoni at edf.fr
+#
+# -------------------------------------------------------
+# NON REGRESSION TEST, ONE CRACK, HOT AIR INJECTION 
+#  Test of the "POURSUITE" command on MACR_ECREVISSE
+# -------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+
+# Tested non regression values 
+NONREGR = (9.98114973621, 8.46099239237E-06, 8.21283844798E-06,\
+           6.61912102113E-06,-6.99999370406E-05,10.7893260664,\
+           25.9790113468,135.256043116,116.706888382,0.02456396, 0.001040661)
+
+pr_atmos = 1.E5
+pr_ext   = 10.E5
+temp_int = 140.0
+temp_ref = 20.0
+temp_ext = temp_ref
+
+
+# MESH
+# -------------------------------------
+MAIL = LIRE_MAILLAGE(FORMAT='MED',)
+
+MAIL = DEFI_GROUP(
+              reuse    = MAIL,
+              MAILLAGE = MAIL,
+              CREA_GROUP_NO = (_F(GROUP_MA = ('BETON','ENCASTRE','INTRADOS',
+                                              'EXTRADOS','BFISH','BFISB',),),
+                                _F(OPTION    ='SEGM_DROI_ORDO',
+                                    NOM      ='BFISBO',
+                                    GROUP_NO ='BFISB',
+                                    GROUP_NO_ORIG = 'I_BD',
+                                    GROUP_NO_EXTR = 'E_BD',
+                                    PRECISION     = 1.E-6,
+                                    CRITERE = 'ABSOLU',),
+                                _F(OPTION    = 'SEGM_DROI_ORDO',
+                                    NOM      ='BFISHO',
+                                    GROUP_NO ='BFISH',
+                                    GROUP_NO_ORIG = 'I_HD',
+                                    GROUP_NO_EXTR = 'E_HD',
+                                    PRECISION     = 1.E-6,
+                                    CRITERE = 'ABSOLU',),),)
+
+MAIL = MODI_MAILLAGE(
+              reuse        = MAIL,
+              MAILLAGE     = MAIL,
+              ORIE_PEAU_2D = _F(GROUP_MA = ('ENCASTRE','INTRADOS',
+                                            'EXTRADOS','BFISH','BFISB',),),)
+
+
+
+# DEFINITION OF MODELS AND MATERIALS
+# -------------------------------------
+MODMECA = AFFE_MODELE(
+                  MAILLAGE  = MAIL,
+                  AFFE      = (_F(GROUP_MA = ('BETON','ENCASTRE','INTRADOS',
+                                              'EXTRADOS','BFISH','BFISB',),
+                  PHENOMENE = 'MECANIQUE',
+                  MODELISATION = 'D_PLAN',),),)
+
+MODTHER = AFFE_MODELE(
+                  MAILLAGE  = MAIL,
+                  AFFE      = _F(GROUP_MA=('BETON','ENCASTRE','INTRADOS',
+                                           'EXTRADOS','BFISH','BFISB',),
+                  PHENOMENE = 'THERMIQUE',
+                  MODELISATION = 'PLAN_DIAG',),)
+
+BETON = DEFI_MATERIAU(ELAS = _F(E      = 35000.0E+6,
+                                NU     = 0.25,
+                                ALPHA  = 1.0E-5,),
+                      THER = _F(LAMBDA = 2.3,
+                                RHO_CP = 2500000.0,),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE  = MAIL,
+                    AFFE      = (_F(GROUP_MA = ('BETON','ENCASTRE','INTRADOS',
+                                                'EXTRADOS','BFISH','BFISB',),
+                                    MATER    = BETON,),),)
+
+
+
+# BOUNDARY CONDITIONS
+# ---------------------------------
+# Mechanical B.C. :
+CONDMECA = AFFE_CHAR_MECA( MODELE   = MODMECA,
+                           DDL_IMPO = (_F(GROUP_NO = 'ENCASTRE',
+                                          DX = 0.0,
+                                          DY = 0.0,),),)
+
+CONT  = DEFI_CONTACT(MODELE      = MODMECA,
+                     FORMULATION = 'DISCRETE',
+                     REAC_GEOM   = 'SANS',
+                     ZONE        = _F(
+                            GROUP_MA_MAIT = 'BFISH',
+                            GROUP_MA_ESCL = 'BFISB',
+                            SANS_GROUP_NO = ('E_HD','E_BD'), # Pour tester la prise en compte de TESTXX
+                     ),)
+
+
+# Thermal B.C. :
+TEMP_INT = DEFI_CONSTANTE(VALE = temp_int,)
+TEMP_EXT = DEFI_CONSTANTE(VALE = temp_ref,)
+H_EXT    = DEFI_CONSTANTE(VALE = 4.0,)
+H_INT    = DEFI_CONSTANTE(VALE = 8.0,)
+
+CONDTHER = AFFE_CHAR_THER_F(
+                    MODELE  = MODTHER,
+                    ECHANGE = (_F(GROUP_MA = 'INTRADOS',
+                                  COEF_H   = H_INT,
+                                  TEMP_EXT = TEMP_INT,),
+                               _F(GROUP_MA = 'EXTRADOS',
+                                  COEF_H   = H_EXT,
+                                  TEMP_EXT = TEMP_EXT,),),)
+
+
+
+# COMPUTATION
+# ---------------------------------
+L_INST1 = DEFI_LIST_REEL(
+                DEBUT      = 0.0,
+                INTERVALLE = (
+                      _F(JUSQU_A = 500,   NOMBRE = 20,),),)
+
+L_INST2 = DEFI_LIST_REEL(
+                DEBUT      = 500.0,
+                INTERVALLE = (
+                      _F(JUSQU_A = 10000, NOMBRE = 20,),),)
+
+RMECA = MACR_ECREVISSE(
+                TABLE  = CO('TBL_ECR0'),
+                TEMPER = CO('RTEMPER'),
+                DEBIT  = CO('DEB_ECR0'),
+                #
+                CHAM_MATER  = CHMAT,
+                MODELE_MECA = MODMECA,
+                TEMP_INIT   = temp_ref,
+                MODELE_THER = MODTHER,
+                EXCIT_MECA  = _F(CHARGE   = CONDMECA),
+                EXCIT_THER  = _F(CHARGE   = CONDTHER),
+                COMPORTEMENT   = _F(RELATION = 'ELAS',),
+                CONTACT     = CONT,
+                ENERGIE=_F(),
+                #
+                FISSURE = _F(
+                      PREFIXE_FICHIER  = 'FISSURE1',
+                      SECTION          = 'RECTANGLE',
+                      GROUP_MA         = ('BFISH','BFISB',),
+                      RUGOSITE         = 0.5E-06,
+                      ZETA             = 0.0,
+                      GROUP_NO_ORIG    = ('I_HD','I_BD',),
+                      GROUP_NO_EXTR    = ('E_HD','E_BD',),
+                      LISTE_VAL_BL     = (0.5,0.5),
+                      OUVERT_REMANENTE = 30.0E-06,
+                      TORTUOSITE       = 1.0, ),
+                #
+                ECOULEMENT = _F(
+                      FLUIDE_ENTREE  = 6,
+                      PRES_ENTREE    = pr_ext,
+                      PRES_SORTIE    = pr_atmos,
+                      TEMP_ENTREE_FO = TEMP_INT,),
+                #
+                LIST_INST = L_INST1,
+                #
+                MODELE_ECRE = _F(
+                      ECOULEMENT     = 'SATURATION',
+                      FROTTEMENT     = 1,
+                      TRANSFERT_CHAL = 1,),
+                #
+                CONV_CRITERE = _F(
+                      TEMP_REF = 0.5,
+                      PRES_REF = 0.01*pr_atmos,
+                      CRITERE  = 'EXPLICITE',),
+                #
+                CONVERGENCE_ECREVISSE = _F(
+                      KGTEST         = 0.5,
+                      ITER_GLOB_MAXI = 400,),
+                #
+                # LOGICIEL    =  '~/dev/codeaster-prerequisites/v13/tools/Ecrevisse-322',
+                VERSION     = '3.2.2',
+                COURBES     = 'AUCUNE',
+                ENTETE      = 'Castest ZZZZ218A',
+                IMPRESSION  = 'NON',
+                INFO        = 1,)
+
+RMECA = MACR_ECREVISSE(  reuse = RMECA,
+                ETAT_INIT    = _F (
+                           EVOL_NOLI  = RMECA,
+                           EVOL_THER  = RTEMPER,
+                           NUME_ORDRE = 20,
+                           ),
+                #
+                TABLE  = CO('TBL_ECRE'),
+                #TEMPER = CO('RTEMPER'),
+                DEBIT  = CO('DEB_ECRE'),
+                #
+                CHAM_MATER  = CHMAT,
+                MODELE_MECA = MODMECA,
+                MODELE_THER = MODTHER,
+                TEMP_INIT   = temp_ref,
+                EXCIT_MECA  = _F(CHARGE   = CONDMECA),
+                EXCIT_THER  = _F(CHARGE   = CONDTHER),
+                COMPORTEMENT   = _F(RELATION = 'ELAS',),
+                CONTACT     = CONT,
+                ENERGIE=_F(),
+                #
+                FISSURE = _F(
+                      PREFIXE_FICHIER  = 'FISSURE1',
+                      SECTION          = 'RECTANGLE',
+                      GROUP_MA         = ('BFISH','BFISB',),
+                      RUGOSITE         = 0.5E-06,
+                      ZETA             = 0.0,
+                      GROUP_NO_ORIG    = ('I_HD','I_BD',),
+                      GROUP_NO_EXTR    = ('E_HD','E_BD',),
+                      LISTE_VAL_BL     = (0.5,0.5),
+                      OUVERT_REMANENTE = 30.0E-06,
+                      TORTUOSITE       = 1.0, ),
+                #
+                ECOULEMENT = _F(
+                      FLUIDE_ENTREE  = 6,
+                      PRES_ENTREE    = pr_ext,
+                      PRES_SORTIE    = pr_atmos,
+                      TEMP_ENTREE_FO = TEMP_INT,),
+                #
+                LIST_INST = L_INST2,
+                #
+                MODELE_ECRE = _F(
+                      ECOULEMENT     = 'SATURATION',
+                      FROTTEMENT     = 1,
+                      TRANSFERT_CHAL = 1,),
+                #
+                CONV_CRITERE = _F(
+                      TEMP_REF = 0.5,
+                      PRES_REF = 0.01*pr_atmos,
+                      CRITERE  = 'EXPLICITE',),
+                #
+                CONVERGENCE_ECREVISSE = _F(
+                      KGTEST         = 0.5,
+                      ITER_GLOB_MAXI = 400,),
+                #
+                # LOGICIEL    =  '~/dev/codeaster-prerequisites/v13/tools/Ecrevisse-322',
+                VERSION     = '3.2.2',
+                COURBES     = 'AUCUNE',
+                ENTETE      = 'Castest ZZZZ218A',
+                IMPRESSION  = 'NON',
+                INFO        = 1,)
+
+#dico = RMECA.LIST_VARI_ACCES()
+#print 'dico[NUME_ORDRE]', dico['NUME_ORDRE']
+#print 'dico[INST]', dico['INST']
+
+
+
+
+# EXTRACTION OF RESULTS
+# ---------------------------------
+DY_I_HD = POST_RELEVE_T(ACTION = _F(CRITERE   = 'RELATIF',
+                                    TOUT_ORDRE= 'OUI',
+                                    NOM_CMP   = ('DY',),
+                                    GROUP_NO  = 'I_HD',
+                                    INTITULE  = 'DY I_HD',
+                                    MOYE_NOEUD= 'OUI',
+                                    NOM_CHAM  = 'DEPL',
+                                    RESULTAT  = RMECA,
+                                    OPERATION = 'EXTRACTION',
+                                    REPERE    = 'GLOBAL',),
+                        INFO = 1,)
+
+T_I_HD = POST_RELEVE_T(ACTION = _F(CRITERE    = 'RELATIF',
+                                    TOUT_ORDRE= 'OUI',
+                                    NOM_CMP   = ('TEMP',),
+                                    GROUP_NO  = 'I_HD',
+                                    INTITULE  = 'TEMP I_HD',
+                                    MOYE_NOEUD= 'OUI',
+                                    NOM_CHAM  = 'TEMP',
+                                    RESULTAT  = RTEMPER,
+                                    OPERATION = 'EXTRACTION',
+                                    REPERE    = 'GLOBAL',),
+                        INFO = 1,)
+
+DY_E_HD = POST_RELEVE_T(ACTION = _F(CRITERE   = 'RELATIF',
+                                    TOUT_ORDRE= 'OUI',
+                                    NOM_CMP   = ('DY',),
+                                    GROUP_NO  = 'E_HD',
+                                    INTITULE  = 'DY E_HD',
+                                    MOYE_NOEUD= 'OUI',
+                                    NOM_CHAM  = 'DEPL',
+                                    RESULTAT  = RMECA,
+                                    OPERATION = 'EXTRACTION',
+                                    REPERE    = 'GLOBAL',),
+                        INFO = 1,)
+
+T_E_HD = POST_RELEVE_T(ACTION = _F(CRITERE    = 'RELATIF',
+                                    TOUT_ORDRE= 'OUI',
+                                    NOM_CMP   = ('TEMP',),
+                                    GROUP_NO  = 'E_HD',
+                                    INTITULE  = 'TEMP E_HD',
+                                    MOYE_NOEUD= 'OUI',
+                                    NOM_CHAM  = 'TEMP',
+                                    RESULTAT  = RTEMPER,
+                                    OPERATION = 'EXTRACTION',
+                                    REPERE    = 'GLOBAL',),
+                        INFO = 1,)
+
+
+# TEST OF RESULTS (NON-REGRESSION)
+# ---------------------------------
+ENERGIE = RECU_TABLE(CO=RMECA,NOM_TABLE='PARA_CALC',);
+
+TEST_TABLE(CRITERE   = 'RELATIF',
+           VALE_CALC = NONREGR[0],
+           NOM_PARA  = 'TRAV_EXT',
+           TABLE     = ENERGIE,
+           FILTRE    = (_F(NOM_PARA='INST',
+                           VALE=1.E+04,),
+                        ),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[1],
+           NOM_PARA  = 'DY',
+           TABLE     = DY_E_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 500.0,),
+           )
+           
+TEST_TABLE(
+           VALE_CALC = NONREGR[2],
+           NOM_PARA  = 'DY',
+           TABLE     = DY_E_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 1.E4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[3],
+           NOM_PARA  = 'DY',
+           TABLE     = DY_I_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 500.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[4],
+           NOM_PARA  = 'DY',
+           TABLE     = DY_I_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE  =1.E4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[5],
+           NOM_PARA  = 'TEMP',
+           TABLE     = T_E_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 500.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[6],
+           NOM_PARA  = 'TEMP',
+           TABLE     = T_E_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 1.E4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[7],
+           NOM_PARA  = 'TEMP',
+           TABLE     = T_I_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 500.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[8],
+           NOM_PARA  = 'TEMP',
+           TABLE     = T_I_HD,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 1.E4,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[9],
+           NOM_PARA  = 'DEBTOT',
+           TABLE     = DEB_ECR0,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 500.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC = NONREGR[10],
+           NOM_PARA  = 'DEBTOT',
+           TABLE     = DEB_ECRE,
+           FILTRE    = _F(NOM_PARA = 'INST',
+                          VALE     = 1.E4,),
+           )
+
+
+
+# PRINT OF RESULTS
+# ---------------------------------
+#IMPR_TABLE(TABLE = TBL_ECRE)
+#IMPR_TABLE(TABLE = DY_I_HD)
+#IMPR_TABLE(TABLE = T_I_HD)
+#IMPR_TABLE(TABLE = DY_E_HD)
+#IMPR_TABLE(TABLE = T_E_HD)
+#IMPR_TABLE(TABLE = DEB_ECRE)
+
+#IMPR_RESU(FORMAT = 'MED',
+          #RESU=(_F( RESULTAT=RMECA,),
+                #_F( RESULTAT=RTEMPER,),),)
+
+
+FIN()

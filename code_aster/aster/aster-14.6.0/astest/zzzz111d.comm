@@ -1,0 +1,159 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Le but de ce cas-test est de "couvrir" la routine fortran PROJKM.
+#
+# On teste l'excentrement et l'indice de projection des noeuds de câble. 
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MAILLAGE=LIRE_MAILLAGE(FORMAT="ASTER",    UNITE=20 )
+
+#
+
+MODELE=AFFE_MODELE(
+                 MAILLAGE=MAILLAGE,AFFE=(
+                     _F(  GROUP_MA = 'VOILE',
+                            PHENOMENE = 'MECANIQUE',
+                            MODELISATION = 'DKT'),
+                     _F(  GROUP_MA = ( 'CABLE', ),
+                            PHENOMENE = 'MECANIQUE',
+                            MODELISATION = 'BARRE')) )
+
+#
+
+CARAELEM=AFFE_CARA_ELEM(
+                      MODELE=MODELE,
+                       COQUE=_F(  GROUP_MA = 'VOILE',
+                               EPAIS = 6.0E-1),
+                       BARRE=_F(  GROUP_MA = ( 'CABLE', ),
+                               SECTION = 'GENERALE',
+                               CARA = ( 'A', ),
+                               VALE = ( 1.5E-4, )) )
+
+#
+
+BETON=DEFI_MATERIAU(
+#                       ELAS=_F(  E = 3.0E+10,
+#                              NU = 0.2),
+                 BPEL_BETON=_F(  PERT_FLUA = 0.07,
+                              PERT_RETR = 0.08) )
+
+#
+
+ACIER=DEFI_MATERIAU(
+                       ELAS=_F(  E = 2.1E+11,
+                              NU = 0.3),
+                 BPEL_ACIER=_F(  RELAX_1000 = 2.0,
+                              MU0_RELAX = 0.3,
+                              F_PRG = 1.77E+9,
+                              FROT_COURB = 0.2,
+                              FROT_LINE = 3.0E-3) )
+
+#
+
+CHMATER=AFFE_MATERIAU(
+                   MAILLAGE=MAILLAGE,AFFE=(
+                       _F(  GROUP_MA = 'VOILE',
+                              MATER = BETON),
+                       _F(  GROUP_MA = ( 'CABLE', ),
+                              MATER = ACIER)) )
+
+#
+
+CABLEP1=DEFI_CABLE_BP(            MODELE=MODELE,
+                                  CHAM_MATER=CHMATER,
+                                   CARA_ELEM=CARAELEM,
+                              GROUP_MA_BETON='VOILE',DEFI_CABLE=(
+                                  _F(
+                               GROUP_MA = 'CABLE',
+                               NOEUD_ANCRAGE = ( 'N101',  'N109', ),),
+                                  ),
+                               TYPE_ANCRAGE = ( 'ACTIF',   'ACTIF',  ),
+                                TENSION_INIT=2.0E+5,
+                               RECUL_ANCRAGE=5.0E-4,
+                               TYPE_RELAX='BPEL',
+                               R_J = 0.7970032677, 
+                              #    RELAXATION=_F(  R_J = 0.7970032677),
+                                       TITRE=(
+                             'VALIDATION DE L OPERATEUR DEFI_CABLE_BP', )
+                                           )
+# pour valider COPIER sur les cabl_precont :
+CABLEPR=COPIER(CONCEPT=CABLEP1)
+
+TABL_CA=RECU_TABLE(    CO=CABLEPR,
+                         NOM_TABLE='CABLE_BP'  )
+
+IMPR_TABLE(   TABLE=TABL_CA,
+               NOM_PARA=( 'NUME_CABLE', 'NOEUD_CABLE', 'INDICE_PROJECTION', ),
+               PAGINATION='NUME_CABLE'
+           )
+
+IMPR_TABLE(   TABLE=TABL_CA,
+           )
+
+########################################################################
+# TESTS
+########################################################################
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=0,
+           VALE_REFE_I=0,
+           NOM_PARA='INDICE_PROJECTION',
+           TABLE=TABL_CA,
+           FILTRE=_F(NOM_PARA='NOEUD_CABLE',
+                     VALE_K='N101',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=2,
+           VALE_REFE_I=2,
+           NOM_PARA='INDICE_PROJECTION',
+           TABLE=TABL_CA,
+           FILTRE=_F(NOM_PARA='NOEUD_CABLE',
+                     VALE_K='N105',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-10,
+           VALE_CALC=0.1,
+           VALE_REFE=0.1,
+           NOM_PARA='EXCENTRICITE',
+           TABLE=TABL_CA,
+           FILTRE=_F(NOM_PARA='NOEUD_CABLE',
+                     VALE_K='N105',),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=0,
+           VALE_REFE_I=0,
+           NOM_PARA='INDICE_PROJECTION',
+           TABLE=TABL_CA,
+           FILTRE=_F(NOM_PARA='NOEUD_CABLE',
+                     VALE_K='N109',),
+           )
+
+FIN( )
+#

@@ -1,0 +1,967 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+################################################################################
+# CE CAS TEST EST LA VERSION SEQUENTIELLE DE LA MODELISATION A.
+################################################################################
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI') ,IMPR_MACRO='NON');
+#
+mail0 = LIRE_MAILLAGE(FORMAT='MED', VERI_MAIL=_F(VERIF='OUI'));
+
+mail=CREA_MAILLAGE(MAILLAGE=mail0,
+                      CREA_POI1 =(_F(NOM_GROUP_MA = 'PBASE',NOEUD = 'N316'),
+                                  _F(NOM_GROUP_MA = 'PFONDAT',GROUP_MA = 'SURFBAS2'),),
+                   );
+
+mail=DEFI_GROUP(reuse =mail,
+                MAILLAGE=mail,
+                CREA_GROUP_NO=_F(NOM='ISOLSTR',
+                                 GROUP_MA=('SURFBAS2'),),
+               );
+
+mail=MODI_MAILLAGE( reuse=mail,
+                    MAILLAGE=mail,
+                    ORIE_NORM_COQUE=(_F( VECT_NORM = (0., 0., 1.,),
+                                         NOEUD = 'N963',
+                                         GROUP_MA = 'IFLUSOL2'),
+                                     _F( VECT_NORM = (1., 0., 0.,),
+                                         NOEUD = 'N221',
+                                         GROUP_MA = 'IFLUSTR2'),
+                                     _F( VECT_NORM = (0., 0., -1.,),
+                                         NOEUD = 'N316',
+                                         GROUP_MA = 'SURFBAS2'),
+                                     _F( VECT_NORM = (0., 0., 1.,),
+                                         NOEUD = 'N1043',
+                                         GROUP_MA = 'SLIBREM2'),
+                                    ),
+                   );
+modele=AFFE_MODELE( MAILLAGE= mail,
+                      AFFE=( _F(GROUP_MA=( 'STRVOU2' ),
+                                PHENOMENE= 'MECANIQUE',
+                                MODELISATION= '3D'),
+                             _F(GROUP_MA = 'PBASE',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'DIS_TR'),
+                           ),
+                      );
+mat1= DEFI_MATERIAU( ELAS=_F( E= 3.6E+10,
+                              RHO= 2400.,
+                              NU= 0.2,
+                            ),
+                       ) ;
+
+champmat = AFFE_MATERIAU( MAILLAGE= mail,
+                            AFFE=_F( GROUP_MA= ('STRVOU2'),
+                                   MATER= mat1 )
+                           );
+
+cara_ele=AFFE_CARA_ELEM(MODELE=modele,
+                        DISCRET=(_F(GROUP_MA='PBASE',
+                                    REPERE='GLOBAL',
+                                    CARA='M_TR_D_N',
+                                    VALE=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,)),
+                                 _F(GROUP_MA='PBASE',
+                                    REPERE='GLOBAL',
+                                    CARA='K_TR_D_N',
+                                    VALE=(0.,0.,0.,0.,0.,0.))
+                                 ),
+                        );
+
+
+cond_lim = AFFE_CHAR_MECA( MODELE= modele,
+                           DDL_IMPO=_F(
+                                          #GROUP_NO=('ISOLSTR',),
+                                          NOEUD = 'N316',
+                                          DX= 0.,
+                                          DY= 0.,
+                                          DZ= 0.,
+                                          DRX= 0.,
+                                          DRY= 0.,
+                                          DRZ= 0.,
+                                      ),
+                           LIAISON_SOLIDE=_F(GROUP_NO=('ISOLSTR',),)
+                          );
+
+
+rigi_ele = CALC_MATR_ELEM( MODELE= modele ,
+                           OPTION= 'RIGI_MECA',
+                           CHAM_MATER= champmat,
+                           CHARGE= cond_lim,
+                           CARA_ELEM=cara_ele,
+                         );
+#
+mass_ele = CALC_MATR_ELEM( MODELE= modele ,
+                           OPTION= 'MASS_MECA',
+                           CHAM_MATER= champmat,
+                           CHARGE= cond_lim,
+                           CARA_ELEM=cara_ele,
+                         );
+
+nume_ddl = NUME_DDL( MATR_RIGI= rigi_ele );
+
+MATRIGI= ASSE_MATRICE( MATR_ELEM= rigi_ele, NUME_DDL= nume_ddl );
+MATMASS= ASSE_MATRICE( MATR_ELEM= mass_ele, NUME_DDL= nume_ddl );
+
+info=1
+
+# INFO_MODE + CALC_MODES
+# EN VARIANT LE TEST DE STURM/SOLVEUR LINEAIRE/SOLVEUR MODAL/REPARTITION "NB_PROC/NB_SOUS_BANDE"
+# NIVEAU_PARALLELISME='COMPLET'
+niv_para='COMPLET'
+
+# si nb_proc<nb_sous_bande: UTMESS_F MODAL_10 CF CAS_TEST ERREU15 (QUELQUE SOIT SOLVEUR MODAL/LIN/STURM)
+
+# si nb_proc==nb_sous_bande: SOLVEUR MODAL=defaut, SOLVEUR LINEAIRE='MUMPS'
+nbmd41=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                 FREQ=(0.1,10.,20.,30.,40.,),
+                 SOLVEUR=_F(METHODE='MUMPS'),
+                 NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd41,UNITE=6)
+para_sturm='GLOBAL'
+mode41=CALC_MODES(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para, ),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),
+                   FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode41l=CALC_MODES(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para, ),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode41n=CALC_MODES(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+# si nb_proc==nb_sous_bande: SOLVEURS LINEAIRE/MODAL/STURM PANACHAGE
+nbmdMF=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                   FREQ=(0.1,10.,20.,30.,40.,),SOLVEUR=_F(METHODE='MULT_FRONT'),),
+IMPR_TABLE(TABLE=nbmdMF,UNITE=6)
+nbmdLDLT=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                   FREQ=(0.1,10.,20.,30.,40.,),SOLVEUR=_F(METHODE='LDLT'),),
+IMPR_TABLE(TABLE=nbmdLDLT,UNITE=6)
+
+# PARALLELISME 4x1 (SORENSEN + MULT_FRONT)
+para_sturm='GLOBAL'
+modeSM=CALC_MODES( MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 10., 20., 30., 40. ),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR_MODAL=_F( METHODE='SORENSEN' ),
+                   SOLVEUR=_F( METHODE='MULT_FRONT' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+# PARALLELISME 4x1 (TRI_DIAG + MULT_FRONT)
+para_sturm='LOCAL'
+modeLM=CALC_MODES( MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 10., 20., 30., 40. ),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR_MODAL=_F( METHODE='TRI_DIAG',COEF_DIM_ESPACE=8 ),
+                   SOLVEUR=_F( METHODE='MULT_FRONT' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+# PARALLELISME 4x1 (JACOBI + MULT_FRONT)
+para_sturm='NON'
+modeJM=CALC_MODES( MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 10., 20., 30., 40. ),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR_MODAL=_F( METHODE='JACOBI' ),
+                   SOLVEUR=_F( METHODE='MULT_FRONT' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+# si nb_proc>nb_sous_bande: SOLVEUR LINEAIRE=autre que MUMPS UTMESS_F MODAL_9/10 CF CAS_TEST ERREU15 (QUELQUE SOIT SOLVEUR MODAL/STURM)
+
+# si nb_proc>nb_sous_bande: SOLVEUR MODAL=defaut, SOLVEUR LINEAIRE='MUMPS'
+# PARALLELISME 2x2 (1 PROC POUR 2 BANDES x 2 PROCS POUR MUMPS)
+nbmd22=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                   FREQ=(0.1,20.,40.,),SOLVEUR=_F(METHODE='MUMPS'),NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd22,UNITE=6)
+para_sturm='GLOBAL'
+mode22=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F(FREQ=(0.1, 20., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode22l=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 20., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode22n=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 20., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+# PARALLELISME AVEC DESEQUILIBRAGE: 1x2 POUR LA PREMIERE SOUS-BANDE, 1x1 POUR LES AUTRES
+nbmd211=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                   FREQ=(0.1,20.,30.,40.,),SOLVEUR=_F(METHODE='MUMPS'),NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd211,UNITE=6)
+para_sturm='GLOBAL'
+mode211=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                    CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                 NIVEAU_PARALLELISME=niv_para,),
+                    SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                    VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode211l=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                    CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                 NIVEAU_PARALLELISME=niv_para,),
+                    SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                    VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode211n=CALC_MODES(MATR_RIGI=MATRIGI, INFO=info,MATR_MASS=MATMASS,OPTION='BANDE',
+                    CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                 NIVEAU_PARALLELISME=niv_para,),
+                    SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                    VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+
+# INFO_MODE + CALC_MODES
+# EN VARIANT LE TEST DE STURM/SOLVEUR LINEAIRE/SOLVEUR MODAL/REPARTITION "NB_PROC/NB_SOUSBANDE"
+# NIVEAU_PARALLELISME='PARTIEL'
+niv_para='PARTIEL'
+
+# si nb_proc<nb_sous_bande: SOLVEUR LINEAIRE=autre que MUMPS, UTMESS_F MODAL_14 CF CAS_TEST ERREU15 (QUELQUE SOIT SOLVEUR MODAL/STURM)
+
+# si nb_proc<nb_sous_bande: SOLVEUR MODAL=defaut, SOLVEUR LINEAIRE='MUMPS'
+# PARALLELISME 1x4 SUR 5 SOUS-BANDES
+nbmd15=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                 FREQ=(0.1,5.,10.,20.,30., 40.),SOLVEUR=_F(METHODE='MUMPS'),NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd15,UNITE=6)
+para_sturm='GLOBAL'
+mode15=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1,5.,10.,20.,30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode15l=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1,5.,10.,20.,30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode15n=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1,5.,10.,20.,30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+# si nb_proc==nb_sous_bande: SOLVEUR LINEAIRE=autre que MUMPS, UTMESS_F MODAL_14 CF CAS_TEST ERREU15 (QUELQUE SOIT SOLVEUR MODAL/STURM)
+
+# si nb_proc==nb_sous_bande: SOLVEUR MODAL=defaut, SOLVEUR LINEAIRE='MUMPS'
+# PARALLELISME 1x4 SUR 4 SOUS_BANDES
+nbmd14=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                 FREQ=(0.1,10.,20.,30.,40.,),SOLVEUR=_F(METHODE='MUMPS'),NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd14,UNITE=6)
+para_sturm='GLOBAL'
+mode14=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode14l=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode14n=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 10., 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+# si nb_proc>nb_sous_bande: SOLVEUR LINEAIRE=autre que MUMPS, UTMESS_F MODAL_14 CF CAS_TEST ERREU15 (QUELQUE SOIT SOLVEUR MODAL/STURM)
+
+# si nb_proc>nb_sous_bande: SOLVEUR MODAL=defaut, SOLVEUR LINEAIRE='MUMPS'
+# PARALLELISME 1x4 SUR 3 SOUS-BANDES
+nbmd13=INFO_MODE(MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,
+                 FREQ=(0.1,20.,30.,40.,),SOLVEUR=_F(METHODE='MUMPS'),NIVEAU_PARALLELISME=niv_para,)
+IMPR_TABLE(TABLE=nbmd13,UNITE=6)
+para_sturm='GLOBAL'
+mode13=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='LOCAL'
+mode13l=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+para_sturm='NON'
+mode13n=CALC_MODES( MATR_RIGI=MATRIGI,MATR_MASS=MATMASS,INFO=info,OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0.1, 20., 30., 40.),
+                                NIVEAU_PARALLELISME=niv_para,),
+                   SOLVEUR=_F( METHODE='MUMPS',RENUM='QAMD',GESTION_MEMOIRE='IN_CORE' ),
+                   VERI_MODE=_F( STURM=para_sturm ),FILTRE_MODE=_F( SEUIL=0.0003 ),NORM_MODE=_F(),IMPRESSION=_F(),)
+
+
+# TEST_RESU SUR QUELQUES FREQS ET COMPOSANTES DE VECTEURS PROPRES
+# ON TESTE LES VALEURS PROPRES SITUEES AUX FRONTIERES DES BORNES
+# DE CALCUL ET QUELQUES COMPOSANTES DE LA MASSE EFFECTIVE UNITAIRE
+#----------------------------------------------------------------
+sd_testee=nbmd41
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=6,VALE_REFE_I=6)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+#
+sd_testee=mode41
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.090228535871,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.012397003557,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode41l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768919E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.012397003557,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',
+                  RESULTAT=sd_testee,VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',
+                  RESULTAT=sd_testee,VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode41n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768926E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.012397003557,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',
+                  RESULTAT=sd_testee,VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+#
+sd_testee=nbmdMF
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=6,VALE_REFE_I=6)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+#
+sd_testee=nbmdLDLT
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=6,VALE_REFE_I=6)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+#
+sd_testee=modeSM
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861796789E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035571,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235212,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709537,),
+                 ),)
+sd_testee=modeLM
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839411,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23862727034E-06, TOLE_MACHINE=2.e-6),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY', RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035528,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667639,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798499,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709586,),
+                  ),)
+sd_testee=modeJM
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861767603E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035602,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.17286079846,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709488,),
+                  ),)
+#
+sd_testee=nbmd22
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=14,VALE_REFE_I=14)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=26,VALE_REFE_I=26)
+#
+sd_testee=mode22
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769177E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798458,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode22l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768911E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798456,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode22n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768964E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY', RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798456,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+#
+sd_testee=nbmd211
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=14,VALE_REFE_I=14)
+#
+sd_testee=mode211
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769193E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX', RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                 ),)
+sd_testee=mode211l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769113E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                 ),)
+sd_testee=mode211n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',
+                  RESULTAT=sd_testee,VALE_CALC=9.23861769002E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',
+                  RESULTAT=sd_testee,VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                 ),)
+#
+sd_testee=nbmd15
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=2,VALE_REFE_I=2)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+#
+sd_testee=mode15
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768865E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.012397003557,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode15l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768864E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode15n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768865E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+#
+sd_testee=nbmd14
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=6,VALE_REFE_I=6)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+#
+sd_testee=mode14
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768901E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode14l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861768955E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode14n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.2386176896E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+#
+sd_testee=nbmd13
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='SOMM',
+           VALE_CALC_I=40,VALE_REFE_I=40)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MIN',
+           VALE_CALC_I=13,VALE_REFE_I=13)
+TEST_TABLE(TABLE=sd_testee,REFERENCE='ANALYTIQUE',
+           NOM_PARA='NB_MODE', TYPE_TEST='MAX',
+           VALE_CALC_I=14,VALE_REFE_I=14)
+#
+sd_testee=mode13
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769295E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode13l
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769349E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+sd_testee=mode13n
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=4.44221839359,),
+               _F(NUME_ORDRE=1,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=9.23861769061E-06,),
+               _F(NUME_ORDRE=7,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=11.713585425,),
+               _F(NUME_ORDRE=7,
+                  PARA='MASS_EFFE_UN_DY',RESULTAT=sd_testee,
+                  VALE_CALC=0.0123970035569,),
+               _F(NUME_ORDRE=15,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=21.0314667638,),
+               _F(NUME_ORDRE=15,
+                  PARA='MASS_EFFE_UN_DZ',RESULTAT=sd_testee,
+                  VALE_CALC=0.172860798457,),
+               _F(NUME_ORDRE=28,
+                  PARA='FREQ',RESULTAT=sd_testee,
+                  VALE_CALC=31.3541235213,),
+               _F(NUME_ORDRE=28,
+                  PARA='MASS_EFFE_UN_DX',RESULTAT=sd_testee,
+                  VALE_CALC=0.0612218709513,),
+                  ),)
+#
+FIN( );

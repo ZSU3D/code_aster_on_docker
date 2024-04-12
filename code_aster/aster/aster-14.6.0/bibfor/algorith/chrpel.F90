@@ -1,0 +1,667 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine chrpel(champ1, repere, nbcmp, icham, type_cham,&
+                  nomch, modele, carele)
+! aslint: disable=W1501
+!
+    implicit none
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "asterc/getfac.h"
+#include "asterc/r8dgrd.h"
+#include "asterfort/angvxy.h"
+#include "asterfort/assach.h"
+#include "asterfort/assert.h"
+#include "asterfort/calc_coor_elga.h"
+#include "asterfort/calcul.h"
+#include "asterfort/celces.h"
+#include "asterfort/cescel.h"
+#include "asterfort/cesexi.h"
+#include "asterfort/cesred.h"
+#include "asterfort/cesvar.h"
+#include "asterfort/chrgd.h"
+#include "asterfort/chrpan.h"
+#include "asterfort/copisd.h"
+#include "asterfort/cylrep.h"
+#include "asterfort/detrsd.h"
+#include "asterfort/dismoi.h"
+#include "asterfort/exisd.h"
+#include "asterfort/getvr8.h"
+#include "asterfort/getvtx.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jedetr.h"
+#include "asterfort/jeexin.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jenuno.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/jexatr.h"
+#include "asterfort/jexnum.h"
+#include "asterfort/manopg.h"
+#include "asterfort/matrot.h"
+#include "asterfort/mecact.h"
+#include "asterfort/mecara.h"
+#include "asterfort/megeom.h"
+#include "asterfort/normev.h"
+#include "asterfort/provec.h"
+#include "asterfort/reliem.h"
+#include "asterfort/sepach.h"
+#include "asterfort/ut2vgl.h"
+#include "asterfort/utmess.h"
+#include "asterfort/utpsgl.h"
+#include "asterfort/utpvgl.h"
+#include "asterfort/wkvect.h"
+#include "asterfort/as_deallocate.h"
+#include "asterfort/as_allocate.h"
+#include "blas/ddot.h"
+    !
+    integer :: nbcmp, icham
+    character(len=*) :: champ1, repere, type_cham, nomch, modele, carele
+! ----------------------------------------------------------------------
+    !
+!     BUT : CHANGEMENT DE REPERE DANS LE CAS D'UN CHAM_ELEM
+! ----------------------------------------------------------------------
+!     ARGUMENTS :
+!     CHAMP1   IN  K16  : NOM DU CHAMP A TRAITER (CHAMP OUT)
+!     REPERE   IN  K16  : TYPE DE REPERE (UTILISATEUR OU CYLINDRIQUE
+!                         OU COQUE OU COQUE_UTIL_INTR OU COQUE_INTR_UTIL
+!                         OU COQUE_UTIL_CYL)
+!     NBCMP    IN  I    : NOMBRE DE COMPOSANTES A TRAITER
+!     ICHAM    IN  I    : NUMERO D'OCCURRENCE
+!     type_cham     IN  K16  : TYPE DU CHAMP :'TENS' 'VECT' OU 'COQUE'
+!     NOMCH    IN  K16  : NOM DE CHAMP
+! ---------------------------------------------------------------------
+    !
+    integer :: i, ii, ino, iad, ipt, isp
+    integer :: jcesd, jcesv, jcesl, nbpt, ncmp
+    integer :: ilcnx1, nbsp, inel, npain
+    integer :: ibid, nbma, iret, inbno
+    integer :: ndim, nbm, idmail, nbmail, imai
+    integer :: inoeu, iret0, iret1, nbgno, igno, nncp
+    integer :: ierk, ipaxe, ipaxe2
+    integer :: nbno, nbpg, nuno, ipg
+    integer :: type_pt
+    integer, parameter :: type_unknown = 0, type_noeud = 1, type_gauss = 2
+! nb max de points (noeuds|gauss) par élément
+    integer, parameter :: nptmax = 30
+    integer, dimension(6) :: permvec
+    aster_logical :: exi_cmp
+    real(kind=8) :: valr, xnormr
+    real(kind=8), dimension(3) :: xbary, angnot
+    real(kind=8), dimension(3) :: orig, axez, vectx, vecty, angrep
+    real(kind=8), dimension(3, 3) :: pgl, pgcyl, pgu
+    real(kind=8), dimension(3, nptmax), target :: xno, xpg
+    real(kind=8), dimension(:, :), pointer :: xpt => null()
+    character(len=3) :: tsca
+    character(len=8) :: ma, k8b, typmcl(2), nomgd, tych
+    character(len=8) :: lpain(5), paout, licmp(9), nomgdr, paoutc
+    character(len=16) :: option, motcle(2)
+    character(len=19) :: chams1, chams0, ligrel, canbsp
+    character(len=19) :: changl, carte, chr, chi, ch1, ch2
+    character(len=24) :: mesmai, chgeom, lchin(5), chaout
+    character(len=24) :: valk(3), chcara(18)
+    character(len=8), pointer :: nom_cmp(:) => null()
+    character(len=8), pointer :: cesk(:) => null()
+    real(kind=8), pointer :: vale(:) => null()
+    integer, pointer :: connex(:) => null()
+    integer :: iexist, jcesd_gauss, jcesl_gauss, icoo
+    character(len=19) :: celgauss, cesgauss
+    real(kind=8), pointer :: coo_gauss(:) => null()
+    integer :: iocc, nocc
+    !
+    call jemarq()
+    ipaxe = 0
+    motcle(1) = 'GROUP_MA'
+    typmcl(1) = 'GROUP_MA'
+    motcle(2) = 'MAILLE'
+    typmcl(2) = 'MAILLE'
+    canbsp = '&&CHRPEL.NBSP'
+    !
+    mesmai = '&&CHRPEL.MES_MAILLES'
+    !
+    if (nbcmp .gt. 0) then
+        AS_ALLOCATE(vk8=nom_cmp, size=nbcmp)
+        call getvtx('MODI_CHAM', 'NOM_CMP', iocc=icham, nbval=nbcmp, vect=nom_cmp,&
+                    nbret=ibid)
+    else
+        call utmess('F', 'ALGORITH2_6')
+    endif
+    !
+    call dismoi('NOM_LIGREL', champ1, 'CHAM_ELEM', repk=ligrel)
+    !
+    !
+! ----- DEFINITION ET CREATION DU CHAM_ELEM SIMPLE CHAMS1
+! ----- A PARTIR DU CHAM_ELEM CHAMP1
+    !
+    chams0='&&CHRPEL.CHAMS0'
+    chams1='&&CHRPEL.CHAMS1'
+    call celces(champ1, 'V', chams0)
+    call cesred(chams0, 0, [0], nbcmp, nom_cmp,&
+                'V', chams1)
+    call detrsd('CHAM_ELEM_S', chams0)
+    call jeveuo(chams1//'.CESK', 'L', vk8=cesk)
+    call jeveuo(chams1//'.CESD', 'L', jcesd)
+    ma = cesk(1)
+    nomgd = cesk(2)
+    call dismoi('TYPE_SCA', nomgd, 'GRANDEUR', repk=tsca)
+    !
+!     ON EXCLUT LES MOT-CLES 'NOEUD' ET 'GROUP_NO'
+    !
+    call jeveuo(ma//'.DIME   ', 'L', inbno)
+    call wkvect('&&CHRPEL.NOEUDS', 'V V K8', zi(inbno), inoeu)
+    call getvtx('AFFE', 'NOEUD', iocc=icham, nbval=0, nbret=iret0)
+    call jeexin(ma//'.GROUPENO', ierk)
+    if (ierk .ne. 0) then
+        call jelira(ma//'.GROUPENO', 'NMAXOC', nbgno)
+        call wkvect('&&CHRPEL.GROUP_NO', 'V V K24', nbgno, igno)
+        call getvtx('AFFE', 'GROUP_NO', iocc=icham, nbval=0, nbret=iret1)
+    else
+        iret1=0
+    endif
+    if (iret0 .lt. 0) then
+        k8b='NOEUD   '
+    else if (iret1.lt.0) then
+        k8b='GROUP_NO'
+    else
+        goto 100
+    endif
+    valk (1) = k8b
+    valk (2) = nomch
+    valk (3) = ' '
+    call utmess('F', 'ALGORITH12_42', nk=3, valk=valk)
+100 continue
+    call jedetr('&&CHRPEL.NOEUDS')
+    call jedetr('&&CHRPEL.GROUP_NO')
+!   nombre total de mailles dans le maillage
+    nbma = zi(jcesd-1+1)
+!   nombre de composantes du champ simple chams1
+    ncmp = zi(jcesd-1+2)
+!   comme chams1 a été créé à partir des composantes sélectionnées par
+!   l'utilisateur, on doit avoir:
+    ASSERT( ncmp == nbcmp )
+!   Détermination de la dimension à partir du maillage
+    ndim = 3
+    call dismoi('Z_CST', ma, 'MAILLAGE', repk=k8b)
+    if (k8b .eq. 'OUI') ndim = 2
+!
+    call jeexin(ma//'.CONNEX', iret)
+    ASSERT(iret.ne.0)
+    call jeveuo(ma//'.CONNEX', 'L', vi=connex)
+    call jeveuo(jexatr(ma//'.CONNEX', 'LONCUM'), 'L', ilcnx1)
+    call jeveuo(chams1//'.CESV', 'E', jcesv)
+    call jeveuo(chams1//'.CESL', 'L', jcesl)
+!
+!  -- Le mot-clé AFFE définit les caractéristiques du nouveau repère
+!     On peut définir un repère variable en définissant ces paramètres
+!     par mailles/groupes de mailles
+    call getfac('AFFE', nocc)
+! Boucle sur les occurrences de AFFE
+    do iocc = 1, nocc
+!  -- Construction de la liste des numéros de mailles
+!     sélectionnées par les mots-clés GROUP_MA et MAILLE
+        call reliem(' ', ma, 'NU_MAILLE', 'AFFE', iocc,&
+                2, motcle, typmcl, mesmai, nbm)
+        if (nbm .gt. 0) then
+            nbmail = nbm
+            call jeveuo(mesmai, 'L', idmail)
+        else
+            nbmail = nbma
+        endif
+!   -- Remise à zéro des tableaux stockant les caractéristiques du repère
+        do i = 1, 3
+          axez(i) = 0.0d0
+          orig(i) = 0.0d0
+          angnot(i) = 0.0d0
+        end do
+!
+!   -- Traitement en fonction du type de repère
+!
+!**
+!***    Changement de repère "UTILISATEUR"
+!**
+!
+        if (repere(1:11) .eq. 'UTILISATEUR') then
+!        SI LE NOUVEAU REPERE EST DONNE VIA DES VECTEURS
+        call getvr8('AFFE', 'VECT_X', iocc=iocc, nbval=3, vect=vectx,&
+                    nbret=ibid)
+        if (ibid .ne. 0) then
+            call getvr8('AFFE', 'VECT_Y', iocc=iocc, nbval=3, vect=vecty,&
+                        nbret=ibid)
+            if (ndim .ne. 3) then
+                call utmess('F', 'ALGORITH2_4')
+            endif
+            call angvxy(vectx, vecty, angnot)
+        else
+            if (ndim .eq. 3) then
+                call getvr8('AFFE', 'ANGL_NAUT', iocc=iocc, nbval=3, vect=angnot,&
+                            nbret=ibid)
+                if (ibid .ne. 3) then
+                    call utmess('F', 'ALGORITH2_7')
+                endif
+            else
+                call getvr8('AFFE', 'ANGL_NAUT', iocc=iocc, scal=angnot(1), nbret=ibid)
+                if (ibid .ne. 1) then
+                    valr = angnot(1)
+                    call utmess('A', 'ALGORITH12_43', sr=valr)
+                endif
+            endif
+            angnot(:) = angnot(:)*r8dgrd()
+        endif
+!
+!      Calcul de pgu = matrice de passage du repère par défaut (repère global du maillage)
+!      vers le repère utilisateur
+       call matrot(angnot, pgl)
+!      matrot retourne la transposée de la matrice de passage : on transpose pour avoir
+!      la matrice de passage
+       pgu=transpose(pgl)
+!
+!      Appliquer le changement de repère pour les mailles sélectionnées
+!
+        do inel = 1, nbmail
+            if (nbm .ne. 0) then
+                imai = zi(idmail+inel-1)
+            else
+                imai = inel
+            endif
+            nbpt = zi(jcesd-1+5+4* (imai-1)+1)
+            nbsp = zi(jcesd-1+5+4* (imai-1)+2)
+            do ipt = 1, nbpt
+                do isp = 1, nbsp
+                    exi_cmp = .false.
+                    do ii = 1, nbcmp
+                        call cesexi('S', jcesd, jcesl, imai, ipt,&
+                                    isp, ii, iad)
+                        if (iad .gt. 0) then
+                            exi_cmp = .true.
+                        endif
+                    end do
+                    if (exi_cmp) then
+                        call chrgd(nbcmp, jcesd, jcesl, jcesv, imai,&
+                                   ipt, isp, type_cham, tsca, pgu)
+                    else
+                        goto 10
+                    endif
+                enddo
+            enddo
+ 10         continue
+        enddo
+
+!**
+!*** Changement de repère "CYLINDRIQUE"
+!**
+    else if (repere(1:11).eq.'CYLINDRIQUE') then
+        !
+        call dismoi('TYPE_CHAMP', champ1, 'CHAMP', repk=tych, arret='C',&
+                    ier=iret)
+        if (ndim .eq. 3) then
+            call getvr8('AFFE', 'ORIGINE', iocc=iocc, nbval=3, vect=orig,&
+                        nbret=ibid)
+            if (ibid .ne. 3) then
+                call utmess('F', 'ALGORITH2_8')
+            endif
+            call getvr8('AFFE', 'AXE_Z', iocc=iocc, nbval=3, vect=axez,&
+                        nbret=ibid)
+            if (ibid .eq. 0) then
+                call utmess('F', 'ALGORITH2_9')
+            endif
+        else
+            call getvr8('AFFE', 'ORIGINE', iocc=iocc, nbval=2, vect=orig,&
+                        nbret=ibid)
+            if (ibid .ne. 2) then
+                call utmess('A', 'ALGORITH2_10')
+            endif
+            call getvr8('AFFE', 'AXE_Z', iocc=iocc, nbval=0, nbret=ibid)
+            if (ibid .ne. 0) then
+                call utmess('A', 'ALGORITH2_11')
+            endif
+            axez(1) = 0.0d0
+            axez(2) = 0.0d0
+            axez(3) = 1.0d0
+        endif
+        xnormr = 0.0d0
+        call normev(axez, xnormr)
+        call jeveuo(ma//'.COORDO    .VALE', 'L', vr=vale)
+!
+! Permutation des composantes en dimension 2
+!
+! Initialisation à l'identité
+        permvec(:)=(/(i,i=1,6)/)
+        if (ndim == 2) then
+            select case (type_cham(1:4))
+            case('TENS')
+            permvec(4) = 5
+            case('VECT')
+            permvec(2) = 3
+            permvec(3) = 2
+        end select
+        endif
+        !
+! Localisation du champ : noeuds/pts de Gauss
+        type_pt = type_unknown
+        if (tych(1:4) == 'VECT') then
+            type_pt = type_noeud
+        endif
+        if (tych(1:4) == 'ELNO') then
+            type_pt = type_noeud
+        else if (tych(1:4) == 'ELGA') then
+            type_pt = type_gauss
+        endif
+        !
+        ASSERT(type_pt /= type_unknown )
+        !
+! Si le champ est un champ 'ELGA', on a besoin des
+! coordonnées des points de Gauss dans chaque élément
+        if ( type_pt == type_gauss) then
+! On utilise calc_coor_elga qui retourne un champ par élément
+! contenant les coordonnées des points de Gauss
+          celgauss='&&CHRPEL.CEL_GAUSS'
+          call exisd('CHAMP', celgauss, iexist)
+          if (iexist .eq. 0) then
+            call megeom(modele, chgeom)
+            call calc_coor_elga(ligrel, chgeom, celgauss)
+          endif
+! On transforme ce champ en champ simple
+          cesgauss='&&CHRPEL.CES_GAUSS'
+          call celces( celgauss, 'V', cesgauss)
+          call jeveuo(cesgauss//'.CESD','L', jcesd_gauss)
+          call jeveuo(cesgauss//'.CESL','L', jcesl_gauss)
+          call jeveuo(cesgauss//'.CESV','L', vr=coo_gauss)
+        endif
+
+! Boucle sur les mailles à transformer
+        do inel = 1, nbmail
+! Récupération de :
+! - imai : indice de la maille courante, imai
+          if (nbm .ne. 0) then
+            imai = zi(idmail+inel-1)
+          else
+            imai = inel
+          endif
+! - nbno : nombre de noeuds de la maille courante
+          nbno = zi(ilcnx1+imai) - zi(ilcnx1-1+imai)
+! et de quelques caractéristiques du champ simple à transformer
+! sur cette maille :
+! - nbpg : nombre de points de Gauss
+           nbpg = zi(jcesd-1+5+4* (imai-1)+1)
+! - nbsp : nombre de sous-points
+           nbsp = zi(jcesd-1+5+4* (imai-1)+2)
+! - nbcmp : nombre de composantes
+           nbcmp = zi(jcesd-1+5+4* (imai-1)+3)
+!
+! Coordonnées des noeuds de la maille courante
+!
+            xno(:,:) = 0.d0
+            do ino = 1, nbno
+                nuno = connex(zi(ilcnx1+imai-1)+ino-1)
+                xno(1,ino) = vale(1+3*(nuno-1)-1+1)
+                xno(2,ino) = vale(1+3*(nuno-1)-1+2)
+                if (ndim == 3) then
+                    xno(3,ino) = vale(1+3*(nuno-1)-1+3)
+                endif
+            end do
+            !
+            select case (type_pt)
+            case (type_noeud)
+! On se place aux noeuds de la maille
+                nbpt=nbno
+                xpt => xno(:,:)
+            case (type_gauss)
+! On se place aux points de Gauss de la maille,
+! dont il faut récupérer les coordonnées :
+!
+             do ipg = 1, nbpg
+               do icoo = 1, 3
+                 call cesexi('S', jcesd_gauss, jcesl_gauss, imai, ipg,&
+                    1, icoo, iad)
+                 xpg(icoo,ipg) = coo_gauss(iad)
+               enddo
+             enddo
+             nbpt = nbpg
+             xpt => xpg(:,:)
+!
+            case default
+                ASSERT(.false.)
+            end select
+!
+! Boucle sur les points (cette partie est commune aux champs ELNO et ELGA)
+            do ipt = 1, nbpt
+! Calcul de la matrice de passage vers le repère cylindrique
+                call cylrep(ndim, xpt(:, ipt), axez, orig, pgcyl,&
+                            ipaxe)
+! Si le point x appartient à l'axe du repère cylindrique
+                if (ipaxe > 0) then
+                    call utmess('A', 'ALGORITH2_13')
+! on calcule la matrice de passage au centre de gravité de l'élément
+                    xbary(:)=sum(xno(:,1:nbno), dim=2)
+                    xbary(:) = xbary(:)/nbno
+                    ipaxe2 = 0
+                    call cylrep(ndim, xbary, axez, orig, pgcyl,&
+                                ipaxe2)
+! et si le centre de gravité de l'élément est aussi sur l'axe, on s'arrête
+                    if (ipaxe2 > 0) then
+                        call utmess('F', 'ALGORITH2_13')
+                    endif
+                endif
+! Boucle sur les sous-points
+                do isp = 1, nbsp
+                    exi_cmp = .true.
+                    do ii = 1, nbcmp
+! la composante ii du champ existe-t-elle?
+                        exi_cmp = .false.
+                        call cesexi('S', jcesd, jcesl, imai, ipt,&
+                                    isp, ii, iad)
+                        if (iad .gt. 0) then
+                            exi_cmp = .true.
+                        endif
+                    end do
+! si oui,
+                    if (exi_cmp) then
+! on applique le changement de base
+                       call chrgd(nbcmp, jcesd, jcesl, jcesv, imai,&
+                                  ipt, isp, type_cham, tsca, pgcyl,&
+                                  permvec)
+! sinon on ne fait rien
+                    else
+                        goto 20
+                    endif
+                end do
+            end do
+ 20         continue
+        end do
+!
+       if (ipaxe .ne. 0) then
+            call utmess('A', 'ALGORITH17_22', si=ipaxe)
+        endif
+       endif
+!
+       call jeexin(mesmai, iret)
+       if (iret .ne. 0) call jedetr(mesmai)
+! Fin de la boucle sur les occurrences du mot-clé AFFE
+     enddo
+!
+      if ((repere(1:11).eq.'CYLINDRIQUE').or.(repere(1:11) .eq. 'UTILISATEUR')) then
+!
+! Champ simple -> Cham_elem
+        call dismoi('NOM_OPTION', champ1, 'CHAM_ELEM', repk=option)
+        call cescel(chams1, ligrel, option, ' ', 'OUI',&
+                    nncp, 'G', champ1, 'F', ibid)
+        call detrsd('CHAM_ELEM_S', chams1)
+      endif
+        !
+! ****************************************
+!  Changement de repère sur une coque
+! ****************************************
+       if((repere(1:5) .eq.'COQUE') .or. (repere(1:15).eq.'COQUE_INTR_UTIL').or. &
+       (repere(1:15).eq.'COQUE_UTIL_INTR').or.(repere(1:14).eq.'COQUE_UTIL_CYL')) &
+       then
+! Pour l'instant on ne traite pas le cas de plusieurs occurrences du mot-clé AFFE
+        if ( nocc /= 1  ) then
+            call utmess('F', 'ALGORITH17_23', sk=repere, si=nocc)
+        endif
+        !
+        call megeom(modele, chgeom)
+        call mecara(carele, chcara)
+        !
+        if (( type_cham(1:10) .eq. 'COQUE_GENE' ) .and. ( repere(1:14).eq.'COQUE_UTIL_CYL')) then
+            call utmess('F', 'ELEMENTS5_55', nk=2, valk=(/'COQUE_UTIL_CYL', 'COQUE_GENE    '/))
+        endif
+        if (type_cham(1:10) .eq. 'COQUE_GENE') then
+            option = 'REPE_GENE'
+! Nb de paramètres en entrée de l'option
+            npain = 4
+        else if (type_cham(1:7).eq.'TENS_3D') then
+            option = 'REPE_TENS'
+            npain = 5
+        else
+            call utmess('F', 'ELEMENTS5_53', sk=type_cham)
+        endif
+        !
+!    GENERATION D UN CHAMP D'ANGLES (CARTE CONSTANTE)
+        !
+        carte = '&&CHRPEL.ANGL_REP'
+        angrep(:) = 0.0d0
+        !
+        if (repere .eq. 'COQUE_INTR_UTIL') then
+            angrep(3)=1.d0
+        else if (repere.eq.'COQUE_UTIL_INTR') then
+            angrep(3)=2.d0
+        else if (repere.eq.'COQUE_UTIL_CYL') then
+            angrep(3)=3.d0
+        endif
+        licmp(1) = 'ALPHA'
+        licmp(2) = 'BETA'
+        licmp(3) = 'REP'
+        licmp(4) = 'AXE_X'
+        licmp(5) = 'AXE_Y'
+        licmp(6) = 'AXE_Z'
+        licmp(7) = 'O_X'
+        licmp(8) = 'O_Y'
+        licmp(9) = 'O_Z'
+        call mecact('V', carte, 'MODELE', modele, 'CAORIE',&
+                    ncmp=9, lnomcmp=licmp, vr=angrep)
+        !
+!  CREATION D UN CHAM_ELEM D'ANGLES EN LISANT LES ANGL_REP
+!
+        changl = '&&CHRPEL.ANGL'
+        call chrpan(modele, carte, option, changl)
+        !
+        lpain(1) = 'PGEOMER'
+        lchin(1) = chgeom
+        lpain(2) = 'PCACOQU'
+        lchin(2) = chcara(7)
+        lpain(3) = 'PANGREP'
+        lchin(3) = changl
+        lchin(4) = champ1
+        lpain(5) = 'PNBSP_I'
+        lchin(5) = chcara(16)
+!
+        call dismoi('NOM_GD', lchin(4), 'CHAMP', repk=nomgdr)
+        !
+        if (type_cham .eq. 'COQUE_GENE') then
+            if (nomch .eq. 'EFGE_ELGA') then
+                lpain(4) = 'PEFGAIN'
+                paout = 'PEFGAOUT'
+                if (nomgdr(5:6) .eq. '_C') paoutc = 'PEFGAOUC'
+            else if (nomch.eq.'EFGE_ELNO') then
+                lpain(4) = 'PEFNOIN'
+                paout = 'PEFNOOUT'
+                if (nomgdr(5:6) .eq. '_C') paoutc = 'PEFNOOUC'
+            else if (nomch.eq.'DEGE_ELGA') then
+                lpain(4) = 'PDGGAIN'
+                paout = 'PDGGAOUT'
+                if (nomgdr(5:6) .eq. '_C') paoutc = 'PDGGAOUC'
+            else if (nomch.eq.'DEGE_ELNO') then
+                lpain(4) = 'PDGNOIN'
+                paout = 'PDGNOOUT'
+                if (nomgdr(5:6) .eq. '_C') paoutc = 'PDGNOOUC'
+            else if (nomch.eq.'SIEF_ELGA') then
+                lpain(4) = 'PEFGAIN'
+                paout = 'PEFGAOUT'
+                if (nomgdr(5:6) .eq. '_C') paoutc = 'PEFGAOUC'
+            else
+                call utmess('F', 'ELEMENTS5_51', sk=nomch)
+            endif
+        else if (type_cham.eq.'TENS_3D') then
+            if (nomch .eq. 'SIGM_ELGA') then
+                lpain(4) = 'PCOGAIN'
+                paout = 'PCOGAOUT'
+            else if (nomch.eq.'SIGM_ELNO') then
+                lpain(4) = 'PCONOIN'
+                paout = 'PCONOOUT'
+            else if (nomch.eq.'EPSI_ELGA') then
+                lpain(4) = 'PDEGAIN'
+                paout = 'PDEGAOUT'
+            else if (nomch.eq.'EPSI_ELNO') then
+                lpain(4) = 'PDENOIN'
+                paout = 'PDENOOUT'
+            else
+                call utmess('F', 'ELEMENTS5_52', sk=nomch)
+            endif
+            !
+        endif
+        call exisd('CHAM_ELEM_S', canbsp, iret1)
+        if (iret1 .ne. 1) then
+            call dismoi('MXNBSP', champ1(1:19), 'CHAM_ELEM', repi=nbsp)
+            !
+! SI LE CHAMP A DEJA ETE EXTRAIT IL FAUT APPELER CESVAR AVEC CE CHAMP
+            !
+            if (nbsp .eq. 1) then
+                call cesvar(champ1(1:19), ' ', ligrel, canbsp)
+            else
+                call cesvar(carele, ' ', ligrel, canbsp)
+            endif
+        endif
+        chaout = chams1
+        call copisd('CHAM_ELEM_S', 'V', canbsp, chaout)
+        !
+        if (nomgdr(5:6) .eq. '_C') then
+            chr='&&CHRPEL.CHR'
+            chi='&&CHRPEL.CHI'
+            ch1='&&CHRPEL.CH1'
+            ch2='&&CHRPEL.CH2'
+            call sepach(carele, lchin(4), 'V', chr, chi)
+            lchin(4)=chr
+            call calcul('S', option, ligrel, npain, lchin(1:npain),&
+                        lpain(1:npain), 1, ch1, paout, 'V',&
+                        'OUI')
+            lchin(4)=chi
+            call calcul('S', option, ligrel, npain, lchin(1:npain),&
+                        lpain(1:npain), 1, ch2, paout, 'V',&
+                        'OUI')
+            call assach(ch1, ch2, 'V', chaout, parout=paoutc)
+            call detrsd('CHAMP', chr)
+            call detrsd('CHAMP', chi)
+            call detrsd('CHAMP', ch1)
+            call detrsd('CHAMP', ch2)
+        else
+            call calcul('S', option, ligrel, npain, lchin(1:npain),&
+                        lpain(1:npain), 1, chaout, paout, 'V',&
+                        'OUI')
+        endif
+        call detrsd('CHAM_ELEM_S', chaout)
+        call copisd('CHAMP_GD', 'G', chaout, champ1)
+    endif
+!
+    AS_DEALLOCATE(vk8=nom_cmp)
+    call exisd('CHAM_ELEM_S', canbsp, iret1)
+    if (iret1 .ne. 0) call detrsd('CHAM_ELEM_S', canbsp)
+
+    call jedema()
+    !
+end subroutine chrpel

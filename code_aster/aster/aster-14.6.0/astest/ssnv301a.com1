@@ -1,0 +1,250 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(   CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+
+
+MODEL2=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = '3D')
+                         )
+
+E_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                VALE=( 0.,     195.E9,
+                                       100.,   175.5E9,    )
+                     )
+
+NU_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                 VALE=( 0.,     0.3,
+                                       100.,    0.3,   )
+                     )
+
+ALPHA_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                    VALE=( 0.,     12.E-6,
+                                          100.,    12.E-6,   )
+                     )
+
+ET_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                 VALE=( 0.,     2857.504E6,
+                                        100.,   1979.695E6, )
+                     )
+
+SY_FO=DEFI_FONCTION(       NOM_PARA='TEMP',
+                                 VALE=( 0.,     181.E6,
+                                        100.,   145.E6,     )
+                     )
+
+RHOF=DEFI_CONSTANTE(VALE = 7860. ,)
+MAT2=DEFI_MATERIAU(      ELAS_FO=_F(  E = E_FO,
+                                         NU = NU_FO,
+                                         RHO = RHOF,
+                                         ALPHA = ALPHA_FO,TEMP_DEF_ALPHA=0.),
+                          ECRO_LINE_FO=_F(  D_SIGM_EPSI = ET_FO,
+                                         SY = SY_FO)
+                          )
+
+MODEL=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'THERMIQUE',
+                                        MODELISATION = '3D')
+                         )
+
+
+THERL=LIRE_RESU(TYPE_RESU='EVOL_THER',
+              FORMAT='MED',UNITE=80,
+              MODELE=MODEL,
+              FORMAT_MED=(_F( NOM_RESU='THERL',
+                              NOM_CHAM    ='TEMP' ),
+                              ) ,
+              TOUT_ORDRE='OUI',);
+
+MATER2=AFFE_MATERIAU(   MAILLAGE=MAYA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = MAT2),
+                                AFFE_VARC=_F( TOUT='OUI',
+                                       EVOL=THERL,VALE_REF=0.,
+                                        NOM_VARC='TEMP',
+                                        NOM_CHAM='TEMP',),
+                         )
+
+PRES_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.,      0.,
+                                          15.,     0.,
+                                          20.,     5.5E6,
+                                          25.,     0.,       )
+                        )
+
+ROTA=AFFE_CHAR_MECA(        MODELE=MODEL2,
+                             ROTATION=_F( VITESSE = 2400.,
+                                          AXE = (0.,0.,1.,),),
+                         )
+
+ROTA_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.0,   0.0,
+                                         15.,    1.0,
+                                         25.,    1.0,   )
+                        )
+
+PRES=AFFE_CHAR_MECA_F(      MODELE=MODEL2,
+                             PRES_REP=_F(  GROUP_MA = 'FACE_INT',
+                                        PRES = PRES_FO)
+                         )
+
+CONDLIM=AFFE_CHAR_MECA(     MODELE=MODEL2,DDL_IMPO=(
+                              _F(  GROUP_NO = 'FIX_C1',
+                                               DX = 0.),
+                                       _F(  GROUP_NO = 'FIX_C2',
+                                               DY = 0.),
+                                       _F(  GROUP_NO = 'FIX_C3',
+                                               DZ = 0.))
+                          )
+
+
+
+# lecture du resultat precedent
+
+CALCNL=LIRE_RESU(TYPE_RESU='EVOL_NOLI',
+              FORMAT='MED',UNITE=80,
+              MODELE=MODEL2,
+              CHAM_MATER=MATER2,
+              COMPORTEMENT=_F(
+                             RELATION = 'VMIS_ISOT_LINE',
+                             DEFORMATION = 'PETIT_REAC'),
+              EXCIT=(
+                             _F(CHARGE = PRES), 
+                             _F(CHARGE = ROTA,FONC_MULT = ROTA_FO),
+                             _F(CHARGE = CONDLIM)),
+              FORMAT_MED=(_F( NOM_RESU='CALCNL',
+                              NOM_CHAM    ='DEPL' ),
+                          _F( NOM_RESU='CALCNL',
+                              NOM_CHAM    ='SIEF_ELGA'),
+                          _F( NOM_RESU='CALCNL',
+                              NOM_CHAM    ='VARI_ELGA'),
+                              ) ,
+              TOUT_ORDRE='OUI',);
+
+
+CAT2=DEFI_LIST_REEL(    DEBUT=5,INTERVALLE=(
+                                     _F(  JUSQU_A = 15.,    NOMBRE = 2),
+                                     _F(  JUSQU_A = 20.,    NOMBRE = 1),
+                                     _F(  JUSQU_A = 25.,    NOMBRE = 1))
+                      )
+
+CALCNL=STAT_NON_LINE( reuse=CALCNL, ETAT_INIT=_F(EVOL_NOLI=CALCNL),
+                       MODELE=MODEL2,
+                       CHAM_MATER=MATER2,
+                       COMPORTEMENT=_F(
+                             RELATION = 'VMIS_ISOT_LINE',
+                             DEFORMATION = 'PETIT_REAC'),
+                       INCREMENT=_F( LIST_INST = CAT2),
+                       NEWTON=_F(  REAC_ITER = 1),
+                       CONVERGENCE=_F( ITER_GLOB_MAXI = 50),
+                       EXCIT=(
+                             _F(CHARGE = PRES), 
+                             _F(CHARGE = ROTA,FONC_MULT = ROTA_FO),
+                             _F(CHARGE = CONDLIM)),
+                     RECH_LINEAIRE=_F(ITER_LINE_MAXI = 3)
+              )
+
+CALCNL=CALC_CHAMP(reuse=CALCNL,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=CALCNL)
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=3,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO002931',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.21217264E+08,
+                   VALE_REFE=1.21692000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000473',),
+                _F(NUME_ORDRE=3,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000204',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.67236330E+08,
+                   VALE_REFE=1.67285000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000074',),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO002931',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=1.3962886285156E+08,
+                   VALE_REFE=1.39804000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000473',),
+                _F(NUME_ORDRE=4,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000204',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.65405266E+08,
+                   VALE_REFE=1.65266000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000074',),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO002931',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.28751130E+08,
+                   VALE_REFE=1.28967000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000473',),
+                _F(NUME_ORDRE=5,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO000204',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.58066639E+08,
+                   VALE_REFE=1.57980000E8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=5E-3,
+                   MAILLE='MA000074',),
+                ),
+          )
+
+FIN()
+#

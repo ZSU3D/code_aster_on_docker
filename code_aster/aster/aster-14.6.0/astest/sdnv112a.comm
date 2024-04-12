@@ -1,0 +1,478 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+import numpy as NP
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse=MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(TOUT_GROUP_MA='OUI',),),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=(_F(GROUP_MA=('POU1','COL1',),
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='POU_D_T',),
+                     _F(GROUP_MA=('RADIER','PLANC1','VOILE1','SEMELLES',),
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='DKT',) ,),);
+
+BETON=DEFI_MATERIAU(ELAS=_F(E=3.E10,
+                           NU=0.2,
+                           RHO=2400,),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.E11,
+                            NU=0.0,
+                            RHO=7800.0,),);
+
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(GROUP_MA=('COL1','POU1','PLANC1','VOILE1','SEMELLES','RADIER'),
+                             MATER=(BETON,),),));
+
+CARAEL=AFFE_CARA_ELEM(MODELE=MO,
+                      POUTRE=(_F(GROUP_MA='POU1',
+                                 SECTION='RECTANGLE',
+                                 CARA=('HY','HZ',),
+                                 VALE=(0.15,0.325,),),
+                              _F(GROUP_MA='COL1',
+                                 SECTION='RECTANGLE',
+                                 CARA='H',
+                                 VALE=0.2,),),
+                      COQUE=(_F(GROUP_MA='PLANC1',
+                                EPAIS=0.1,),
+                             _F(GROUP_MA='V2',
+                                EPAIS=0.1,),
+                             _F(GROUP_MA='V3',
+                                EPAIS=0.1,),
+                             _F(GROUP_MA='V1',
+                                EPAIS=0.1,),
+                             _F(GROUP_MA=('RADIER',),
+                                EPAIS=0.5,),
+                             _F(GROUP_MA='SEMELLES',
+                                EPAIS=0.38,),),
+                      ORIENTATION=(_F(GROUP_MA='POU1',
+                                      CARA='VECT_Y',
+                                      VALE=(1.,0.,0.,),),
+                                   _F(GROUP_MA='COL1',
+                                      CARA='VECT_Y',
+                                      VALE=(0.,-1.,1.,),),),);
+
+CONDLIM=AFFE_CHAR_MECA(MODELE=MO,
+                       DDL_IMPO=(_F(GROUP_NO='CDG',
+                                   DX=0.0,
+                                   DY=0.0,
+                                   DZ=0.0,
+                                   DRX=0.0,
+                                   DRY=0.0,
+                                   DRZ=0.0,),
+                                _F(GROUP_NO='S',
+                                   DX=0.0,
+                                   DY=0.0,
+                                   DZ=0.0,
+                                   DRX=0.0,
+                                   DRY=0.0,
+                                   DRZ=0.0,)),
+                       LIAISON_SOLIDE=_F(GROUP_NO=('RADIER'),),);
+
+
+
+#
+ASSEMBLAGE(MODELE=MO,
+           CHARGE=CONDLIM,
+           CARA_ELEM=CARAEL,
+           CHAM_MATER=CHMAT,
+           NUME_DDL=CO("NUMEDDL"),
+           MATR_ASSE=(_F(MATRICE=CO("RIGIDITE"),OPTION = 'RIGI_MECA'),
+                      _F(MATRICE=CO("MASSE"),OPTION = 'MASS_MECA')))
+
+#
+# CALCUL DES MODES AVEC BLOCAGE DES ANCRAGES:
+#---------------------------------------------
+MODE_MEC=CALC_MODES(MATR_RIGI=RIGIDITE,
+                    OPTION='PLUS_PETITE',
+                    CALC_FREQ=_F(NMAX_FREQ=10.,
+                                 ),
+                    MATR_MASS=MASSE,
+                    )
+
+MODE_MEC=NORM_MODE(reuse=MODE_MEC,  MODE=MODE_MEC,   NORME='MASS_GENE' )
+
+#
+# CALCUL DES MODES STATIQUES AUX POINTS D ANCRAGE:
+#-------------------------------------------------
+MODE_STA=MODE_STATIQUE(MATR_RIGI=RIGIDITE,
+                       MATR_MASS=MASSE,
+                       MODE_STAT=(_F(GROUP_NO='CDG',AVEC_CMP =('DX','DY','DZ')),
+                                  _F(GROUP_NO='S',AVEC_CMP =('DX','DY','DZ'))))
+
+#
+# DESCRIPTION DES PAS DES FONCTIONS:
+#-----------------------------------
+Tps_fin = 1.0;
+
+L_INST=DEFI_LIST_REEL(  DEBUT=0.,
+                        INTERVALLE=_F(  JUSQU_A = Tps_fin, PAS = 0.01) )
+
+list_py=[0.0001*ii for ii in range(10001)]
+
+L_INST2=DEFI_LIST_REEL(VALE=(list_py))
+
+#
+# DESCRIPTION DES ACCELEROGRAMMES:
+#---------------------------------
+ACCE1 = FORMULE(NOM_PARA='INST',
+                VALE='NP.cos(30.*2*3.1416*INST + 0.)',
+                NP=NP)
+ACCE2 = FORMULE(NOM_PARA='INST',
+                VALE='NP.cos(45.*2*NP.pi*INST + NP.pi/3.)',
+                NP=NP)
+ACCE3 = FORMULE(NOM_PARA='INST',
+                VALE='20.*NP.cos(15.*2*NP.pi*INST + NP.pi/4.)',
+                NP=NP)
+# AU NIVEAU DU RADIER
+ACCERX=CALC_FONC_INTERP(FONCTION=ACCE1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+ACCERY=CALC_FONC_INTERP(FONCTION=ACCE2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+ACCERZ=CALC_FONC_INTERP(FONCTION=ACCE3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+
+# AU NIVEAU DU POTEAU
+ACCEPX=CALC_FONC_INTERP(FONCTION=ACCE2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+ACCEPY=CALC_FONC_INTERP(FONCTION=ACCE3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+ACCEPZ=CALC_FONC_INTERP(FONCTION=ACCE1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='ACCE')
+#
+# INTEGRATION DES ACCELEROGRAMMES:
+#---------------------------------
+VITE1 = FORMULE(NOM_PARA='INST',
+                VALE='-30.*2*NP.pi*NP.sin(30.*2*NP.pi*INST + 0.)',
+                NP=NP)
+VITE2 = FORMULE(NOM_PARA='INST',
+                VALE='-45.*2*NP.pi*NP.sin(45.*2*NP.pi*INST + NP.pi/3.)',
+                NP=NP)
+VITE3 = FORMULE(NOM_PARA='INST',
+                VALE='-300.*2*NP.pi*NP.sin(15.*2*NP.pi*INST + NP.pi/4.)',
+                NP=NP)
+# AU NIVEAU DU RADIER
+VITERX=CALC_FONC_INTERP(FONCTION=VITE1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+VITERY=CALC_FONC_INTERP(FONCTION=VITE2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+VITERZ=CALC_FONC_INTERP(FONCTION=VITE3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+# AU NIVEAU DU POTEAU
+VITEPX=CALC_FONC_INTERP(FONCTION=VITE2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+VITEPY=CALC_FONC_INTERP(FONCTION=VITE3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+VITEPZ=CALC_FONC_INTERP(FONCTION=VITE1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='VITE')
+
+DEPL1 = FORMULE(NOM_PARA='INST',
+                VALE='(30.*2*NP.pi)**2*NP.cos(30.*2*NP.pi*INST + 0.)',
+                NP=NP)
+DEPL2 = FORMULE(NOM_PARA='INST',
+                VALE='(45.*2*NP.pi)**2*NP.cos(45.*2*NP.pi*INST + NP.pi/3.)',
+                NP=NP)
+DEPL3 = FORMULE(NOM_PARA='INST',
+                VALE='(20.*15.*2*NP.pi)**2*NP.cos(15.*2*NP.pi*INST + NP.pi/4.)',
+                NP=NP)
+# AU NIVEAU DU RADIER
+DEPLRX=CALC_FONC_INTERP(FONCTION=DEPL1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+DEPLRY=CALC_FONC_INTERP(FONCTION=DEPL2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+DEPLRZ=CALC_FONC_INTERP(FONCTION=DEPL3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+# AU NIVEAU DU POTEAU
+DEPLPX=CALC_FONC_INTERP(FONCTION=DEPL2, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+DEPLPY=CALC_FONC_INTERP(FONCTION=DEPL3, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+DEPLPZ=CALC_FONC_INTERP(FONCTION=DEPL1, LIST_PARA=L_INST,
+                         NOM_PARA = 'INST',
+                         PROL_DROITE='LINEAIRE',
+                         PROL_GAUCHE='LINEAIRE',
+                         NOM_RESU='DEPL')
+#
+# ON ETUDIE LA STRUCTURE EN VRAI MULTI-APPUI:
+#----------------------------------------------------------
+#
+MULTRX=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 1., 0., 0.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='CDG' )
+MULTPX=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 1., 0., 0.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='S' )
+MULTRY=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 0., 1., 0.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='CDG' )
+MULTPY=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 0., 1., 0.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='S' )
+MULTRZ=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 0., 0., 1.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='CDG' )
+MULTPZ=CALC_CHAR_SEISME(MATR_MASS=MASSE,   DIRECTION=( 0., 0., 1.,),
+                        MODE_STAT=MODE_STA,   GROUP_NO='S' )
+
+#
+# PROJECTION DES MATRICES M ET K SUR LA BASE MODALE
+#---------------------------------------------------
+PROJ_BASE(BASE=MODE_MEC,
+          STOCKAGE='DIAG',
+          MATR_ASSE_GENE=(_F( MATRICE = CO("MASS_GEN"), MATR_ASSE = MASSE),
+                          _F( MATRICE = CO("RIGI_GEN"), MATR_ASSE = RIGIDITE)),
+          VECT_ASSE_GENE=(_F( VECTEUR = CO("VECTRX"), VECT_ASSE = MULTRX, TYPE_VECT='FORC'),
+                          _F( VECTEUR = CO("VECTPX"), VECT_ASSE = MULTPX, TYPE_VECT='FORC'),
+                          _F( VECTEUR = CO("VECTRY"), VECT_ASSE = MULTRY, TYPE_VECT='FORC'),
+                          _F( VECTEUR = CO("VECTPY"), VECT_ASSE = MULTPY, TYPE_VECT='FORC'),
+                          _F( VECTEUR = CO("VECTRZ"), VECT_ASSE = MULTRZ, TYPE_VECT='FORC'),
+                          _F( VECTEUR = CO("VECTPZ"), VECT_ASSE = MULTPZ, TYPE_VECT='FORC'),))
+
+#
+# CALCUL TRANSITOIRE PAR SUPERPOSITION MODALE
+# -------------------------------------------
+RESU=DYNA_VIBRA(TYPE_CALCUL='TRAN',
+                BASE_CALCUL='GENE',
+                MATR_MASS=MASS_GEN,
+                MATR_RIGI=RIGI_GEN,
+                SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                MODE_STAT=MODE_STA,
+                EXCIT=(_F(VECT_ASSE_GENE=VECTRX,
+                          ACCE=ACCERX,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 1., 0., 0.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITERX,
+                          DEPL=DEPLRX),
+                       _F(VECT_ASSE_GENE=VECTRY,
+                          ACCE=ACCERY,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 0., 1., 0.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITERY,
+                          DEPL=DEPLRY),
+                       _F(VECT_ASSE_GENE=VECTRZ,
+                          ACCE=ACCERZ,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 0., 0., 1.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITERZ,
+                          DEPL=DEPLRZ),
+                       _F(VECT_ASSE_GENE=VECTPX,
+                          ACCE=ACCEPX,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 1., 0., 0.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITEPX,
+                          DEPL=DEPLPX),
+                       _F(VECT_ASSE_GENE=VECTPY,
+                          ACCE=ACCEPY,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 0., 1., 0.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITEPY,
+                          DEPL=DEPLPY),
+                       _F(VECT_ASSE_GENE=VECTPZ,
+                          ACCE=ACCEPZ,
+                          MULT_APPUI = 'OUI',
+                          DIRECTION = ( 0., 0., 1.,),
+                          GROUP_NO = 'CDG',
+                          VITE=VITEPZ,
+                          DEPL=DEPLPZ),),
+                 ARCHIVAGE=_F(PAS_ARCH = 1),
+                 INCREMENT=_F(LIST_INST=L_INST2,),);
+
+
+#
+# CALCUL DES ACCELERATION AVEC LA MACRO MACR_SPECTRE
+# ----------------------------------------------
+#
+# RECUPERATION DES ACCELERATIONS ABSOLUES CALCULEES
+# ----------------------------------------------
+#
+frequ=DEFI_LIST_REEL(VALE=(0.10,0.20,0.30,0.41,0.52,10.,15., 20.))
+
+TABAVMAC=MACR_SPECTRE(
+    MAILLAGE=MA,
+    RESU=_F(RESU_GENE=RESU,),
+    PLANCHER=(_F(GROUP_NO=('A1','B1','C1','D1'),NOM='P_1', BATIMENT='BATI', COMMENTAIRE='TEST DE COMMENTAIRE'),),
+    LIST_FREQ=frequ,
+    NOM_CHAM='ACCE',
+    CALCUL='ABSOLU',
+    NORME = 9.81,
+    AMOR_SPEC=(0.05,0.07),
+    MULT_APPUI='OUI',
+)
+#IMPR_TABLE(TABLE=TABAVMAC)
+
+# test de l'ecriture de colonne NOM, BATIMENT et COMMENTAIRE dans la table
+TABTEST=MACR_SPECTRE(
+    MAILLAGE=MA,
+    RESU=_F(RESU_GENE=RESU,),
+    PLANCHER=(_F(GROUP_NO=('A1','B1','C1','D1'),NOM='P_1', BATIMENT='BATI', ),
+              _F(GROUP_NO=('A1','B1','C1','D1'),NOM='P_2', COMMENTAIRE='TEST DE COMMENTAIRE2'),),
+    LIST_FREQ=frequ,
+    NOM_CHAM='ACCE',
+    CALCUL='ABSOLU',
+    NORME = 9.81,
+    AMOR_SPEC=(0.05,0.07),
+    MULT_APPUI='OUI',
+)
+
+IMPR_TABLE(TABLE=TABTEST)
+
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+           VALE_REFE=4.53316E-02,
+           VALE_CALC=4.53316E-02,
+           NOM_PARA='eH_0_P_1',
+           TABLE=TABAVMAC,
+           FILTRE=_F(NOM_PARA='FREQ',
+                     VALE=0.52,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.07,
+           NOM_PARA='AMOR',
+           TABLE=TABTEST,
+           FILTRE=_F(NOM_PARA='NUME_AMOR',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC_K='BATI',
+           NOM_PARA='BATIMENT',
+           TABLE=TABTEST,
+           FILTRE=_F(NOM_PARA='NOM',
+                     VALE_K='P_1',),
+           )
+
+TEST_TABLE(
+           VALE_CALC_K='TEST DE COMMENTAIRE2',
+           NOM_PARA='COMMENTAIRE',
+           TABLE=TABTEST,
+           FILTRE=_F(NOM_PARA='NOM',
+                     VALE_K='P_2',),
+           )
+
+# --------------------------------------------------------------------------------------------------
+ACCELE=REST_GENE_PHYS(RESU_GENE=RESU, NOM_CHAM='ACCE', TOUT_INST='OUI',)
+
+liste_grpno = ('A1', 'B1', 'C1',  'D1',)
+liste_noeud = ('N78','N84','N129','N133',)
+
+TAB_RESU=CREA_TABLE(
+    RESU=_F(RESULTAT=ACCELE,  GROUP_NO= liste_grpno,
+            NOM_CHAM='ACCE',  NOM_CMP=('DX','DY','DZ'),)
+)
+
+TABSPEC1=MACR_SPECTRE(
+    MAILLAGE=MA,
+    PLANCHER=(
+        _F(NOM='P_1', GROUP_NO= liste_grpno,),
+    ),
+    NOM_CHAM='ACCE', AMOR_SPEC=(0.05), LIST_FREQ=frequ, NORME=1.0,
+    CALCUL='RELATIF',
+    RESU=_F(TABLE=TAB_RESU, ACCE_X=ACCERX, ACCE_Y=ACCERY, ACCE_Z=ACCERZ,),
+)
+
+TABSPEC2=MACR_SPECTRE(
+    PLANCHER=(
+        _F(NOM='P_1', NOEUD= liste_noeud,),
+    ),
+    NOM_CHAM='ACCE', AMOR_SPEC=(0.05), LIST_FREQ=frequ, NORME=9.7647346,
+    CALCUL='RELATIF',
+    RESU=_F(TABLE=TAB_RESU, ACCE_X=ACCEPX, ACCE_Y=ACCEPY, ACCE_Z=ACCEPZ,),
+)
+
+#
+TEST_TABLE(
+    REFERENCE='AUTRE_ASTER',
+    TABLE=TABSPEC1,
+    VALE_REFE= 0.00225538264094,
+    VALE_CALC= 0.00225538264094,
+    NOM_PARA='eH_0_P_1',
+    FILTRE=_F(NOM_PARA='FREQ', VALE=0.52,),
+)
+
+TEST_TABLE(
+    REFERENCE='AUTRE_ASTER',
+    TABLE=TABSPEC2,
+    VALE_REFE= 4.53316E-02,
+    VALE_CALC= 4.53316E-02,
+    NOM_PARA='eH_0_P_1',
+    FILTRE=_F(NOM_PARA='FREQ', VALE=0.52,),
+)
+
+
+FIN()
+#

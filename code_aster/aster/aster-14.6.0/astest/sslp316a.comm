@@ -1,0 +1,269 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: josselin.delmas at edf.fr
+# TEST V3.02.316
+# CHARGEMENT EN DEPLACEMENT
+# MAILLAGE : QUAD LINEAIRE
+# COMPORTEMENT ELASTIQUE C_PLAN
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+e = 100000.0;
+
+nu = 0.0;
+
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=e,
+                            NU=nu,
+                            RHO=7800.0,),);
+lx = 1.0;
+
+ly = 1.0;
+
+
+# a : profondeur de la fissure
+# h : hauteur du plan de fissure
+a = 0.5;
+
+h = 0.5;
+
+
+LN = FORMULE(VALE='Y-h',
+             h=h,
+             NOM_PARA=['X', 'Y'],)
+
+LT = FORMULE(VALE='-X+a',
+             a=a,
+             NOM_PARA=['X', 'Y'],)
+
+R = FORMULE(VALE='sqrt((X-0.5)**2+(Y-0.5)**2)',
+            NOM_PARA=['X', 'Y'],)
+
+T = FORMULE(VALE='atan2(Y-0.5,-X+0.5)',
+            NOM_PARA=['X', 'Y'],)
+coef = ((1 + nu) / (e * sqrt(6.28318530718)));
+
+
+# CHAMPS DE DEPLACEMENT
+
+OUAUX1 = FORMULE(VALE='-1.*coef*sqrt(R(X,Y))*cos(T(X,Y)/2.)*(3.-4.*nu-cos(T(X,Y)))',
+                 coef=coef,
+                 R=R,
+                 T=T,
+                 nu=nu,
+                 NOM_PARA=['X', 'Y'],)
+
+UAUX2 = FORMULE(VALE=' coef*sqrt(R(X,Y))*sin(T(X,Y)/2.)*(3.-4.*nu-cos(T(X,Y)))',
+                coef=coef,
+                R=R,
+                T=T,
+                nu=nu,
+                NOM_PARA=['X', 'Y'],)
+
+UAUX1 = FORMULE(VALE='-1.* OUAUX1(X,Y)',
+                OUAUX1=OUAUX1,
+                NOM_PARA=['X', 'Y'],)
+
+H1YSUP = FORMULE(VALE='coef*sqrt(R(X,0.5))*(4.-4.*nu)',
+                 coef=coef,
+                 R=R,
+                 nu=nu,
+                 NOM_PARA=['X', 'Y'],)
+
+# INSTANTS
+
+L_INS1=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=3.0,
+                                    NOMBRE=3,),);
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(GROUP_MA=('LIGSUP','LIGINF','LIGGAU','LIGDRO',),),
+                             _F(OPTION='ENV_SPHERE',
+                                NOM='NHSUP',
+                                POINT=(lx,0.545454545455,),
+                                RAYON=0.0227272727273,
+                                PRECISION=0.0227272727273,),
+                             _F(OPTION='ENV_SPHERE',
+                                NOM='NHINF',
+                                POINT=(lx,0.454545454545,),
+                                RAYON=0.0227272727273,
+                                PRECISION=0.0227272727273,),
+                             _F(UNION=('LIGSUP','LIGINF','LIGGAU','LIGDRO',),
+                                NOM='ENVELTOU',),
+                             _F(DIFFE=('ENVELTOU','NHSUP','NHINF',),
+                                NOM='ENVELCLA',),),);
+
+MOD=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(GROUP_MA='SURF',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='C_PLAN',),);
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA,
+                    DEFI_FISS=_F(FONC_LT=LT,
+                                 FONC_LN=LN,),);
+
+MODK=MODI_MODELE_XFEM(MODELE_IN=MOD,
+                      FISSURE=FISS,);
+
+
+MAT=AFFE_MATERIAU(MAILLAGE=MA,
+                  MODELE=MODK,
+                  AFFE=_F(GROUP_MA='SURF',
+                          MATER=ACIER,),);
+
+CH2=AFFE_CHAR_MECA_F(MODELE=MODK,
+                     DDL_IMPO=(_F(GROUP_NO='ENVELCLA',
+                                  DX=OUAUX1,
+                                  DY=UAUX2,),
+                               _F(GROUP_NO='NHSUP',
+                                  DX=OUAUX1,
+                                  DY=UAUX2,
+                                  H1X=OUAUX1,
+                                  H1Y=H1YSUP,),
+                               _F(GROUP_NO='NHINF',
+                                  DX=OUAUX1,
+                                  DY=UAUX2,
+                                  H1X=UAUX1,
+                                  H1Y=H1YSUP,),),);
+
+UTOT=MECA_STATIQUE(MODELE=MODK,
+                   CHAM_MATER=MAT,
+                   EXCIT=(
+                          _F(CHARGE=CH2),
+                          ),
+                   );
+
+UTOT=CALC_ERREUR(reuse =UTOT,
+                 RESULTAT=UTOT,
+                 NUME_ORDRE=1,
+                 OPTION='ERME_ELEM',);
+
+UTOT=CALC_CHAMP(reuse=UTOT,RESULTAT=UTOT,NUME_ORDRE=1,CONTRAINTE=('SIEF_ELNO'))
+
+
+# RQ: LES CHAMPS SISE_ELNO (CAS XFEM) ET SIGM_ELNO SONT AUTOMATIQUEMENT
+#     CALCULES DANS LA COMMANDE CALC_ERREUR POUR TROUVER L'ESTIMATEUR
+#     D'ERREUR EN RESIDU
+
+
+TEST_RESU(RESU=(_F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=1.15629740377,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=0.0607994001817,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=0.916410820231,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIEF_ELNO',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=-0.835266802211,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=1.15629740377,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=0.0607994001817,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=0.916410820231,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=-0.835266802211,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SISE_ELNO',
+                   NOM_CMP='X4',
+                   VALE_CALC=0.812078942873,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='SISE_ELNO',
+                   NOM_CMP='X4',
+                   VALE_CALC=-0.510118026455,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MAX',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='ERME_ELEM',
+                   NOM_CMP='ERREST',
+                   VALE_CALC=0.000698457464821,
+                   CRITERE='RELATIF',
+                   ),
+                _F(INST=0.0,
+                   TYPE_TEST='MIN',
+                   RESULTAT=UTOT,
+                   NOM_CHAM='ERME_ELEM',
+                   NOM_CMP='ERREST',
+                   VALE_CALC=3.49704197058E-06,
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+FIN();

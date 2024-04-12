@@ -1,0 +1,490 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS_TEST__: FDLV111A
+#
+# PROPAGATION D'UNE ONDE DE COMPRESSION DANS UNE COLONNE FLUIDE
+# INFINIE - ABSORPTION DE L'ONDE A LA FRONTIERE DU MAILLAGE
+# ELEMENTS FINIS
+# CAS 3D
+#=======================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED', )
+
+MAIL=DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,
+                       CREA_GROUP_NO=_F(  GROUP_MA = 'IFLUSOL')
+                     )
+
+MAIL=DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,
+                       CREA_GROUP_NO=_F(  GROUP_MA = 'IPRES')
+                     )
+
+MAIL=DEFI_GROUP( reuse=MAIL,   MAILLAGE=MAIL,
+                       CREA_GROUP_NO=_F(  GROUP_MA = 'STRU')
+                     )
+
+EAU=DEFI_MATERIAU( FLUIDE=_F( RHO = 1000.,  CELE_R = 1500.))
+
+MAT1=DEFI_MATERIAU( ELAS=_F(  E = 3.6E+10, RHO = 2400.,  NU = 0.2)
+                    )
+
+MODELE=AFFE_MODELE(    MAILLAGE=MAIL,AFFE=(
+                         _F(  GROUP_MA = 'FLUIDE',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = '3D_FLUIDE'),
+                         _F(  GROUP_MA = 'IFLUSOL',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'FLUI_STRU'),
+                         _F(  GROUP_MA = 'FOND',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = '3D_FLUI_ABSO'),
+                         _F(  GROUP_MA = 'IPRES',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'FLUI_STRU'),
+                         _F(  GROUP_MA = 'STRU',
+                                 PHENOMENE = 'MECANIQUE',
+                                 MODELISATION = '3D'))
+                        )
+
+CHAMPMAT=AFFE_MATERIAU(    MAILLAGE=MAIL,AFFE=(
+                   _F(  GROUP_MA = ( 'FLUIDE', 'IFLUSOL',
+                                       'FOND', 'IPRES', ),
+                          MATER = EAU),
+                   _F(  GROUP_MA = 'STRU',
+                          MATER = MAT1))
+                           )
+
+COND_LIM=AFFE_CHAR_MECA(    MODELE=MODELE,DDL_IMPO=(
+                   _F(  GROUP_NO = 'IFLUSOL',
+                               DX = 0., DY = 0., DZ = 0.),
+                   _F(  GROUP_NO = 'IPRES',
+                              DX = 1.E-3))
+                             )
+
+RIGI_ELE=CALC_MATR_ELEM(    MODELE=MODELE,
+                              OPTION='RIGI_MECA',
+                              CHAM_MATER=CHAMPMAT,
+                              CHARGE=COND_LIM
+                            )
+
+MASS_ELE=CALC_MATR_ELEM(    MODELE=MODELE,
+                              OPTION='MASS_MECA',
+                              CHAM_MATER=CHAMPMAT,
+                              CHARGE=COND_LIM
+                            )
+
+VECTELEM=CALC_VECT_ELEM(    OPTION='CHAR_MECA',
+                              CHAM_MATER=CHAMPMAT,
+                              CHARGE=COND_LIM
+                            )
+
+NUMEDDL=NUME_DDL(    MATR_RIGI=RIGI_ELE )
+
+RIGIDITE=ASSE_MATRICE(    MATR_ELEM=RIGI_ELE,
+                            NUME_DDL=NUMEDDL
+                          )
+
+MASSE=ASSE_MATRICE(    MATR_ELEM=MASS_ELE,
+                         NUME_DDL=NUMEDDL
+                       )
+
+VECTASS=ASSE_VECTEUR(    VECT_ELEM=VECTELEM,
+                           NUME_DDL=NUMEDDL
+                         )
+
+# --- LECTURE DE LA FONCTION D'EXCITATION ---
+INCLUDE(   UNITE=11,   INFO=1 )
+
+TEMPLI=DEFI_LIST_REEL(DEBUT=0., INTERVALLE=_F( JUSQU_A = 2.5, NOMBRE = 2000))
+
+#INTLI=DEFI_LIST_ENTI( DEBUT=1, INTERVALLE=_F( JUSQU_A = 2001, PAS = 1))
+
+DYN=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                          MATR_MASS=MASSE,   MATR_RIGI=RIGIDITE,
+                          ENERGIE=_F(),
+                          EXCIT=_F(  VECT_ASSE = VECTASS,
+                                  FONC_MULT = FONC),
+                         INCREMENT=_F( LIST_INST = TEMPLI),
+#                        ARCHIVAGE=_F(  LIST_ARCH = INTLI),
+                         SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                         SOLVEUR=_F(POSTTRAITEMENTS='MINI'),
+                  
+                        )
+
+# --- TEST SUR LES ENERGIES ---------------------------------------------------
+#     LA PRECISION RELATIVE EST DIMINUEE POUR LES TEST A T = 1.2 PAR RAPPORT
+#     AUX TESTS A T = 0.6 CAR LA MULTITUDE DE PAS DE TEMPS ENTRAINE DES ECARTS.
+#     LA DISSIPATION DU SCHEMA EST TESTEE EN ABSOLU.
+
+ENER1=RECU_TABLE(CO=DYN,NOM_TABLE='PARA_CALC',);
+
+TEST_TABLE(
+           VALE_CALC=16174.2169227,
+           NOM_PARA='TRAV_EXT',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=8708.2326446,
+           NOM_PARA='ENER_CIN',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1643.19954412,
+           NOM_PARA='ENER_TOT',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.,
+           NOM_PARA='TRAV_AMOR',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=5822.78279503,
+           NOM_PARA='TRAV_LIAI',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+
+TEST_TABLE(
+           VALE_CALC=25960.4323845,
+           NOM_PARA='TRAV_EXT',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2.18903053315,
+           NOM_PARA='ENER_CIN',
+           TABLE=ENER1,
+           TOLE_MACHINE=1.E-5,                 # TODO TOLE_MACHINE
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.135116065095,
+           NOM_PARA='ENER_TOT',
+           TABLE=ENER1,
+           TOLE_MACHINE=3.E-5,                 # TODO TOLE_MACHINE
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.,
+           NOM_PARA='TRAV_AMOR',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=25958.1094647,
+           NOM_PARA='TRAV_LIAI',
+           TABLE=ENER1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+
+
+# TESTS DE NON REGRESSION SUPPLEMENTAIRES
+
+TEST_RESU(RESU=_F(NUME_ORDRE=960,
+                  RESULTAT=DYN,
+                  NOM_CHAM='VITE',
+                  NOEUD='N46',
+                  NOM_CMP='DY',
+                  VALE_CALC=-1.41484969548E-05,
+                  ),
+          )
+
+DYN = CALC_CHAMP (reuse = DYN,
+  RESULTAT = DYN,
+  FORCE='FORC_NODA'
+   )
+
+TRAVAIL = POST_ELEM(
+  RESULTAT = DYN,
+  TRAV_EXT = _F()
+  )
+
+TEST_TABLE(
+           VALE_CALC=0.135116064829,
+           TOLE_MACHINE=3.E-5,                 # TODO TOLE_MACHINE
+           NOM_PARA='TRAV_REEL',
+           TABLE=TRAVAIL,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+# --- FIN TEST SUR LES ENERGIES -----------------------------------------------
+
+PN16=RECU_FONCTION(    LIST_INST=TEMPLI,   PRECISION=1.E-4,
+                        RESULTAT=DYN,   NOEUD='N16',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+PN18=RECU_FONCTION(    LIST_INST=TEMPLI,   PRECISION=1.E-4,
+                        RESULTAT=DYN,   NOEUD='N18',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+PN47=RECU_FONCTION(    LIST_INST=TEMPLI,   PRECISION=1.E-4,
+                        RESULTAT=DYN,   NOEUD='N47',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=7137.371232063,
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.47125,
+                         FONCTION=PN16,
+                         ),
+                      _F(VALE_CALC=-7083.053595543,
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.72750000000000004,
+                         FONCTION=PN16,
+                         ),
+                      _F(VALE_CALC=0.18033003807068,
+                         TOLE_MACHINE=5.E-3,           # TODO TOLE_MACHINE
+                         CRITERE='ABSOLU',
+                         VALE_PARA=1.27375,
+                         FONCTION=PN16,),
+                      ),
+              )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=7137.371232808,
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.47125,
+                         FONCTION=PN18,
+                         ),
+                      _F(VALE_CALC=7093.211415648,
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.3725,
+                         FONCTION=PN47,
+                         ),
+                      ),
+              )
+
+TEMLI=DEFI_LIST_REEL(DEBUT=0., INTERVALLE=_F( JUSQU_A = 1.2, NOMBRE = 400))
+
+TEMLI2=DEFI_LIST_REEL(DEBUT=0.003,
+        INTERVALLE=_F( JUSQU_A = 1.2, NOMBRE = 399))
+
+INLI=DEFI_LIST_ENTI( DEBUT=1, INTERVALLE=_F( JUSQU_A = 401, PAS = 1))
+
+
+
+ACCE0 = CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',OPERATION='AFFE',MODELE=MODELE,
+                   AFFE=_F(TOUT='OUI',NOM_CMP=('DX', 'DY', 'DZ', 'PRES', 'PHI',),VALE = (0., 0., 0., 0., 0.,),),);
+
+DYNA=DYNA_NON_LINE(     MODELE=MODELE,   CHAM_MATER=CHAMPMAT,
+                          EXCIT=_F(  CHARGE = COND_LIM,
+                                  FONC_MULT = FONC),
+                     #    ETAT_INIT=_F(  INST_INIT = 0.),
+#  On impose explicitement une acceleration initiale nulle car la matrice de masse etant singuliere
+#  a cause du modele (u,p,phi), on ne peut calculer une acceleration non nulle :
+                        ETAT_INIT=_F(  ACCE = ACCE0,),
+                        ENERGIE=_F(),
+                        CONVERGENCE=_F( RESI_GLOB_RELA = 1.E-9),
+                          COMPORTEMENT=_F( RELATION = 'ELAS',
+                                  TOUT = 'OUI'),
+                         SOLVEUR=_F( STOP_SINGULIER = 'NON'),
+                         NEWTON=_F(  MATRICE = 'ELASTIQUE',
+                                 REAC_INCR = 0,
+                                 REAC_ITER = 0),
+                         INCREMENT=_F( LIST_INST = TEMLI),
+                         SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',
+                                FORMULATION='DEPLACEMENT',),
+                        )
+
+# --- TEST SUR LES ENERGIES ---------------------------------------------------
+#     LA PRECISION RELATIVE EST DIMINUEE POUR LES TEST A T = 1.2 PAR RAPPORT
+#     AUX TESTS A T = 0.6 CAR LA MULTITUDE DE PAS DE TEMPS ENTRAINE DES ECARTS.
+#     LA DISSIPATION DU SCHEMA EST TESTEE EN ABSOLU.
+
+ENER=RECU_TABLE(CO=DYNA,NOM_TABLE='PARA_CALC',);
+
+
+TEST_TABLE(
+           VALE_CALC=16182.454098,
+           NOM_PARA='TRAV_EXT',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=8544.6318427,
+           NOM_PARA='ENER_CIN',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1659.41619048,
+           NOM_PARA='ENER_TOT',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.,
+           NOM_PARA='TRAV_AMOR',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=5978.73881029,
+           NOM_PARA='TRAV_LIAI',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=0.6,),
+           )
+
+
+TEST_TABLE(
+           VALE_CALC=25878.0513871,
+           NOM_PARA='TRAV_EXT',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.405193547538,
+           NOM_PARA='ENER_CIN',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.0314212639384,
+           NOM_PARA='ENER_TOT',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.,
+           NOM_PARA='TRAV_AMOR',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=25877.467642,
+           NOM_PARA='TRAV_LIAI',
+           TABLE=ENER,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.2,),
+           )
+
+
+
+# --- FIN TEST SUR LES ENERGIES -----------------------------------------------
+
+PNA16=RECU_FONCTION(    LIST_INST=TEMLI2,   PRECISION=1.E-4,
+                        RESULTAT=DYNA,   NOEUD='N16',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+PNA18=RECU_FONCTION(    LIST_INST=TEMLI2,   PRECISION=1.E-4,
+                        RESULTAT=DYNA,   NOEUD='N18',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+PNA47=RECU_FONCTION(    LIST_INST=TEMLI2,   PRECISION=1.E-4,
+                        RESULTAT=DYNA,   NOEUD='N47',
+                        NOM_CHAM='DEPL',
+                        NOM_CMP='PRES'
+                      )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=7108.750208710,
+                         VALE_REFE=7114.73,
+                         REFERENCE='AUTRE_ASTER',
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.471,
+                         PRECISION=9E-3,
+                         FONCTION=PNA16,),
+                      _F(VALE_CALC=-7049.036377070,
+                         VALE_REFE=-7000.22,
+                         REFERENCE='AUTRE_ASTER',
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.726,
+                         PRECISION=0.02,
+                         FONCTION=PNA16,),
+                      _F(VALE_CALC=-6.418774471980,
+                         VALE_REFE=0.0,
+                         REFERENCE='AUTRE_ASTER',
+                         CRITERE='ABSOLU',
+                         VALE_PARA=1.2,
+                         PRECISION=50.0,
+                         FONCTION=PNA16,),
+                      ),
+              )
+
+TEST_FONCTION(VALEUR=(_F(VALE_CALC=7108.750208710,
+                         VALE_REFE=7114.73,
+                         REFERENCE='AUTRE_ASTER',
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.471,
+                         PRECISION=9E-3,
+                         FONCTION=PNA18,),
+                      _F(VALE_CALC=7081.746388512,
+                         VALE_REFE=7081.10,
+                         REFERENCE='AUTRE_ASTER',
+                         CRITERE='RELATIF',
+                         VALE_PARA=0.372,
+                         PRECISION=3.0E-3,
+                         FONCTION=PNA47,),
+                      ),
+              )
+
+FIN()

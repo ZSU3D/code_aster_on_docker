@@ -1,0 +1,151 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'));
+
+SABLE=DEFI_MATERIAU(ELAS=_F(E=670.E+6, NU=0.25, RHO  =1850., ALPHA=0.),
+                    HUJEUX=_F(N     = 0.5,
+                              BETA  = 29.,
+                              D     = 5.8,
+                              B     = 0.2,
+                              PHI   = 40.,
+                              ANGDIL= 40.,
+                              PCO   = -150.E+3,
+                              PREF  = -1.E+6,
+                              AMON  = 0.0024,
+                              ACYC  = 0.00024,
+                              CMON  = 0.01,
+                              CCYC  = 0.005,
+                              RD_ELA= 0.06,
+                              RI_ELA= 0.006,
+                              RHYS  = 0.15,
+                              RMOB  = 0.9,
+                              XM    = 2.5,
+                              RD_CYC= 0.06,
+                              RI_CYC= 0.006,
+                              DILA  = 2.,),);
+
+TABTND   = CO('TTND');
+TABTNDC1 = CO('TTNDC1');
+TABTNDC2 = CO('TTNDC2');
+
+CALC_ESSAI_GEOMECA(INFO        =1,
+                   MATER       =SABLE,
+                   COMPORTEMENT=_F(RELATION      ='HUJEUX',
+                                   ITER_INTE_MAXI=-50,
+                                   RESI_INTE_RELA=1.E-7,
+                                   ALGO_INTE     ='SEMI_EXPLICITE',
+                                   ITER_INTE_PAS =-50,),
+                   CONVERGENCE =_F(RESI_GLOB_RELA =1.E-6,
+                                  ITER_GLOB_MAXI =10,),
+
+                   ESSAI_TRIA_ND_C_F =_F(PRES_CONF  = 2.e+5,
+                                   SIGM_IMPOSE= -11.e+4, # 1er chgt en traction
+                                   NB_CYCLE   = 3,
+                                   TYPE_CHARGE='TRIANGULAIRE',
+                                   UN_SUR_K   = 1.E-12,
+                                   KZERO      =1,
+                                   CRIT_LIQUEFACTION ='RU_MAX',
+                                   ARRET_LIQUEFACTION='OUI',
+                                   VALE_CRIT  = .8,
+                                   NB_INST    = 25, # Discr. par quart de cycle
+                                   TABLE_RESU = (TABTNDC1,TABTNDC2,),
+                                   GRAPHIQUE  = ('P-Q','INST-Q','EPS_AXI-Q',
+                                                 'EPS_AXI-PRE_EAU',
+                                                  'SIG_AXI-PRE_EAU',),),);
+IMPR_TABLE(TABLE=TABTNDC1,);
+IMPR_TABLE(TABLE=TABTNDC2,);
+
+# pour l'essai 'TND_C' -> valeurs de reference de wtnv134b ('TRACE')
+
+# Valeurs de P et Q au dernier pic de Q avant passage ds la zone instable
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=167596.551051,
+           VALE_REFE=167596.551051,
+           NOM_PARA ='P_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=70.,),);
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=109999.984793,
+           VALE_REFE=1.1E+05,
+           NOM_PARA ='Q_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=70.,),);
+                     
+# Valeurs de P et Q lors de la 1ere reprise de dilatance   
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=2.E-2,
+           VALE_CALC=66200.1037075,
+           VALE_REFE=65366.1349332,
+           NOM_PARA ='P_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=91.15,),);
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=-69158.1549861,
+           VALE_REFE=-69200.9510567,
+           NOM_PARA ='Q_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=91.15,),);
+
+# Valeurs de P et Q lors de la 2eme reprise de dilatance
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=3626.59504438,
+           VALE_REFE=3623.17388583,
+           NOM_PARA ='P_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=99.3,),);
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=5926.27717192,
+           VALE_REFE=5920.04567725,
+           NOM_PARA ='Q_1',
+           TABLE=TABTNDC1,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=9.0E-05,
+                     NOM_PARA='INST_1',
+                     VALE=99.3,),);
+FIN();

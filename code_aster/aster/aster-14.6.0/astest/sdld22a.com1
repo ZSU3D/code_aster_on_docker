@@ -1,0 +1,54 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+POURSUITE(CODE='OUI')
+
+f_amor = DEFI_FONCTION(NOM_PARA='FREQ',
+                       NOM_RESU='AMOR',
+                       VALE=(0., 0.2, 10., 0.1, 40., 0.45))
+
+tab = RECU_TABLE(CO=MODES,
+                 NOM_PARA='FREQ')
+
+IMPR_TABLE(UNITE=6,
+           TABLE=tab)
+
+g_freq = RECU_FONCTION(TABLE=tab,
+                       PARA_X='FREQ',
+                       PARA_Y='FREQ')
+
+# amor(freq) = g o f(freq) = f_amor( g_freq(freq) )
+amor = CALC_FONCTION(COMPOSE=_F(FONC_PARA=g_freq,
+                                FONC_RESU=f_amor))
+
+IMPR_FONCTION(UNITE=6,
+              COURBE=_F(FONCTION=amor))
+
+TEST_FONCTION(VALEUR=(
+    _F(FONCTION=amor,
+       VALE_PARA=5.52739E+00,
+       VALE_CALC=1.44726E-01),
+    _F(FONCTION=amor,
+       VALE_PARA=3.13474E+01,
+       VALE_CALC=3.49053E-01),
+))
+
+FIN()

@@ -1,0 +1,241 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+#PRE_IDEAS(UNITE_IDEAS=19,);
+#
+
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=(_F(GROUP_MA='HAUT',),
+                               _F(GROUP_MA='BAS',),),);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D_THM',),);
+#
+#
+#
+#  LISTE DES INSTANTS DE CALCUL
+#
+#
+#
+#
+#
+
+
+LI=DEFI_LIST_REEL(DEBUT=0.0,
+                  INTERVALLE=_F(JUSQU_A=100.,
+                                NOMBRE=1,),);
+############################################
+
+
+
+UN=DEFI_CONSTANTE(VALE=1.0,);
+
+ZERO=DEFI_CONSTANTE(VALE=0.0,);
+#
+#
+#
+# PERMEABILITE INTRINSEQUE, RELATIVE DU LIQUIDE, RELATIVE DU GAZ
+# UNITE INTRINSEQUE : METRES CARRES , UNITE RELATIVE : SANS
+#
+#
+#
+#
+#
+#
+
+
+KINT=DEFI_CONSTANTE(VALE=2.9999999999999999E-16,);
+
+PERMLIQ=DEFI_CONSTANTE(VALE=1.0,);
+
+DPERMLI=DEFI_CONSTANTE(VALE=0.0,);
+
+PERMGAZ=DEFI_CONSTANTE(VALE=1.0,);
+
+DPERGSA=DEFI_CONSTANTE(VALE=0.0,);
+
+DPERGPG=DEFI_CONSTANTE(VALE=0.0,);
+#
+# COEFFICIENT DE FICK
+# UNITE METRES CARRES PAR SECONDES
+#
+#
+#
+#
+#
+#
+
+
+FICK=DEFI_CONSTANTE(VALE=9.9999999999999995E-08,);
+
+DFICKTE=DEFI_CONSTANTE(VALE=0.0,);
+
+DFICKPG=DEFI_CONSTANTE(VALE=0.0,);
+
+DCONDLI=DEFI_CONSTANTE(VALE=0.0,);
+
+CONDGAZ=DEFI_CONSTANTE(VALE=0.02,);
+
+DCONDGA=DEFI_CONSTANTE(VALE=0.0,);
+#
+# CONDUCTIVITES DU SOLIDE, DU LIQUIDE, DU GAZ
+# UNITES : WATTS PAR METRE CARRE
+#
+#
+#
+#
+#
+#
+
+
+CONDHOMO=DEFI_CONSTANTE(VALE=1.7,);
+
+DCONDHO=DEFI_CONSTANTE(VALE=0.0,);
+
+CONDLIQ=DEFI_CONSTANTE(VALE=2.9999999999999999E-16,);
+
+
+THMALP1 = DEFI_CONSTANTE(VALE=0.000100)
+
+ARGILE0=DEFI_MATERIAU(ELAS=_F(E=2.25000000E8,
+                              NU=0.0,
+                              RHO=2000.0,
+                              ALPHA=7.9999999999999996E-06,),
+                               COMP_THM = 'LIQU_SATU',
+                      THM_LIQU=_F(RHO=1000.0,
+                                  UN_SUR_K=3.77E-09,
+                                  ALPHA=THMALP1,
+                                  CP=2.850000E6,
+                                  VISC=UN,
+                                  D_VISC_TEMP=ZERO,),
+                      THM_GAZ=_F(MASS_MOL=0.02896,
+                                 CP=1.0,
+                                 VISC=UN,
+                                 D_VISC_TEMP=ZERO,),
+                      THM_INIT=_F(TEMP=273.0,
+                                  PRE1=0.0,
+                                  PRE2=0.0,
+                                  PORO=0.40000000000000002,
+                                  PRES_VAPE=1.0,),
+                      THM_DIFFU=_F(R_GAZ=8.3149999999999995,
+                                   RHO=1600.0,
+                                   CP=2.850000E6,
+                                   BIOT_COEF=9.9999999999999998E-13,
+                                   SATU_PRES=UN,
+                                   D_SATU_PRES=ZERO,
+                                   PESA_X=0.0,
+                                   PESA_Y=0.0,
+                                   PESA_Z=0.0,
+                                   PERM_IN=KINT,
+                                   PERM_LIQU=UN,
+                                   D_PERM_LIQU_SATU=ZERO,
+                                   PERM_GAZ=PERMGAZ,
+                                   D_PERM_SATU_GAZ=DPERGSA,
+                                   D_PERM_PRES_GAZ=DPERGPG,
+                                   LAMB_T=CONDHOMO,),);
+
+CHMAT0=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=_F(GROUP_MA='VOLUME',
+                             MATER=ARGILE0,),);
+
+
+CHAR0=AFFE_CHAR_MECA(MODELE=MODELE,
+                     DDL_IMPO=(_F(TOUT=('OUI'),
+                                  PRE1=500.0),
+                                  _F(TOUT=('OUI'), DX=0.0,),
+                                  _F(TOUT=('OUI'), DY=0.0,),                     
+                           _F(GROUP_NO='BAS',
+                                  DZ = 0.,),
+
+                               _F(GROUP_NO='HAUT',
+                                  DZ=1.E-3,),),);
+
+MESTAT=STAT_NON_LINE(MODELE=MODELE,
+                     CHAM_MATER=CHMAT0,
+                     EXCIT=_F(CHARGE=CHAR0,),
+                     SCHEMA_THM=_F(PARM_THETA=1.,),
+                     COMPORTEMENT=_F(RELATION='KIT_THM',
+                                  RELATION_KIT=('ELAS','LIQU_SATU','HYDR_UTIL'),
+                                  ITER_INTE_MAXI=5,),
+                     INCREMENT=_F(LIST_INST=LI,),
+                     NEWTON=_F(MATRICE='TANGENTE',
+                               REAC_ITER=20,),
+                     CONVERGENCE=_F(RESI_GLOB_RELA=9.9999999999999995E-07,
+                                    ITER_GLOB_MAXI=10),
+                     SOLVEUR=_F(METHODE='LDLT',),);
+
+MESTAT=CALC_CHAMP(reuse=MESTAT,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=MESTAT)
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MESTAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=-1.04458421323E-07,
+                  VALE_REFE=-1.045E-07,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MESTAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO16',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=-1.04458421323E-07,
+                  VALE_REFE=-1.045E-07,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MESTAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO19',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=-1.04458421323E-07,
+                  VALE_REFE=-1.045E-07,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-3,),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MESTAT,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO7',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=-1.04458421323E-07,
+                  VALE_REFE=-1.045E-07,
+                  CRITERE='RELATIF',
+                  PRECISION=1.E-3,),
+          )
+
+FIN();

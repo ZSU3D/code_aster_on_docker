@@ -1,0 +1,314 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'));
+
+mesh=LIRE_MAILLAGE(FORMAT='MED',);
+
+# Heat transfer coefficient with air (W.mm-2.K-1)
+C_echang=DEFI_CONSTANTE(VALE=1.5e-05,);
+
+# Heat transfer coefficient with one face of the cube (W.mm-2.K-1)
+C_echanf=DEFI_CONSTANTE(VALE=1.0,);
+
+# Ambient temperature
+T_ex=DEFI_CONSTANTE(VALE=20.0,);
+
+# Temperature of one face of the cube
+T_im=DEFI_FONCTION(
+                   NOM_PARA='INST',
+                   VALE=(0.0 ,20.0 ,
+                         1.0 ,30.0 ,
+                         2.0 ,50.0 ,
+                         3.0 ,90.0 ,
+                         4.0 ,140.0 ,
+                         5.0 ,240.0 ,
+                         6.0 ,350.0 ,
+                         7.0 ,570.0 ,
+                         8.0 ,800.0 ,
+                         9.0 ,1000.0 ,),
+                   PROL_DROITE='CONSTANT',
+                   PROL_GAUCHE='LINEAIRE',);
+
+# Emissivity
+C_epsi=DEFI_CONSTANTE(VALE=0.75,);
+
+# Stefan–Boltzmann constant (J.mm-2.s-1.K-4)
+C_sigma=DEFI_CONSTANTE(VALE=5.67e-14,);
+
+# Thermic model
+model=AFFE_MODELE(MAILLAGE=mesh,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='THERMIQUE',
+                       MODELISATION='3D',),);
+
+# Boundary condition
+chg_th=AFFE_CHAR_THER_F(MODELE=model,
+                        RAYONNEMENT=_F(GROUP_MA='S_e',
+                                       SIGMA=C_sigma,
+                                       EPSILON=C_epsi,
+                                       TEMP_EXT=T_ex,),
+                        ECHANGE=(_F(GROUP_MA='S_e',
+                                    COEF_H=C_echang,
+                                    TEMP_EXT=T_ex,),
+                                 _F(GROUP_MA='S_f',
+                                    COEF_H=C_echanf,
+                                    TEMP_EXT=T_im,),),);
+
+# Read complete computation to create base
+thnl1 = LIRE_RESU(FORMAT='MED',
+                  MODELE=model,
+                  UNITE=30,
+                  TYPE_RESU='EVOL_THER',
+                  FORMAT_MED=(
+                     _F(NOM_CHAM='TEMP',
+                        NOM_RESU='thnl',),
+                     _F(NOM_CHAM='FLUX_NOEU',
+                        NOM_RESU='thnl',),),
+                  TOUT_ORDRE='OUI',);
+thnl2 = LIRE_RESU(FORMAT='MED',
+                  MODELE=model,
+                  UNITE=31,
+                  TYPE_RESU='EVOL_THER',
+                  FORMAT_MED=(
+                     _F(NOM_CHAM='TEMP',
+                        NOM_RESU='thnl',),
+                     _F(NOM_CHAM='FLUX_NOEU',
+                        NOM_RESU='thnl',),),
+                  TOUT_ORDRE='OUI',);
+
+thnl = CREA_RESU(OPERATION='ASSE',
+                 TYPE_RESU='EVOL_THER',
+                 ASSE=(_F(RESULTAT=thnl1),
+                       _F(RESULTAT=thnl2),
+                      ),
+                )
+
+# Create base (TEMP)
+base_p=DEFI_BASE_REDUITE(RESULTAT = thnl,
+                         MODELE   = model,
+                         INFO     = 2,
+                         NOM_CHAM = 'TEMP',
+                         TOLE_SVD = 1.E-3,);
+
+coorredp=RECU_TABLE(CO=base_p,NOM_TABLE='COOR_REDUIT',);
+
+
+# Create base (FLUX_NOEU)
+base_d=DEFI_BASE_REDUITE(RESULTAT = thnl,
+                         MODELE   = model,
+                         INFO     = 2,
+                         NOM_CHAM = 'FLUX_NOEU',
+                         TOLE_SVD = 1.E-3,);
+
+coorredd=RECU_TABLE(CO=base_d,NOM_TABLE='COOR_REDUIT',);
+
+# Print base (TEMP)
+IMPR_RESU(FORMAT='MED',UNITE=80,RESU=_F(RESULTAT=base_p))
+
+# Print base (FLUX_NOEU)
+IMPR_RESU(FORMAT='MED',UNITE=81,RESU=_F(RESULTAT=base_d))
+
+# Print reduced coordinates (TEMP)
+IMPR_TABLE(TABLE=coorredp,UNITE=6)
+
+# Print reduced coordinates (FLUX_NOEU)
+IMPR_TABLE(TABLE=coorredd,UNITE=6)
+
+# Tests base
+TEST_RESU(RESU=(
+                _F(RESULTAT=base_p,
+                   NUME_ORDRE= 1,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N27',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=(-0.140634433078,0.140634433078),
+                   ),
+                _F(RESULTAT=base_p,
+                   NUME_ORDRE= 2,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N27',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=(-0.188084836492,0.188084836492),
+                   ),
+                _F(RESULTAT=base_p,
+                   NUME_ORDRE= 3,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N27',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=(0.0851156981709,-0.0851156981709),
+                   ),
+                ),
+          );
+
+TEST_RESU(RESU=(
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 1,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=(-0.000131913642177,0.000131913642177),
+                   ),
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 1,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=(-0.000264685470879,0.000264685470879),
+                   ),
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 2,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=(0.00210320104369,-0.00210320104369),
+                   ),
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 2,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=(0.00422456825203,-0.00422456825203),
+                   ),
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 3,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=(0.00540174775494,-0.00540174775494),
+                   ),
+                _F(RESULTAT=base_d,
+                   NUME_ORDRE= 3,
+                   NOM_CHAM='FLUX_NOEU',
+                   NOEUD='N27',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=(0.010855124341,-0.010855124341),
+                   ),
+                ),
+          );
+
+# Tests reduced coordinates
+TEST_TABLE(
+           VALE_CALC=(7673.69355304,-7673.69355304),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredp,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 1,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 11,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(879.130655319,-879.130655319),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredp,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 1,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 5,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(0.135906406893,-0.135906406893),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredp,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 3,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 5,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(0.0564625439087,-0.0564625439087),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredp,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 3,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 11,),
+                       ),
+           )
+#
+
+TEST_TABLE(
+           VALE_CALC=(5.01049807634,-5.01049807634),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredd,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 1,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 11,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(2.3667100854,-2.3667100854),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredd,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 1,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 5,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(0.0112726127965,-0.0112726127965),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredd,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 4,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 5,),
+                       ),
+           )
+TEST_TABLE(
+           VALE_CALC=(0.00632713385844,-0.00632713385844),
+           NOM_PARA  = 'COOR_REDUIT',
+           TABLE     = coorredd,
+           FILTRE    = (
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_MODE',
+                              VALE_I    = 4,),
+                           _F(CRIT_COMP = 'EQ',
+                              NOM_PARA  = 'NUME_SNAP',
+                              VALE_I    = 11,),
+                       ),
+           )
+
+FIN();

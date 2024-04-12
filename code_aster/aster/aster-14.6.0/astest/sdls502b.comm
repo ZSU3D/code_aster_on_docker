@@ -1,0 +1,176 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+# DATE   : 19/05/2000
+# AUTEUR : F. LEBOUVIER (DELTACAD )
+#  - CALCUL EN ANALYSE MODALE DYNAMIQUE D'UNE PLAQUE CARREE EPAISSE
+#    SIMPLEMENT SUPPORTEE
+#  - MODELISATION AVEC DES ELEMENTS DST(QUAD4)
+#---------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+
+PLAQ_MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI',),FORMAT='MED',);
+#
+
+MODEL=AFFE_MODELE(MAILLAGE=PLAQ_MA,
+                  AFFE=_F(TOUT='OUI',
+                          PHENOMENE='MECANIQUE',
+                          MODELISATION='DST',),);
+
+PLAQ_MA=DEFI_GROUP(reuse =PLAQ_MA,
+                   MAILLAGE=PLAQ_MA,
+                   CREA_GROUP_NO=_F(GROUP_MA='BORDS',
+                                    NOM='BORDS',),);
+#
+#---------------------------------------------------------------------
+#                     CARACTERISTIQUES ELEMENTAIRES
+#---------------------------------------------------------------------
+
+CARA_ELE=AFFE_CARA_ELEM(MODELE=MODEL,
+                        COQUE=_F(GROUP_MA='TOUT_ELT',
+                                 EPAIS=1.0,
+                                 ANGL_REP=(15.5,0.0,),),);
+#
+#---------------------------------------------------------------------
+#                     CARACTERISTIQUES MATERIAUX
+#---------------------------------------------------------------------
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=200000000000.0,
+                            NU=0.3,
+                            RHO=8000.0,),);
+#
+
+MAT=AFFE_MATERIAU(MAILLAGE=PLAQ_MA,
+                  AFFE=_F(TOUT='OUI',
+                          MATER=ACIER,),);
+#
+#---------------------------------------------------------------------
+#                     CHARGEMENTS
+#---------------------------------------------------------------------
+
+CHAR0=AFFE_CHAR_MECA(MODELE=MODEL,
+                     DDL_IMPO=_F(GROUP_NO='BORDS',
+                                 DZ=0.0,),);
+#
+#---------------------------------------------------------------------
+#                     RESOLUTION
+#---------------------------------------------------------------------
+
+M_EL_RIG=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                        MODELE=MODEL,
+                        CHAM_MATER=MAT,
+                        CARA_ELEM=CARA_ELE,
+                        CHARGE=CHAR0,);
+#
+
+M_EL_MAS=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                        MODELE=MODEL,
+                        CHAM_MATER=MAT,
+                        CARA_ELEM=CARA_ELE,
+                        CHARGE=CHAR0,);
+#
+
+NU=NUME_DDL(MATR_RIGI=M_EL_RIG,);
+#
+
+M_AS_RIG=ASSE_MATRICE(MATR_ELEM=M_EL_RIG,
+                      NUME_DDL=NU,);
+#
+
+M_AS_MAS=ASSE_MATRICE(MATR_ELEM=M_EL_MAS,
+                      NUME_DDL=NU,);
+#
+
+MODES=CALC_MODES(MATR_RIGI=M_AS_RIG,
+                 OPTION='BANDE',
+                 CALC_FREQ=_F(FREQ=(10.0,350.0,),
+                              ),
+                 MATR_MASS=M_AS_MAS,
+                 SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                  ),
+                 )
+
+#
+#---------------------------------------------------------------------
+#                     VERIFICATION DES RESULTATS
+#---------------------------------------------------------------------
+
+TEST_RESU(RESU=(_F(PARA='FREQ',
+                   NUME_MODE=4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=44.639869493,
+                   VALE_REFE=44.762,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,),
+                _F(PARA='FREQ',
+                   NUME_MODE=5,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=108.036851158,
+                   VALE_REFE=110.52,
+                   CRITERE='RELATIF',
+                   PRECISION=0.029999999999999999,),
+                _F(PARA='FREQ',
+                   NUME_MODE=6,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=108.264115686,
+                   VALE_REFE=110.52,
+                   CRITERE='RELATIF',
+                   PRECISION=0.029999999999999999,),
+                _F(PARA='FREQ',
+                   NUME_MODE=7,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=162.856207754,
+                   VALE_REFE=169.08000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=0.040000000000000001,),
+                _F(PARA='FREQ',
+                   NUME_MODE=8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=195.699199883,
+                   VALE_REFE=193.93000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                _F(PARA='FREQ',
+                   NUME_MODE=11,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=208.887466785,
+                   VALE_REFE=206.63999999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.014999999999999999,),
+                _F(PARA='FREQ',
+                   NUME_MODE=12,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=208.887466785,
+                   VALE_REFE=206.63999999999999,
+                   CRITERE='RELATIF',
+                   PRECISION=0.014999999999999999,),
+                ),
+          )
+
+FIN();

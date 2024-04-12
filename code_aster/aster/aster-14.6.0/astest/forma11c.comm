@@ -1,0 +1,194 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: emmanuel.boyere at edf.fr
+#-------------------------------------------------------------------
+#                 CORRIGE TP ANALYSE MODAL N3 
+#                            CALC_MODES MULTI-BANDES
+
+#
+#-------------------------------------------------------------------
+#                       CALCUL ASTER
+#-------------------------------------------------------------------
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+# LECTURE MAILLAGE ET AFFECTATION MATERIAU/MODELE
+MAYA=LIRE_MAILLAGE(FORMAT='MED',);
+STRUC=AFFE_MODELE(MAILLAGE=MAYA,
+                  AFFE=_F(GROUP_MA='TOUT',
+                          PHENOMENE='MECANIQUE',
+                          MODELISATION='DKT',),);
+ACIER=DEFI_MATERIAU(ELAS=_F(E=2.7600000000E10,
+                            NU=0.16600000000000001,
+                            RHO=2244.0,),);
+MATER=AFFE_MATERIAU(MAILLAGE=MAYA,
+                    AFFE=_F(GROUP_MA='TOUT',
+                            MATER=ACIER,),);
+CARA=AFFE_CARA_ELEM(MODELE=STRUC,
+                    COQUE=_F(GROUP_MA='TOUT',
+                             EPAIS=0.30499999999999999,),);
+
+# AFFECTATION CL
+FIXA=AFFE_CHAR_MECA(MODELE=STRUC,
+                    DDL_IMPO=_F(GROUP_NO='FIXA',
+                                DX=0.0,
+                                DY=0.0,
+                                DZ=0.0,
+                                DRX=0.0,
+                                DRY=0.0,
+                                DRZ=0.0,),);
+
+# CALCULS DES MATRICES DE MASSE ET DE RIGIDITE
+K_ELEM=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                      MODELE=STRUC,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA,
+                      CHARGE=FIXA,);
+M_ELEM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=STRUC,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA,
+                      CHARGE=FIXA,);
+NUMERO=NUME_DDL(MATR_RIGI=K_ELEM,);
+K_ASSE=ASSE_MATRICE(MATR_ELEM=K_ELEM,
+                    NUME_DDL=NUMERO,);
+M_ASSE=ASSE_MATRICE(MATR_ELEM=M_ELEM,
+                    NUME_DDL=NUMERO,);
+
+#--------------------------------------------------------------------
+# ANALYSE MODALE
+# QUESTION PRELIMINAIRE: PESER LE MODELE ET EVALUER LE NBRE DE MODES
+
+TABL_MAS=POST_ELEM(MODELE=STRUC,
+                   CHAM_MATER=MATER,
+                   CARA_ELEM=CARA,
+                   MASS_INER=_F(TOUT='OUI',),);
+
+IMPR_TABLE(TABLE=TABL_MAS,);
+
+NB_MODES=INFO_MODE(MATR_RIGI=K_ASSE,
+                   MATR_MASS=M_ASSE,
+                   FREQ=(0.,4.0,));
+
+
+                          
+# TEST_TABLE UNIQUEMENT POUR FAIRE CAS TEST
+TEST_TABLE(
+           VALE_CALC_I=86,
+           NOM_PARA='NB_MODE',
+           TABLE=NB_MODES,
+           )
+
+# FIN DE LA QUESTION 0.
+#FIN();
+
+# QUESTION 1: CALCUL BANDE DES MODES PAR SORENSEN
+
+MODES=CALC_MODES(MATR_RIGI=K_ASSE,
+                 OPTION='BANDE',
+                 CALC_FREQ=_F(FREQ=(0.0,4.0,),
+                              ),
+                 MATR_MASS=M_ASSE,
+                 )
+
+
+# TEST_RESU UNIQUEMENT POUR FAIRE CAS TEST
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODES,
+                  VALE_CALC=1.1385562506602,
+                  ),
+          )
+
+# ON LES NORMALISE AVEC LA NORME INFINIE SUR TOUTES LES COMPOSANTES
+# DES NOEUDS PHYSIQUES TOUT EN REQUIERANT LE CALCUL DES MASSES
+# EFFECTIVES UNITAIRES.
+MODES=NORM_MODE(reuse =MODES,
+                MODE=MODES,
+                NORME='TRAN_ROTA',);
+
+# ON TRIE LES MODES.
+MODEST=EXTR_MODE(FILTRE_MODE=_F(MODE=MODES,
+                                CRIT_EXTR='MASS_EFFE_UN',
+                                SEUIL=0.001,),
+                 IMPRESSION=_F(CUMUL='OUI',),);
+
+# IMPRESSION FORMAT MED DES MODES PROPRES
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(
+                  MAILLAGE=MAYA,
+                  RESULTAT=MODEST,),);
+# AFFICHAGE GIBI INTERACTIF VIA PYTHON
+#os.system('cp %spost.dcas .' %directory)
+#os.system('/logiciels/aster/outils/gibi2000.x post.dcas')   
+
+# FIN DE LA QUESTION 1.
+#FIN();
+
+# QUESTION 2: ON REALISE LES TROIS OPERATIONS EN UNE 
+# (EN COUPANT EN 2 INTERVALLES) VIA CALC_MODES
+
+
+MODES2=CALC_MODES( MATR_RIGI=K_ASSE,
+                   MATR_MASS=M_ASSE,
+                   OPTION='BANDE',
+                   STOP_BANDE_VIDE='OUI',
+                   CALC_FREQ=_F( FREQ=(0., 2., 4.) ),
+                   NORM_MODE=_F( NORME='TRAN_ROTA' ),
+                   FILTRE_MODE=_F (CRIT_EXTR='MASS_EFFE_UN' ),
+                   IMPRESSION=_F( CUMUL='OUI' ),
+                  );
+
+
+# FIN DE LA QUESTION 2.
+#FIN();
+
+# QUESTION 3: ON REALISE LES TROIS OPERATIONS EN UNE
+# (EN COUPANT EN 4 INTERVALLES) VIA CALC_MODES
+
+
+MODES4=CALC_MODES( MATR_RIGI=K_ASSE,
+                   MATR_MASS=M_ASSE,
+                   OPTION='BANDE',
+                   SOLVEUR=_F( METHODE='MULT_FRONT' ),
+                   CALC_FREQ=_F( FREQ=(0., 1., 2., 3., 4.) ),
+                   NORM_MODE=_F( NORME='TRAN_ROTA' ),
+                   FILTRE_MODE=_F( CRIT_EXTR='MASS_EFFE_UN' ),
+                   IMPRESSION=_F( CUMUL='OUI' ),
+                  );
+
+
+# FIN DE LA QUESTION 3.
+#FIN();
+
+# QUESTION 4: IDEM VIA LANCZOS
+
+MODEL4=CALC_MODES( MATR_RIGI=K_ASSE,
+                   MATR_MASS=M_ASSE,
+                   OPTION='BANDE',
+                   CALC_FREQ=_F( FREQ=(0., 1., 2., 3., 4.) ),
+                   SOLVEUR_MODAL=_F( METHODE='TRI_DIAG',
+                                     DIM_SOUS_ESPACE = 180 ),
+                   VERI_MODE=_F( SEUIL=1e-05 ),
+                   NORM_MODE=_F( NORME='TRAN_ROTA' ),
+                   FILTRE_MODE=_F( CRIT_EXTR='MASS_EFFE_UN' ),
+                   IMPRESSION=_F( CUMUL='OUI' ),
+                  );
+
+FIN();

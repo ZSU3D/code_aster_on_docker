@@ -1,0 +1,367 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MO=AFFE_MODELE(    MAILLAGE=MA,
+                   
+                   AFFE=_F(  TOUT = 'OUI',
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = 'AXIS')
+                       )
+
+  
+ACIER=DEFI_MATERIAU(
+                   ELAS=_F(
+                   E = 200000.,
+                   NU = 0.3,),
+                   ECRO_LINE=_F(D_SIGM_EPSI=2000,
+                                SY=1000,)
+             )
+
+L_REEL=DEFI_LIST_REEL(
+              DEBUT=0.0,INTERVALLE=(
+                                   _F(  JUSQU_A = 2.00, NOMBRE = 2),)
+             )
+
+
+L_INST=DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST=L_REEL),
+                      ECHEC=_F(EVENEMENT='ERREUR',
+                               ACTION='DECOUPE',),)
+
+F_CHAR=DEFI_FONCTION(
+                NOM_PARA='INST',
+                PROL_DROITE='CONSTANT',
+                    VALE=(
+                          0.,   0.,
+                          2.,  290,
+                          )
+                  )
+
+CHR_LIAI=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+                                  _F(  NOEUD = 'NO1',  DY = 0.),
+                                  _F(  NOEUD = 'NO2',  DY = 0.))
+                          )
+
+CHR_TRAC=AFFE_CHAR_MECA(  MODELE=MO,
+                          FACE_IMPO=_F(  MAILLE = 'MA2',  DY = 1.)
+                          )
+
+CHP_MATL=AFFE_MATERIAU(   MAILLAGE=MA,
+                          AFFE=_F(  TOUT = 'OUI',
+                                    MATER = ACIER,),
+                       )
+
+####################################################
+#CALCUL GDEF_LOG à toutes iterations
+####################################################
+LOG_T=STAT_NON_LINE(
+                  MODELE=MO,
+                  CHAM_MATER=CHP_MATL,
+                  EXCIT=(_F(CHARGE = CHR_LIAI),
+                        _F(CHARGE = CHR_TRAC,
+                           FONC_MULT = F_CHAR,)),
+                  COMPORTEMENT=_F(RELATION = 'VMIS_ISOT_LINE',
+                               DEFORMATION = 'GDEF_LOG'),
+                  INCREMENT=_F(LIST_INST = L_INST),
+                  NEWTON=_F(MATRICE = 'TANGENTE',
+                            REAC_ITER = 1),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 50),
+                  RECH_LINEAIRE=_F(ITER_LINE_MAXI = 0)
+              )
+
+ENELOG=POST_ELEM(ENER_ELAS=_F(TOUT='OUI'),
+                 RESULTAT=LOG_T,
+                 );
+####################################################
+#Test_resu au dernier instant et calcul ENER_ELAS
+####################################################
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG_T,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO3',
+                   NOM_CMP='DY',
+                   VALE_CALC=290.000000000,
+                   VALE_REFE=290.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG_T,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.49479546E+03,
+                   VALE_REFE=1495.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,
+                   MAILLE='MA1',),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG_T,
+                   NOM_CHAM='VARI_ELGA',
+                   NOM_CMP='V1',
+                   VALE_CALC=0.247145796,
+                   VALE_REFE=0.2475,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.014999999999999999,
+                   MAILLE='MA1',),
+                ),
+          )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC= 2.80981728E+09,
+           VALE_REFE=2.810000000E9,
+           NOM_PARA='TOTALE',
+           TABLE=ENELOG,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+LOG_T = CALC_CHAMP(reuse=LOG_T,RESULTAT=LOG_T,ENERGIE=('ENEL_ELGA'),)
+
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG_T,
+                   NOM_CHAM='ENEL_ELGA',
+                   MAILLE='MA1',POINT=1,
+                   NOM_CMP='TOTALE',
+                   VALE_CALC=2.80981728*2,
+                   VALE_REFE=2.81*2,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-2,),))
+
+
+###################################################
+#CALCUL GDEF_LOG à la premiere iteration
+###################################################
+
+LOG1=STAT_NON_LINE(
+                  MODELE=MO,
+                  CHAM_MATER=CHP_MATL,
+                  EXCIT=(_F(CHARGE = CHR_LIAI),
+                        _F(CHARGE = CHR_TRAC,
+                           FONC_MULT = F_CHAR,)),
+                  COMPORTEMENT=_F(RELATION = 'VMIS_ISOT_LINE',
+                               DEFORMATION = 'GDEF_LOG'),
+                  INCREMENT=_F(LIST_INST = L_INST,
+                               INST_INIT=0.,
+                               INST_FIN=1.0),
+                  NEWTON=_F(MATRICE = 'TANGENTE',
+                            REAC_ITER = 1),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 50),
+                  RECH_LINEAIRE=_F(ITER_LINE_MAXI = 0)
+              )
+
+
+###################################################
+#ON veut VARI_ELGA et DEPL à la premiere iteration pour faire un ETAT_INIT
+###################################################
+
+VAR_LOG1=CREA_CHAMP(INFO=2,
+                TYPE_CHAM='ELGA_VARI_R',
+                OPERATION='EXTR',
+                RESULTAT=LOG1,
+                NOM_CHAM='VARI_ELGA',
+                INST=1.0,);
+
+
+DEP_LOG1=CREA_CHAMP(INFO=2,
+                TYPE_CHAM='NOEU_DEPL_R',
+                OPERATION='EXTR',
+                RESULTAT=LOG1,
+                NOM_CHAM='DEPL',
+                INST=1.0,);
+
+
+###################################################
+#CALCUL GDEF_LOG avec ETAT_INIT
+###################################################
+LOG2=STAT_NON_LINE(
+                  MODELE=MO,
+                  CHAM_MATER=CHP_MATL,
+                  EXCIT=(_F(CHARGE = CHR_LIAI),
+                        _F(CHARGE = CHR_TRAC,
+                           FONC_MULT = F_CHAR,)),
+                  COMPORTEMENT=_F(RELATION = 'VMIS_ISOT_LINE',
+                               DEFORMATION = 'GDEF_LOG'),
+                  INCREMENT=_F(LIST_INST = L_INST,
+                               INST_INIT=1.,
+                               INST_FIN=2.0),
+                  NEWTON=_F(MATRICE = 'TANGENTE',
+                            REAC_ITER = 1),
+                  ETAT_INIT=_F(VARI=VAR_LOG1,
+                               DEPL=DEP_LOG1),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 50),
+                  RECH_LINEAIRE=_F(ITER_LINE_MAXI = 0)
+              )
+
+
+ENELOG2=POST_ELEM(ENER_ELAS=_F(TOUT='OUI'),
+                 RESULTAT=LOG2,
+                 );
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG2,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO3',
+                   NOM_CMP='DY',
+                   VALE_CALC=290.000000000,
+                   VALE_REFE=290.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG2,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.49479546E+03,
+                   VALE_REFE=1495.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,
+                   MAILLE='MA1',),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG2,
+                   NOM_CHAM='VARI_ELGA',
+                   NOM_CMP='V1',
+                   VALE_CALC=0.247145796,
+                   VALE_REFE=0.2475,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.014999999999999999,
+                   MAILLE='MA1',),
+                ),
+          )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC= 2.80981728E+09,
+           VALE_REFE=2.810000000E9,
+           NOM_PARA='TOTALE',
+           TABLE=ENELOG2,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+LOG2 = CALC_CHAMP(reuse=LOG2,RESULTAT=LOG2,ENERGIE=('ENEL_ELGA'),)
+
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG2,
+                   NOM_CHAM='ENEL_ELGA',
+                   MAILLE='MA1',POINT=1,
+                   NOM_CMP='TOTALE',
+                   VALE_CALC=2.80981728*2,
+                   VALE_REFE=2.81*2,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-2,),))
+
+
+
+###################################################
+#CALCUL GDEF_LOG derniere iteration avec reuse
+###################################################
+
+LOG1=STAT_NON_LINE(reuse=LOG1,
+                  MODELE=MO,
+                  CHAM_MATER=CHP_MATL,
+                  EXCIT=(_F(CHARGE = CHR_LIAI),
+                        _F(CHARGE = CHR_TRAC,
+                           FONC_MULT = F_CHAR,)),
+                  COMPORTEMENT=_F(RELATION = 'VMIS_ISOT_LINE',
+                               DEFORMATION = 'GDEF_LOG'),
+                  INCREMENT=_F(LIST_INST = L_INST,),
+                  NEWTON=_F(MATRICE = 'TANGENTE',
+                            REAC_ITER = 1),
+                            ETAT_INIT=_F(EVOL_NOLI=LOG1,),
+                  CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-6,
+                                 ITER_GLOB_MAXI = 50),
+                  RECH_LINEAIRE=_F(ITER_LINE_MAXI = 0)
+              )
+
+
+ENELOG1=POST_ELEM(ENER_ELAS=_F(TOUT='OUI'),
+                 RESULTAT=LOG1,
+                 );
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG1,
+                   NOM_CHAM='DEPL',
+                   NOEUD='NO3',
+                   NOM_CMP='DY',
+                   VALE_CALC=290.000000000,
+                   VALE_REFE=290.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG1,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC= 1.49479546E+03,
+                   VALE_REFE=1495.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,
+                   MAILLE='MA1',),
+                _F(INST=2.0,
+                   POINT=1,
+                   RESULTAT=LOG1,
+                   NOM_CHAM='VARI_ELGA',
+                   NOM_CMP='V1',
+                   VALE_CALC=0.247145796,
+                   VALE_REFE=0.2475,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.014999999999999999,
+                   MAILLE='MA1',),
+                ),
+          )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC= 2.80981728E+09,
+           VALE_REFE=2.810000000E9,
+           NOM_PARA='TOTALE',
+           TABLE=ENELOG1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+LOG1 = CALC_CHAMP(reuse=LOG1,RESULTAT=LOG1,ENERGIE=('ENEL_ELGA'),)
+
+
+TEST_RESU(RESU=(_F(INST=2.0,
+                   RESULTAT=LOG1,
+                   NOM_CHAM='ENEL_ELGA',
+                   MAILLE='MA1',POINT=1,
+                   NOM_CMP='TOTALE',
+                   VALE_CALC=2.80981728*2,
+                   VALE_REFE=2.81*2,
+                   REFERENCE='ANALYTIQUE',
+                   PRECISION=1.E-2,),))
+
+
+FIN(  )
+#

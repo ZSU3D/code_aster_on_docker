@@ -1,0 +1,199 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+
+#---------------------------------------------------------------------
+# -- MAILLAGE LINEAIRE , MODELISATION D_PLAN
+#---------------------------------------------------------------------
+
+MA_INIT = LIRE_MAILLAGE(FORMAT='GMSH',
+                        UNITE=19,
+                        )
+
+MA_INIT=DEFI_GROUP(reuse=MA_INIT,  MAILLAGE=MA_INIT,
+                    CREA_GROUP_MA=_F(  NOM = 'ALL', TOUT = 'OUI'))
+
+MA=CREA_MAILLAGE(MAILLAGE=MA_INIT,LINE_QUAD=_F(TOUT='OUI'))
+
+ACIER=DEFI_MATERIAU(   ELAS=_F( E = 1.E+11,
+                             NU = 0.3 ,RHO=7800.,))
+
+CHMAT=AFFE_MATERIAU(   MAILLAGE=MA,
+                             AFFE=_F( TOUT = 'OUI', MATER = ACIER),)
+
+MO=AFFE_MODELE(    MAILLAGE=MA,
+                         AFFE=_F(  TOUT='OUI',
+                                   PHENOMENE = 'MECANIQUE',
+                                   MODELISATION = 'D_PLAN'),
+               )
+#
+#--CREATION DE LA SD RESULTAT DE TYPE EVOL_NOLI
+#
+VITE_1s=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_DEPL_R',
+                    MAILLAGE=MA,
+                    AFFE=_F(  TOUT = 'OUI',
+                    NOM_CMP = ('DX','DY'),
+                    VALE = (  1.5,    0.,))
+                      )
+VITE_2s=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_DEPL_R',
+                    MAILLAGE=MA,
+                    AFFE=_F(  TOUT = 'OUI',
+                    NOM_CMP = ('DX','DY'),
+                    VALE = (  1.5,    2.5,))
+                      )
+VITE=CREA_RESU(OPERATION='AFFE',
+                    TYPE_RESU='EVOL_NOLI',
+                    NOM_CHAM='VITE',
+                    AFFE=_F(CHAM_GD=VITE_1s,INST=1.0,),);
+VITE=CREA_RESU(reuse=VITE,
+               RESULTAT=VITE,
+               OPERATION='AFFE',
+               TYPE_RESU='EVOL_NOLI',
+               NOM_CHAM='VITE',
+               AFFE=_F(CHAM_GD=VITE_2s,INST=2.0,),);
+
+# CALCUL DE LA MASSE  ---------------------------------
+#
+MASSE=POST_ELEM(  MODELE=MO,
+                        CHAM_MATER=CHMAT,
+                        MASS_INER=(_F(  GROUP_MA = ( 'GM100','GM200', 'ALL' ),),
+                                    _F(TOUT = 'OUI') ))
+
+#IMPR_TABLE(TABLE=MASSE, UNITE=6)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 2.04750000E+03,
+           VALE_REFE=2047.5,
+           NOM_PARA='MASSE',
+           TABLE=MASSE,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='MA',),
+           )
+
+# TEST_TABLE(REFERENCE='ANALYTIQUE',
+#            PRECISION=1.E-4,
+#            VALE_CALC= 2.04750000E+03,
+#            VALE_REFE=2047.5,
+#            NOM_PARA='MASSE',
+#            TABLE=MASSE,
+#            FILTRE=_F(NOM_PARA='LIEU',
+#                      VALE_K='UNION_GROUP_MA',),
+#            )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 2.04750000E+03,
+           VALE_REFE=2047.5,
+           NOM_PARA='MASSE',
+           TABLE=MASSE,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ALL',),
+           )
+
+#
+# CALCUL DE L'ENERGIE CINETIQUE -----------------------
+#
+ENER=POST_ELEM(   MODELE=MO,   CHAM_MATER=CHMAT,
+                 RESULTAT=VITE,ENER_CIN=(_F(
+                                           GROUP_MA=('GM100','GM200'),),
+                                         _F(TOUT='OUI') ))
+IMPR_TABLE(TABLE=ENER)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 2.30343750E+03,
+           VALE_REFE=2303.4400000000001,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='MA',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC=921.375000000,
+           VALE_REFE=921.375,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='GM100',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 1.38206250E+03,
+           VALE_REFE=1382.0599999999999,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='GM200',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=1,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 8.70187500E+03,
+           VALE_REFE=8701.8700000000008,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='MA',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 3.48075000E+03,
+           VALE_REFE=3480.75,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='GM100',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   ),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-4,
+           VALE_CALC= 5.22112500E+03,
+           VALE_REFE=5221.125,
+           NOM_PARA='TOTALE',
+           TABLE=ENER,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                      VALE_K='GM200',),
+                   _F(NOM_PARA='NUME_ORDRE',
+                      VALE_I=2,),
+                   ),
+           )
+
+FIN( )
+#

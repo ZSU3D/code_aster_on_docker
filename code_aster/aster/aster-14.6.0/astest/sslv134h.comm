@@ -1,0 +1,260 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# METHODE X-FEM (FISSURE NON MAILLEE)
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI')
+      )
+
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(GROUP_MA='PEAUEXT',),
+                             _F(GROUP_MA='PEAUINT',),
+                             _F(GROUP_MA='EXTUBE_S',),
+                             _F(GROUP_MA='EXTUBE_I',),
+                             _F(GROUP_MA='BORD1',),
+                             _F(GROUP_MA='BORD2',),
+                            ),
+               )
+
+
+MAT=DEFI_MATERIAU( ELAS=_F( E = 2.E11,  NU = 0.3, RHO = 0.,
+                            ALPHA = 0.))
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MA,
+                     AFFE=_F(#GROUP_MA=('TUBE','EXTUBE_S','EXTUBE_I',),
+                             TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D'))
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=_F(GROUP_MA=('EXTUBE_S','EXTUBE_I')))
+
+# PARAMETRES DE LA FISSURE
+x0 = 8.18
+y0 = 0.
+z0 = 2.05
+ray = 2.
+
+# avec l'orientation automatique du fond de fissure
+# on tourne dans l'autre sans, il faudra changer les DTAN_ORIG....
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA, #NB_COUCHES=5,
+                    DEFI_FISS=_F(
+                                 FORM_FISS      = 'ELLIPSE',
+                                 DEMI_GRAND_AXE = ray,
+                                 DEMI_PETIT_AXE = ray,
+                                 CENTRE         = (x0, y0, z0),
+                                 VECT_X         = (0. , 1. , 0. ),
+                                 VECT_Y         = (1., 0. , 0. ),
+                                 ),
+                    )
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=FISS)
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                       MODELE=MODELEK,
+                       AFFE=_F(TOUT = 'OUI',
+                               MATER=MAT)
+                             )
+CHAR1=AFFE_CHAR_MECA(MODELE=MODELEK,
+                     DDL_IMPO=(
+                               _F(GROUP_NO='PEAUEXT',DX=0.,H1X=0.),
+                               _F(NOEUD='N99',DZ=0,),
+                               _F(GROUP_NO='BORD1',DY=0.,H1Y=0.),
+                               ))
+
+CHAR2=AFFE_CHAR_MECA(MODELE=MODELEK,
+                     PRES_REP=(_F(GROUP_MA='EXTUBE_S',
+                                 PRES=-1.E6),
+                               _F(GROUP_MA='EXTUBE_I',
+                                 PRES=-1.E6),
+                               )
+                     )
+
+UTOT1=MECA_STATIQUE(MODELE=MODELEK,
+                    CHAM_MATER=CHAMPMAT,
+                    EXCIT=(_F(CHARGE=CHAR1),
+                           _F(CHARGE=CHAR2),),)
+
+
+#----------------------------------------------------------------------
+#                       POST-TRAITEMENT DE K1
+#----------------------------------------------------------------------
+
+# LISSAGE LEGENDRE
+SIFTH1=CALC_G( RESULTAT=UTOT1,
+               OPTION='CALC_K_G',
+               THETA = _F(FISSURE=FISS))
+
+IMPR_TABLE(TABLE=SIFTH1,);
+
+# LISSAGE LEGENDRE + REPARTITION UNIFORME DE 24 POINTS
+SIFTH2=CALC_G(    RESULTAT=UTOT1,
+                  OPTION='CALC_K_G',
+                  THETA = _F(FISSURE=FISS,
+                             NB_POINT_FOND = 24))
+IMPR_TABLE(TABLE=SIFTH2)
+
+# LISSAGE LAGRANGE
+SIFTH3=CALC_G(  RESULTAT=UTOT1,
+                OPTION='CALC_K_G',
+                LISSAGE = _F(LISSAGE_THETA='LAGRANGE',
+                             LISSAGE_G='LAGRANGE',),
+                THETA = _F(FISSURE=FISS))
+IMPR_TABLE(TABLE=SIFTH3)
+
+# LISSAGE LAGRANGE + REPARTITION UNIFORME DE 24 POINTS
+SIFTH4=CALC_G(  RESULTAT=UTOT1,
+                OPTION='CALC_K_G',
+                LISSAGE = _F(LISSAGE_THETA='LAGRANGE',
+                             LISSAGE_G='LAGRANGE',),
+                THETA = _F(FISSURE=FISS,
+                           NB_POINT_FOND = 24))
+IMPR_TABLE(TABLE=SIFTH4)
+
+# LISSAGE LAGRANGE + REPARTITION UNIFORME DE 10 POINTS
+SIFTH5=CALC_G(  RESULTAT=UTOT1,
+                OPTION='CALC_K_G',
+                LISSAGE = _F(LISSAGE_THETA='LAGRANGE',
+                             LISSAGE_G='LAGRANGE',),
+                THETA = _F(FISSURE=FISS,
+                           NB_POINT_FOND = 10))
+IMPR_TABLE(TABLE=SIFTH5)
+
+
+
+SIFK1=POST_K1_K2_K3(FISSURE=FISS,
+                    RESULTAT=UTOT1,
+                    )
+
+IMPR_TABLE(TABLE=SIFK1)
+
+
+SIFK2=POST_K1_K2_K3(FISSURE=FISS,
+                    NB_POINT_FOND = 10,
+                    INFO=1,
+                    RESULTAT=UTOT1,
+                    )
+
+IMPR_TABLE(TABLE=SIFK2)
+
+
+#----------------------------------------------------------------------
+#              TEST DE K1 EN 1 POINT
+#----------------------------------------------------------------------
+
+# TEST DU LISSAGE LEGENDRE
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.18,
+           VALE_CALC=1861987.0337852675,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=SIFTH1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=1576324.3661506702,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=SIFTH1,)
+
+# TEST DU LISSAGE LEGENDRE + REPARTITION UNIFORME DE 24 POINTS
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.25,
+           VALE_CALC=1968970.5374626103,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=SIFTH2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.040000000000000001,
+           VALE_CALC=1539814.179681091,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=SIFTH2,)
+
+# TEST DU LISSAGE LAGRANGE : OSCILLATIONS
+TEST_TABLE(
+           VALE_CALC=2785650.748650307,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=SIFTH3,
+           )
+
+# TEST DU LISSAGE LAGRANGE + REPARTITION UNIFORME DE 24 POINTS : OSCILLATIONS MOINDRES
+TEST_TABLE(
+           VALE_CALC=2124490.202180567,
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=SIFTH4,
+           )
+
+# TEST DU LISSAGE LAGRANGE + REPARTITION UNIFORME DE 10 POINTS : PLUS D'OSCILLATIONS
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.070000000000000007,
+           VALE_CALC=1702463.9108941406,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TABLE=SIFTH5,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=5,),
+           )
+
+# TEST DE POST_K1_K2_K3
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02000000000000000,
+           VALE_CALC=1595486.1176612077,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TABLE=SIFK1,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02000000000000000,
+           VALE_CALC=1605635.5185308044,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TABLE=SIFK1,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=23,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=1594545.9645840756,
+           VALE_REFE=1.595000E6,
+           NOM_PARA='K1',
+           TABLE=SIFK2,
+           FILTRE=_F(NOM_PARA='NUM_PT',
+                     VALE_I=5,),
+           )
+
+FIN()

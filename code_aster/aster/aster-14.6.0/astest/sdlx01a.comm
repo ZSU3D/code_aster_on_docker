@@ -1,0 +1,217 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: SDLX01A
+# SDLX01/A                 COMMANDES                             5/03/91
+# FLEXION D'UN PORTIQUE SYMETRIQUE
+# SECT RECT: 4.8*29MM -- HAUTEUR: 0.81M  LARGEUR: 0.60M
+# 2D -- BASES ENCASTREES                            REF: SFM.VPCS SDLX01
+# MODELISATION POU_D_T: 6+9+10+9+6 +10=50 SEG2
+# POINTS  A=N100  B=N600  C=N200  D=N500  E=N300  F=N400
+#=======================================================================
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                  AFFE=_F(  TOUT = 'OUI',     PHENOMENE = 'MECANIQUE',
+                         MODELISATION = 'POU_D_T') )
+
+CARELEM=AFFE_CARA_ELEM(   MODELE=MO,
+                  POUTRE=_F(
+       GROUP_MA = 'TOUT',
+       SECTION = 'RECTANGLE',
+                           CARA = (  'HY',    'HZ', ),
+                           VALE = ( 0.0048,  0.029, )) )
+
+MAT=DEFI_MATERIAU( ELAS=_F(  E = 2.1E+11,  NU = 0.3,  RHO = 7800.) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',  MATER = MAT) )
+
+#----------------------------------------------------------------------
+#    PB PLAN --- POINTS A ET B ENCASTRES
+
+CH=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+          _F(  TOUT = 'OUI',     DZ = 0., DRX = 0., DRY = 0.),
+                   _F(  GROUP_NO = 'AB',   DX = 0., DY = 0.,  DRZ = 0.)) )
+
+#--------------------------------------------------------------------
+
+MELR=CALC_MATR_ELEM(  MODELE=MO,
+                        CHARGE=CH,
+                        CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,
+                       OPTION='RIGI_MECA'  )
+
+MELM=CALC_MATR_ELEM(  MODELE=MO,
+                        CHARGE=CH,
+                        CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,
+                       OPTION='MASS_MECA'  )
+
+#--------------------------------------------------------------------
+
+NUM=NUME_DDL(  MATR_RIGI=MELR )
+
+MATASSR=ASSE_MATRICE(MATR_ELEM=MELR,NUME_DDL=NUM)
+
+MATASSM=ASSE_MATRICE(MATR_ELEM=MELM,NUME_DDL=NUM)
+
+#====================================================================
+#
+#-------------- CALCUL MODAL
+
+MODES=CALC_MODES(MATR_RIGI=MATASSR,VERI_MODE=_F(STURM='OUI'),
+                 OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                 CALC_FREQ=_F(NMAX_FREQ=13,
+                              FREQ=(5.,350.,),
+                              ),
+                 MATR_MASS=MATASSM,
+                 )
+
+
+# --------------------------------------------------------------------
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=8.780236148,
+                   VALE_REFE=8.8,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=2.5E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=29.434077800,
+                   VALE_REFE=29.4,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   PRECISION=1.5E-3,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=43.8,
+                   VALE_CALC=43.838524059493,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=56.3,
+                   VALE_CALC=56.28259206916,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=96.2,
+                   VALE_CALC=96.150631617578,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=102.6,
+                   VALE_CALC=102.64076668116,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=147.1,
+                   VALE_CALC=147.04372207057,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=174.8,
+                   VALE_CALC=174.81176084602,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=9,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=178.8,
+                   VALE_CALC=178.79792291977,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=10,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=206.0,
+                   VALE_CALC=206.0613991048,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=11,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=266.4,
+                   VALE_CALC=266.46981682201,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=12,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=320.0,
+                   VALE_CALC=320.11416643507,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=13,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_REFE=335.0,
+                   VALE_CALC=335.22996585592,
+                   PRECISION=1.E-3,
+                   REFERENCE='SOURCE_EXTERNE',
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+
+FIN()

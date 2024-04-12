@@ -1,0 +1,85 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+import os.path as osp
+
+from waflib import Configure, Utils
+
+def options(self):
+    self.load('compiler_cxx')
+
+def configure(self):
+    self.load('compiler_cxx')
+    self.check_cxx_compiler_flags()
+    self.check_bibcxx_depends()
+    incpath = osp.join(self.path.get_src().abspath(), 'include')
+    self.env.append_value('INCLUDES', incpath)
+
+def build(self):
+    env = self.all_envs[self.variant]
+    get_srcs = self.path.get_src().ant_glob
+    uses = env['all_dependencies']
+
+    if env.BUILD_MFRONT:
+        paths = get_srcs('mfront', src=True, dir=True)
+        paths = [d.abspath() for d in paths]
+        env.append_value('INCLUDES', paths)
+        self(
+            features = 'cxx',
+                name = 'astermfront',
+              source = get_srcs('mfront/*.cxx'),
+                 env = env.derive(),
+                 use = ['PYEMBED'] + uses,
+            )
+
+    self(
+        features = 'cxx',
+            name = 'asterbibcxx',
+          source = get_srcs('**/*.cxx', excl='mfront/*.cxx'),
+             env = env.derive(),
+             use = ['PYEMBED'] + uses,
+    )
+
+###############################################################################
+@Configure.conf
+def check_bibcxx_depends(self):
+    """check dependencies of bibcxx"""
+    self.check_cxx(uselib_store='CXX', lib='stdc++')
+
+@Configure.conf
+def check_cxx_compiler_flags(self):
+    """check C++ compiler flags"""
+    # this option is compiler independent (ifort & g++)
+    self.check_cxx(cxxflags='-std=c++11', uselib_store='SYS',
+                   mandatory=False)
+
+@Configure.conf
+def check_optimization_cxxflags(self):
+    self.setenv('debug')
+    self.remove_optflags("CXXFLAGS")
+    flags = ['-g', '-O0'] + Utils.to_list(self.env['CXXFLAGS_ASTER_DEBUG'])
+    self.start_msg('Setting C++ debug flags')
+    self.env.append_unique('CXXFLAGS', flags)
+    self.end_msg(flags)
+
+    self.setenv('release')
+    flags = ['-O2']
+    self.start_msg('Setting C++ optimization flags')
+    self.env.append_unique('CXXFLAGS', flags)
+    self.end_msg(flags)

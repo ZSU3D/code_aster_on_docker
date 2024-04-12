@@ -1,0 +1,134 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: ayaovi-dzifa.kudawoo at edf.fr
+#  - ANALYSE DYNAMIQUE D'UNE TUYAUTERIE COMPORTANT UN COUDE
+#  - MODELISATION AVEC DES ELEMENTS 'TUYAU'
+#  - CALCUL DE LA PLUS GRANDE FREQUENCE PROPRE
+#    AVEC L'OPTION 'PLUS_GRANDE'
+#---------------------------------------------------------------------
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),
+       IGNORE_ALARM=('ALGELINE3_58',),)
+
+#
+MAILLAGE=LIRE_MAILLAGE(FORMAT='MED',   INFO=2)
+
+#
+MAILLAGE=DEFI_GROUP( reuse=MAILLAGE,         MAILLAGE=MAILLAGE,CREA_GROUP_NO=(
+                          _F(  NOM = 'A',  NOEUD = 'NO23'),
+                          _F(  NOM = 'B',  NOEUD = 'NO2'),
+                          _F(  NOM = 'C',  NOEUD = 'NO40'),
+                          _F(  NOM = 'D',  NOEUD = 'NO1')))
+
+MODELE=AFFE_MODELE(   MAILLAGE=MAILLAGE,
+                            AFFE=_F( TOUT = 'OUI',
+                                  PHENOMENE = 'MECANIQUE',
+                                  MODELISATION = 'TUYAU_3M')
+                     )
+
+#
+#---------------------------------------------------------------------
+#                        CARACTERISTIQUES ELEMENTAIRES
+#---------------------------------------------------------------------
+CARELEM=AFFE_CARA_ELEM(   MODELE=MODELE,
+                           POUTRE=_F( GROUP_MA = 'TOUT_ELE',
+                                   SECTION = 'CERCLE',
+                                   CARA = ('R', 'EP',),
+                                   VALE = (0.010, 0.002,),
+                          MODI_METRIQUE = 'OUI'),
+                            ORIENTATION=_F( GROUP_NO = 'D',
+                                         CARA = 'GENE_TUYAU',
+                                         VALE = (0., 0., 1.,))
+                          )
+
+#
+#---------------------------------------------------------------------
+#                        CARACTERISTIQUES MATERIAUX
+#---------------------------------------------------------------------
+MATER=DEFI_MATERIAU(   ELAS=_F( E = 2.1E+11, NU = 0.3, RHO = 7800.))
+
+#
+AFF_MAT=AFFE_MATERIAU(   MAILLAGE=MAILLAGE,
+                               AFFE=_F( TOUT = 'OUI', MATER = MATER)
+                         )
+
+#
+#---------------------------------------------------------------------
+#                        CHARGEMENTS
+#---------------------------------------------------------------------
+COND_LIM=AFFE_CHAR_MECA(     MODELE=MODELE,DDL_IMPO=(
+                             _F( GROUP_NO = ('C', 'D',),
+                                      DX = 0., DY = 0., DZ = 0.,
+                                      DRX = 0., DRY = 0., DRZ = 0.,
+                                      UI2 = 0., VI2 = 0., WI2 = 0.,
+                                      UO2 = 0., VO2 = 0., WO2 = 0.,
+                                      UI3 = 0., VI3 = 0., WI3 = 0.,
+                                      UO3 = 0., VO3 = 0., WO3 = 0.,
+                                      WI1 = 0., WO1 = 0., WO = 0.),
+                             _F( GROUP_NO = 'B',
+                                      DX = 0., DZ = 0.),
+                             _F( GROUP_NO = 'A',
+                                      DY = 0., DZ = 0.))
+                          )
+
+#
+#---------------------------------------------------------------------
+#                        RESOLUTION
+#---------------------------------------------------------------------
+
+## CALCUL DE LA PLUS GRANDE FREQUENCE PROPRE
+# - avec l'option 'PLUS_GRANDE'
+ASSEMBLAGE(MODELE=MODELE,
+           CHAM_MATER=AFF_MAT,
+           CARA_ELEM=CARELEM,
+           CHARGE=COND_LIM,
+           NUME_DDL=CO('NUM'),
+           MATR_ASSE=(_F(MATRICE=CO('MATASSR'),
+                         OPTION='RIGI_MECA',),
+                      _F(MATRICE=CO('MATASSM'),
+                         OPTION='MASS_MECA',),),
+           );
+
+MODE_PG=CALC_MODES(MATR_RIGI=MATASSR,
+                   VERI_MODE=_F(STURM='NON',
+                                ),
+                   OPTION='PLUS_GRANDE',
+                   MATR_MASS=MATASSM,
+                   SOLVEUR_MODAL=_F(METHODE='TRI_DIAG',
+                                    ),
+                   )
+
+
+#---------------------------------------------------------------------
+#                        VERIFICATION DES RESULTATS
+#---------------------------------------------------------------------
+# LA VALEUR DE REFERENCE EST DONNEE PAR LA MODELISATION SDLL14E
+TEST_RESU(RESU=(
+                _F(RESULTAT = MODE_PG,
+                   PARA = 'FREQ',
+                   CRITERE = 'RELATIF',
+                   NUME_ORDRE = 1,
+                   VALE_CALC = 3.0520927416196E+05,
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=3.05197690121E+05),
+    ),)
+
+#
+FIN()
+#

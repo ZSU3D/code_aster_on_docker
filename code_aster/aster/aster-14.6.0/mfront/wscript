@@ -1,0 +1,438 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+import os
+import os.path as osp
+from glob import glob
+import subprocess
+import shutil
+from functools import partial
+import re
+from distutils.version import LooseVersion
+
+from waflib import Configure, Context, Build, TaskGen, Task, Utils, Errors, Logs
+
+def options(self):
+    group = self.add_option_group('MFront library options')
+    group.add_option('--disable-mfront', dest='enable_mfront',
+                    default=None, action='store_false',
+                    help='disable the MFRONT support')
+    group.add_option('--enable-mfront', dest='enable_mfront',
+                    default=None, action='store_true',
+                    help='force the MFRONT support. The TFELHOME environment '
+                         'variable can be used to choose a prefered version.')
+
+def configure(self):
+    opts = self.options
+    try:
+        self.env.stash()
+        self.check_mfront()
+    except Errors.ConfigurationError:
+        self.env.revert()
+        if opts.enable_mfront == True:
+            raise
+        self.define('_DISABLE_MFRONT', 1)
+        self.undefine('HAVE_MFRONT')
+        self.env.TFELSUFFIX = ''
+    else:
+        self.define('HAVE_MFRONT', 1)
+        self.env.BUILD_MFRONT = True
+
+INCLUDES = (
+    'MonoCrystal_DD_CC_InteractionMatrix.mfront',
+    'MonoCrystal_DD_CFC_InteractionMatrix.mfront',
+    'MonoCrystal_DD_CC_SlidingSystems.mfront',
+    'PolyCrystal_DD_CC_SlidingSystems.mfront',
+    'PolyCrystal_Orientation.mfront',
+    'PolyCrystal_Orientation_100grains.mfront',
+    'Plasticity_Sy.mfront',
+)
+
+def build(self):
+    env = self.all_envs[self.variant]
+    c_mfront = self.path.find_or_declare('c_mfront_official.py')
+    if env.BUILD_MFRONT:
+        get_srcs = self.path.get_src().ant_glob
+        lmfront = get_srcs('**/*.mfront', excl=INCLUDES)
+        lst = [i.name for i in lmfront]
+
+        self(
+            features = 'cxx cxxshlib',
+                name = 'asterbehaviour',
+              source = lmfront,
+            includes = [osp.join(osp.splitext(i)[0], "include") for i in lst],
+              target = env['_ASTERBEHAVIOUR'],
+        install_path = env.ASTERLIBDIR,
+                 env = env.derive(),
+                 use = ('MFRONT', 'MFRONT_ONLY', 'SYS'),
+        )
+
+        self.add_group()
+        self(
+            features = 'mfront_mater py',
+                name = 'mfront_mater',
+                 lst = lmfront,
+                path = self.path,
+                 env = env.derive(),
+              target = c_mfront,
+        install_path = osp.join(env.ASTERLIBDIR, "code_aster", "Cata", "Commons"),
+        install_from = self.path.get_bld(),
+                 use = 'asterbehaviour',
+        )
+    else:
+        self(
+            features = 'fake_mfront_mater py',
+                name = 'mfront_mater',
+                path = self.path,
+                 env = env.derive(),
+              target = c_mfront,
+        install_path = osp.join(env.ASTERLIBDIR, "code_aster", "Cata", "Commons"),
+        install_from = self.path.get_bld(),
+        )
+
+###############################################################################
+@Configure.conf
+def check_mfront(self):
+    opts = self.options
+    if opts.enable_mfront == False:
+        raise Errors.ConfigurationError('MFRONT disabled')
+
+    self.start_msg('Checking for TFELHOME variable')
+    # takes TFELHOME from env (wafcfg) or environment
+    if not self.env.TFELHOME:
+        self.add_os_flags('TFELHOME')
+    if not self.env.TFELHOME:
+        self.end_msg('no', 'YELLOW')
+        raise Errors.ConfigurationError('TFELHOME must be defined!')
+    self.end_msg(self.env.TFELHOME)
+
+    tfelhome = Utils.to_list(self.env.TFELHOME)
+    paths = self.environ.get('PATH', '').split(os.pathsep)
+    if tfelhome:
+        paths.insert(0, osp.join(tfelhome[0], 'bin'))
+    self.env.TFELHOME = tfelhome
+    # export TFELHOME for future checkings
+    os.environ['TFELHOME'] = tfelhome[0]
+    # takes TFELVERS from env (wafcfg) or environment
+    if not self.env.TFELVERS:
+        self.add_os_flags('TFELVERS')
+    tfelvers = Utils.to_list(self.env.TFELVERS)
+    # Define suffix for version
+    if not tfelvers:
+        self.env.TFELSUFFIX = ''
+    else:
+        self.env.TFELSUFFIX = '-' + tfelvers[0]
+    # Define programs names mfront and tfel-config
+    self.find_program('mfront' + self.env.TFELSUFFIX,
+                      path_list=paths, var='MFRONT')
+    self.find_program('tfel-config' + self.env.TFELSUFFIX,
+                      path_list=paths, var='TFEL_CONFIG')
+
+    tfel_config = self.env.TFEL_CONFIG[0]
+    self.check_cfg(path=tfel_config,
+                   msg="Checking for '{0}'".format(osp.basename(tfel_config)),
+                   args='--cppflags --includes --oflags0 ' \
+                        '--libs --material --utilities --system',
+                   package='', uselib_store='MFRONT', mandatory=True)
+    if self.get_define('_USE_64_BITS'):
+        arch = 'ASTER_ARCH=64'
+    else:
+        arch = 'ASTER_ARCH=32'
+    self.env.append_value('DEFINES_MFRONT', arch)
+    # remove options usually used by MFront but in conflict with our code
+    for flag in ('-fvisibility=hidden', '-fvisibility-inlines-hidden'):
+        self.safe_remove('CFLAGS_MFRONT', flag)
+        self.safe_remove('CXXFLAGS_MFRONT', flag)
+        # these options are not relevant for C
+        self.env.append_value('CXXFLAGS_MFRONT_ONLY', flag)
+    self.check_mfront_version( (3, 2, 1) )
+    self.check_mfront_libs()
+    self.check_mfront_py()
+    self.check_cxx11_abi()
+    self.check_mfront_obsolete_source()
+
+@Configure.conf
+def check_mfront_version(self, minver=None):
+    """Check if mfront is matching a given minimum version.
+    minver should be a tuple, eg. to check for mfront >= 2.0 pass (2,0,0) as minver.
+    """
+    assert isinstance(minver, tuple)
+    cmd = self.env.MFRONT + ['--version']
+    res = self.cmd_and_log(cmd)
+    mfrver = '0.0.0'
+    regexp = re.compile('version *: *([0-9]+\.[0-9]+\..*) *', re.I | re.M)
+    mat = regexp.search( res.strip() )
+    if mat:
+        mfrver = mat.group(1).strip()
+    if minver is None:
+        self.msg('Checking for mfront version', mfrver)
+        return
+    minver_str = '.'.join(map(str, minver))
+    result = LooseVersion(mfrver) >= LooseVersion(minver_str)
+    self.msg("Checking for mfront version >= %s" % minver_str, mfrver,
+             result and 'GREEN' or 'YELLOW')
+    if result:
+        self.define('MFRONT_VERSION', mfrver)
+    else:
+        raise Errors.ConfigurationError('The Mfront version is too old, required >= %r' % minver_str)
+
+@Configure.conf
+def check_mfront_libs(self):
+    _check = partial(self.check_cxx, mandatory=True, uselib_store='MFRONT',
+                     use='MFRONT')
+    check_lib = lambda lib: _check(lib=lib)
+    libs = ['AsterInterface' + self.env.TFELSUFFIX,
+            'TFELSystem' + self.env.TFELSUFFIX]
+    list(map(check_lib, Utils.to_list(libs)))
+
+@Configure.conf
+def check_mfront_py(self):
+    import sys
+    from distutils.sysconfig import get_python_lib
+    mfr = get_python_lib(prefix=self.env.TFELHOME[0])
+    suffix = self.env.TFELSUFFIX.replace(".", "_").replace("-", "_")
+    try:
+        sys.path.remove(mfr)
+    except ValueError:
+        pass
+    sys.path.append(mfr)
+    # for profile.sh
+    self.env.append_value('CFG_PYTHONPATH', mfr)
+    self.check_python_module('tfel' + suffix + '.material')
+
+@Configure.conf
+def check_cxx11_abi(self):
+    import ctypes
+    # LD_LIBRARY_PATH is not reread now.
+    # So 'libname' must not have dependencies out of initial LD_LIBRARY_PATH.
+    # Use http://demangler.com/ to demangle names
+    libname = "./libTFELUtilities" + self.env.TFELSUFFIX + ".so"
+    symbol = "replace_all"
+    prev = os.getcwd()
+    os.chdir(osp.join(self.env.TFELHOME[0], "lib"))
+    lib = ctypes.cdll.LoadLibrary(libname)
+    os.chdir(prev)
+    exists = getattr(lib, symbol, None) is not None
+    # if a such symbol exists, MFront was not compiled with cxx11 ABI.
+    use_cxx11_abi = int(not exists)
+    reverse = int(exists)
+    self.safe_remove('CXXFLAGS',
+        '-D_GLIBCXX_USE_CXX11_ABI={0}'.format(reverse))
+    self.env.append_value('CXXFLAGS',
+        '-D_GLIBCXX_USE_CXX11_ABI={0}'.format(use_cxx11_abi))
+
+def remove(path):
+    """Remove a file or a directory"""
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        os.remove(path)
+
+@Configure.conf
+def check_mfront_obsolete_source(self):
+    src = self.path.get_src().abspath()
+    # clean obsolete behaviours (from a previous build)
+    bld, mfront = osp.split(self.path.get_bld().abspath())
+    excl = ['libAsterMFrOfficial.so', 'libAsterMFrOfficialDebug.so',
+            'include', 'c_mfront_official.py']
+    for variant in ('debug', 'release'):
+        build = osp.join(bld, variant, mfront)
+        if osp.exists(build):
+            cleaned = False
+            for node in os.listdir(build):
+                ignore = False
+                for excl_i in excl:
+                    if node.startswith(excl_i):
+                        ignore = True
+                if ignore:
+                    continue
+                if not osp.exists( osp.join(src, node + '.mfront') ):
+                    Logs.warn("remove obsolete build: %s" % node)
+                    remove( osp.join(build, node) )
+
+@TaskGen.extension('.hxx')
+def nothing(*k, **kw):
+        pass
+
+@TaskGen.extension('.mfront')
+def process_mfront(self, node):
+    name = osp.splitext(node.name)[0]
+    wrkdir = node.parent.find_or_declare(name)
+    # print "DEBUG: node:", node, "wkrdir:", wrkdir.abspath()
+    wrkdir.mkdir()
+    files = [name, "aster" + name] + getAdditionalOutputs(node.abspath())
+
+    _nod = wrkdir.find_or_declare
+    outputs = [_nod(osp.join("src", i + ".cxx")) for i in files]
+    outputs.append(_nod(osp.join("include", "MFront", "Aster",
+                                 "aster" + name + ".hxx")))
+    outputs.extend([_nod(osp.join("include", "TFEL", "Material",
+                                  name + i + ".hxx"))
+                    for i in ("", "BehaviourData", "IntegrationData")])
+    tsk = self.create_task('mfront2cxx', node, outputs)
+    self.source.extend(tsk.outputs)
+
+import re
+RE_OUTPUT = re.compile('^//output *(.*?) *$', re.M)
+
+def getAdditionalOutputs(filename):
+    """Search additional outputs in a MFront file"""
+    found = RE_OUTPUT.findall(open(filename, 'r').read())
+    return found
+
+class mfront2cxx(Task.Task):
+    """Convert a MFront source file into C++"""
+    color   = 'PINK'
+    ext_out = ['.h', '.cxx']
+
+    def run(self):
+        """Call MFront to convert `.mfront` to C++"""
+        name = osp.splitext(self.inputs[0].name)[0]
+        mfrdir = self.inputs[0].parent
+        wrknode = mfrdir.get_bld().find_or_declare(name)
+        if len(name) > 16:
+            msg = "The behaviour name is too long, max. 16 characters: " \
+                  "'%s'" % name
+            raise Errors.WafError(msg)
+        wrkdir = wrknode.abspath()
+        cmd = '%s --interface=aster --search-path=%s %s' % (
+            self.env.MFRONT[0],
+            mfrdir.get_src().abspath(),
+            self.inputs[0].abspath()
+        )
+        # self.generator.bld.cmd_and_log(cmd, cwd=wrkdir, quiet=Context.STDOUT)
+        self.exec_command(cmd, cwd=wrkdir)
+
+@TaskGen.feature('mfront_mater')
+def mater_capy(self):
+    """Create the capy for MFront materials"""
+    link_task = self.bld.get_tgen_by_name('asterbehaviour').link_task
+    tsk = self.create_task('mfront_capy', src=link_task.outputs, tgt=self.target)
+    self.process_py(self.target)
+
+class mfront_capy(Task.Task):
+    color   = 'PINK'
+    ext_out = ['.py']
+
+    def run(self):
+        """Create a .capy file for the MFront behaviours"""
+        libpath = self.inputs[0].abspath()
+        lst = self.generator.lst
+        suffix = self.generator.env.TFELSUFFIX
+        target = self.outputs[0]
+        lines = [capy_header]
+        for node in lst:
+            filename = node.abspath()
+            comport = osp.splitext(osp.basename(filename))[0]
+            symbol = "aster" + comport.lower()
+            try:
+                props = getMaterialProperties(libpath, filename, symbol, suffix)
+            except RuntimeError as exc:
+                Logs.error("Errors occurred with behaviour '{name}' searched "
+                    "in file '{filename}'.\nDetails: {exc}"
+                    .format(name=comport, filename=filename, exc=str(exc)))
+                raise Errors.BuildError
+            lines.extend(_capy_comport(comport, props, "'R'", " " * 8))
+            lines.extend(_capy_comport(comport + '_FO', props,
+                                       "fonction_sdaster", " " * 8))
+        lines.append(capy_footer)
+        open(target.abspath(), 'w').write(os.linesep.join(lines))
+        target.sig = Utils.h_file(target.abspath())
+
+@TaskGen.feature('fake_mfront_mater')
+def fake_mater_capy(self):
+    """Create an 'empty' capy when MFront is not available"""
+    tsk = self.create_task('fake_mfront_capy', src=[], tgt=self.target)
+    self.process_py(self.target)
+
+class fake_mfront_capy(Task.Task):
+    color   = 'PINK'
+    ext_out = ['.py']
+
+    def run(self):
+        """Create a .capy file for the MFront behaviours"""
+        target = self.outputs[0]
+        lines = [capy_header, capy_footer]
+        open(target.abspath(), 'w').write(os.linesep.join(lines))
+        target.sig = Utils.h_file(target.abspath())
+
+###############################################################################
+def getMaterialProperties(lib, mfront_filename, symbol, suffix):
+    """Return the list of material properties"""
+    suffix = suffix.replace('-','_').replace('.','_')
+    tfel = __import__("tfel" + suffix + ".material", fromlist=[])
+    ModellingHypothesis = getattr(tfel.material, 'ModellingHypothesis')
+    mfront = __import__("mfront" + suffix)
+    os.environ['MFRONT_INCLUDE_PATH'] = osp.dirname(mfront_filename)
+    props = []
+
+    dsl = mfront.getDSL(mfront_filename)
+    dsl.analyseFile(mfront_filename, [])
+    # behaviour description
+    desc = dsl.getBehaviourDescription()
+
+    # Should also check "RequiresThermalExpansionCoefficientTensor" and "Symmetry"
+    # (see old bibcxx/mfront/MFrontBehaviour.cxx up to 13.3.13)
+    req = desc.getBooleanAttribute("requiresStiffnessTensor", False)
+    if req:
+        props.extend(["YoungModulus{0}".format(i) for i in (1, 2, 3)])
+        props.extend(["PoissonRatio{0}".format(i) for i in (12, 23, 13)])
+        props.extend(["ShearModulus{0}".format(i) for i in (12, 23, 13)])
+
+    data = desc.getBehaviourData(ModellingHypothesis.TRIDIMENSIONAL)
+    for var in data.getMaterialProperties():
+        name = data.getExternalName(var.name)
+        if var.arraySize <= 1:
+            props.append(name)
+        else:
+            for i in range(var.arraySize):
+                props.append("{0}_{1}".format(name ,i))
+
+    return props
+
+def _capy_comport(comport, properties, typ, indent):
+    """Return the lines for the catalog for `comport`"""
+    assert typ in ("'R'", "fonction_sdaster"), 'unknown type: %s' % typ
+    lines = ["'%s' : FACT(statut='f'," % comport]
+    for i in properties:
+        lines.append("    %s = SIMP(statut='o', typ=%s)," % (i, typ))
+        if len(i) > 16:
+            msg = "Behaviour  '%s': The material property '%s' exceeds " \
+                  "16 characters." % (comport, i)
+            raise Errors.WafError(msg)
+    lines.append('),')
+    return [indent + k for k in lines]
+
+capy_header = """#
+# Automatically-generated file. Do not edit!
+#
+#
+
+from code_aster.Cata.Syntax import *
+from code_aster.Cata.DataStructure import *
+from code_aster.Cata.Commons import *
+
+
+def C_MFRONT_OFFICIAL():
+    keywords = {
+"""
+
+capy_footer = """    }
+    return keywords
+"""

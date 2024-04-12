@@ -1,0 +1,366 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ELEMENTS  : MECAPOUD_TG
+# REFERENCE : ANALYTIQUE
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=6.7E10,
+                            NU=0.,
+                            RHO=2400.,),);
+
+MAYA=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MATER=AFFE_MATERIAU(MAILLAGE=MAYA,
+                    AFFE=_F(GROUP_MA='GROUP_MA_POUTRE',
+                            MATER=ACIER,),);
+
+STRUC_1=AFFE_MODELE(MAILLAGE=MAYA,
+                    AFFE=_F(GROUP_MA='GROUP_MA_POUTRE',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='POU_D_TG',),);
+
+CARA_1=AFFE_CARA_ELEM(MODELE=STRUC_1,
+                      POUTRE=_F(GROUP_MA='GROUP_MA_POUTRE',
+                                SECTION='RECTANGLE',
+                                CARA=('HY','HZ',),
+                                VALE=(0.014,0.014,),),);
+
+FIXA_1=AFFE_CHAR_MECA(MODELE=STRUC_1,
+                      DDL_IMPO=(_F(GROUP_NO='GROUP_NO_POINT_A',
+                                   DX=0.,
+                                   DY=0.,),
+                                _F(GROUP_NO='GROUP_NO_TOUT',
+                                   DZ=0.,
+                                   DRX=0.,
+                                   DRY=0.,),),);
+
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITE ET DE MASSE
+
+K_EL_1=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                      MODELE=STRUC_1,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA_1,
+                      CHARGE=FIXA_1,);
+
+M_EL_1=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=STRUC_1,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA_1,
+                      CHARGE=FIXA_1,);
+
+# NUMEROTATION
+
+NUMERO_1=NUME_DDL(MATR_RIGI=K_EL_1,);
+
+# ASSEMBLAGE DES MATRICES DE RIGIDITE ET DE MASSE
+
+K_AS_1=ASSE_MATRICE(MATR_ELEM=K_EL_1,
+                    NUME_DDL=NUMERO_1,);
+
+M_AS_1=ASSE_MATRICE(MATR_ELEM=M_EL_1,
+                    NUME_DDL=NUMERO_1,);
+
+# CALCUL DES MODES PAR SORENSEN + BANDE
+
+MODE_A_1=CALC_MODES(MATR_RIGI=K_AS_1,
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=(10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_1,
+                    )
+
+TEST_RESU(RESU=(_F(RESULTAT=MODE_A_1,
+                   NUME_MODE=2,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=85.5,
+                   PRECISION=0.0011,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=85.406779762,),
+                _F(RESULTAT=MODE_A_1,
+                   NUME_MODE=3,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=277.0,
+                   PRECISION=0.003,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=276.392805933,),
+                _F(RESULTAT=MODE_A_1,
+                   NUME_MODE=4,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=577.9,
+                   PRECISION=0.004,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=575.684265401,),
+                _F(RESULTAT=MODE_A_1,
+                   NUME_MODE=5,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=988.2,
+                   PRECISION=0.006,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=982.937618675,),
+                _F(RESULTAT=MODE_A_1,
+                   NUME_MODE=6,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=1507.9,
+                   PRECISION=0.007,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=1498.7429,),),);
+
+# CALCUL DES MODES PAR JACOBI + BANDE
+
+MODE_B_1=CALC_MODES(CALC_FREQ=_F(FREQ=(10.,2000.,),
+                                 ),
+                    OPTION='BANDE',
+                    MATR_RIGI=K_AS_1,
+                    MATR_MASS=M_AS_1,
+                    SOLVEUR_MODAL=_F(METHODE='JACOBI',
+                                     ),
+                    )
+
+TEST_RESU(RESU=(_F(RESULTAT=MODE_B_1,
+                   NUME_MODE=2,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=85.5,
+                   PRECISION=0.0011,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=85.406779762,),
+                _F(RESULTAT=MODE_B_1,
+                   NUME_MODE=3,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=277.0,
+                   PRECISION=0.003,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=276.392805933,),
+                _F(RESULTAT=MODE_B_1,
+                   NUME_MODE=4,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=577.9,
+                   PRECISION=0.004,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=575.684265401,),
+                _F(RESULTAT=MODE_B_1,
+                   NUME_MODE=5,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=988.2,
+                   PRECISION=0.006,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=982.937618675,),
+                _F(RESULTAT=MODE_B_1,
+                   NUME_MODE=6,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=1507.9,
+                   PRECISION=0.007,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=1498.7429,),),);
+
+#------------------------------------------------------------------
+#     CALCUL AVEC RESSORT
+#------------------------------------------------------------------
+
+STRUC_2=AFFE_MODELE(MAILLAGE=MAYA,
+                    AFFE=(_F(GROUP_MA='GROUP_MA_POUTRE',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='POU_D_TG',),
+                          _F(GROUP_MA='GROUP_MA_RESSORT',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='DIS_TR',),),);
+
+CARA_2=AFFE_CARA_ELEM(MODELE=STRUC_2,
+                      POUTRE=_F(GROUP_MA='GROUP_MA_POUTRE',
+                                SECTION='RECTANGLE',
+                                CARA=('HY','HZ',),
+                                VALE=(0.014,0.014,),),
+                      DISCRET=(_F(REPERE='GLOBAL',
+                                  CARA='K_TR_D_N',
+                                  GROUP_MA='GROUP_MA_RESSORT',
+                                  VALE=(0.,18000.,0.,0.,0.,0.,),),
+                               _F(REPERE='GLOBAL',
+                                  CARA='M_TR_D_N',
+                                  GROUP_MA='GROUP_MA_RESSORT',
+                                  VALE=(0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,),),),);
+
+FIXA_2=AFFE_CHAR_MECA(MODELE=STRUC_2,
+                      DDL_IMPO=(_F(GROUP_NO='GROUP_NO_POINT_A',
+                                   DX=0.,
+                                   DY=0.,),
+                                _F(GROUP_NO='GROUP_NO_TOUT',
+                                   DZ=0.,
+                                   DRX=0.,
+                                   DRY=0.,),),);
+
+# CALCUL DES MATRICES ELEMENTAIRES DE RIGIDITE ET DE MASSE
+
+K_EL_2=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                      MODELE=STRUC_2,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA_2,
+                      CHARGE=FIXA_2,);
+
+M_EL_2=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                      MODELE=STRUC_2,
+                      CHAM_MATER=MATER,
+                      CARA_ELEM=CARA_2,
+                      CHARGE=FIXA_2,);
+
+# NUMEROTATION
+
+NUMERO_2=NUME_DDL(MATR_RIGI=K_EL_2,);
+
+# ASSEMBLAGE DES MATRICES DE RIGIDITE ET DE MASSE
+
+K_AS_2=ASSE_MATRICE(MATR_ELEM=K_EL_2,
+                    NUME_DDL=NUMERO_2,);
+
+M_AS_2=ASSE_MATRICE(MATR_ELEM=M_EL_2,
+                    NUME_DDL=NUMERO_2,);
+
+# A - CALCUL DES MODES PAR SORENSEN + BANDE
+
+MODE_A_2=CALC_MODES(MATR_RIGI=K_AS_2,
+                    OPTION='BANDE',
+                    CALC_FREQ=_F(FREQ=(10.,2000.,),
+                                 ),
+                    MATR_MASS=M_AS_2,
+                    )
+
+TEST_RESU(RESU=(_F(RESULTAT=MODE_A_2,
+                   NUME_MODE=1,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=43.1,
+                   PRECISION=0.001,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=43.080346878,),
+                _F(RESULTAT=MODE_A_2,
+                   NUME_MODE=2,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=115.4,
+                   PRECISION=0.001,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=115.295089948,),
+                _F(RESULTAT=MODE_A_2,
+                   NUME_MODE=3,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=286.5,
+                   PRECISION=0.002,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=285.9523028,),
+                _F(RESULTAT=MODE_A_2,
+                   NUME_MODE=4,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=582.3,
+                   PRECISION=0.004,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=580.092402849,),
+                _F(RESULTAT=MODE_A_2,
+                   NUME_MODE=5,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=990.7,
+                   PRECISION=0.006,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=985.485910271,),
+                _F(RESULTAT=MODE_A_2,
+                   NUME_MODE=6,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=1509.6,
+                   PRECISION=0.007,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=1500.41315,),),);
+
+# B - CALCUL DES MODES PAR JACOBI + BANDE
+
+MODE_B_2=CALC_MODES(CALC_FREQ=_F(FREQ=(10.,2000.,),
+                                 ),
+                    OPTION='BANDE',
+                    MATR_RIGI=K_AS_2,
+                    MATR_MASS=M_AS_2,
+                    SOLVEUR_MODAL=_F(METHODE='JACOBI',
+                                     ),
+                    )
+
+TEST_RESU(RESU=(_F(RESULTAT=MODE_B_2,
+                   NUME_MODE=1,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=43.1,
+                   PRECISION=0.001,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=43.080346878,),
+                _F(RESULTAT=MODE_B_2,
+                   NUME_MODE=2,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=115.4,
+                   PRECISION=0.001,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=115.295089948,),
+                _F(RESULTAT=MODE_B_2,
+                   NUME_MODE=3,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=286.5,
+                   PRECISION=0.002,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=285.9523028,),
+                _F(RESULTAT=MODE_B_2,
+                   NUME_MODE=4,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=582.3,
+                   PRECISION=0.004,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=580.092402849,),
+                _F(RESULTAT=MODE_B_2,
+                   NUME_MODE=5,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=990.7,
+                   PRECISION=0.006,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=985.485910271,),
+                _F(RESULTAT=MODE_B_2,
+                   NUME_MODE=6,
+                   PARA='FREQ',
+                   CRITERE='RELATIF',
+                   VALE_REFE=1509.6,
+                   PRECISION=0.007,
+                   REFERENCE='ANALYTIQUE',
+                   VALE_CALC=1500.41315,),),);
+
+#------------------------------------------------------------------
+
+FIN();

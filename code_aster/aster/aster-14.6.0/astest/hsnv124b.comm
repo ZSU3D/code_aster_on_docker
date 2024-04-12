@@ -1,0 +1,455 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: david.haboussa at edf.fr
+#       ELEMENT DE VOLUME EN TRACTION / TEMPERATURE VARIABLE
+#       MODELISATION B : ECROUISSAGE CINEMATIQUE LINEAIRE
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+TITRE='PHI2AS TEST1 ECR CINEMATIQUE LINEAIRE'
+
+COMMENT='20 INCREMENTS '
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+LINST=DEFI_LIST_REEL(   DEBUT=0.,INTERVALLE=(
+                             _F( JUSQU_A = 1.00,   NOMBRE = 1,   ),
+                             _F( JUSQU_A = 2.00,   NOMBRE = 20,   ))
+                         )
+
+COEF=DEFI_FONCTION(      NOM_PARA='INST',
+                            PROL_DROITE='LINEAIRE',
+                           PROL_GAUCHE='LINEAIRE',
+                          VALE=( 0.0,     0.0,
+                                 1.0,     1.0,
+                                 2.0,     1.0,))
+
+YOUNG=2.E5
+
+C_F = FORMULE(VALE='(1000.+2990.*TEMP)',
+              NOM_PARA='TEMP',)
+
+H_F = FORMULE(VALE='YOUNG*C_F(TEMP)/(YOUNG+C_F(TEMP))',
+              YOUNG=YOUNG,
+              C_F=C_F,
+              NOM_PARA='TEMP',)
+
+SY_F = FORMULE(VALE='200.-1.7*TEMP',
+               NOM_PARA='TEMP',)
+
+TEMPE1=DEFI_LIST_REEL(  DEBUT=0.,
+              INTERVALLE=_F(  JUSQU_A = 100.,    NOMBRE = 100,  )
+                         )
+
+DSET=CALC_FONC_INTERP(    FONCTION=H_F,
+                           LIST_PARA=TEMPE1,
+                         NOM_PARA = 'TEMP', )
+
+SYT=CALC_FONC_INTERP(    FONCTION=SY_F,
+                         LIST_PARA=TEMPE1,
+                         NOM_PARA = 'TEMP', )
+
+ACIER=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                            ECRO_LINE_FO=_F( SY = SYT,
+                                          D_SIGM_EPSI = DSET,   )
+                          )
+
+# ECMI
+
+PRAG_F = FORMULE(VALE='(2. /3.) * C_F(TEMP)',
+                 C_F=C_F,
+                 NOM_PARA='TEMP',)
+
+PRAG=CALC_FONC_INTERP(    FONCTION=PRAG_F,
+                           LIST_PARA=TEMPE1,
+                            NOM_PARA = 'TEMP', )
+
+ACIER2=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                            ECRO_LINE_FO=_F( SY = SYT,
+                                          D_SIGM_EPSI = DSET,   ),
+                                PRAGER_FO=_F( C = PRAG,  )
+                          )
+
+# CIN1_CHAB
+
+C_T=CALC_FONC_INTERP(FONCTION=C_F,LIST_PARA=TEMPE1,NOM_PARA ='TEMP',)
+
+D_T=DEFI_CONSTANTE( VALE=0.0)
+
+UN=DEFI_CONSTANTE( VALE=1.0)
+
+ZERO=DEFI_CONSTANTE( VALE=0.0)
+
+ACIER3=DEFI_MATERIAU(
+                            ELAS=_F( E = YOUNG,  NU = .3,
+                                  ALPHA = 0.00001,   ),
+                    CIN1_CHAB_FO=_F(
+                                 R_0 = SYT,
+                                 R_I = SYT,
+                                 B = ZERO,
+                                 C_I = C_T,
+                                 K = UN,
+                                 W = ZERO,
+                                 G_0 = D_T,
+                                 A_I = UN,
+                                    )
+                          )
+
+MOMECA=AFFE_MODELE(
+
+               MAILLAGE=MA,
+
+                AFFE=_F(
+                TOUT = 'OUI',
+                PHENOMENE = 'MECANIQUE',
+                MODELISATION = '3D',
+                )
+              )
+
+PRESSION=AFFE_CHAR_MECA(        MODELE=MOMECA,
+
+                                  PRES_REP=_F(  MAILLE = 'HAUT',     PRES = -210.,      )
+                           )
+
+FTEMP=DEFI_FONCTION(
+                            NOM_PARA='INST',
+                             PROL_DROITE='LINEAIRE',
+                            PROL_GAUCHE='LINEAIRE',
+                           VALE=( 0.,  0.,
+                                  1., 0.,
+                                  2., 100.,)
+                          )
+
+CHP_TEMP=CREA_CHAMP(OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_F',
+               MAILLAGE=MA,
+
+                   AFFE=_F(
+               TOUT = 'OUI',
+               NOM_CMP = 'TEMP',
+               VALE_F = FTEMP,
+               )
+             )
+
+RTEMP=CREA_RESU(
+               OPERATION='AFFE', TYPE_RESU='EVOL_THER',
+                NOM_CHAM='TEMP',
+                 AFFE=_F(
+               LIST_INST = LINST,
+               CHAM_GD = CHP_TEMP,
+               )
+             )
+
+
+CHMATER=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER,  ),
+                            AFFE_VARC=_F( TOUT='OUI',
+                                  EVOL=RTEMP,VALE_REF=0.,
+                                  NOM_VARC='TEMP',
+                                  NOM_CHAM='TEMP',),)
+
+CHMATER2=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER2,  ),
+                            AFFE_VARC=_F( TOUT='OUI',
+                                  EVOL=RTEMP,VALE_REF=0.,
+                                  NOM_VARC='TEMP',
+                                  NOM_CHAM='TEMP',),)
+
+CHMATER3=AFFE_MATERIAU(  MAILLAGE=MA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MATER = ACIER3,  ),
+                            AFFE_VARC=_F( TOUT='OUI',
+                                  EVOL=RTEMP,VALE_REF=0.,
+                                  NOM_VARC='TEMP',
+                                  NOM_CHAM='TEMP',),)
+
+LIAISON=AFFE_CHAR_MECA(      MODELE=MOMECA,DDL_IMPO=(
+
+                               _F(  NOEUD = 'NO3',    DX = 0.,  DY = 0.,   DZ = 0., ),
+                               _F(  NOEUD = 'NO4',           DY = 0.,   DZ = 0., ),
+                               _F(  NOEUD = 'NO8',           DY = 0.,         ),
+                               _F(  NOEUD = 'NO7',           DY = 0.,         ))
+                           )
+
+U=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_CINE_LINE'),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ),),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              CONVERGENCE=_F(
+                    ITER_GLOB_MAXI = 50,
+                    ARRET = 'OUI',
+                              ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+U=CALC_CHAMP(reuse=U,RESULTAT=U,DEFORMATION=('EPSP_ELNO'))
+
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=U,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=210.000000000,
+                   VALE_REFE=210.0,
+                   MAILLE='CUBE',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=1.1000000000000001,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=2.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 8.00000002E-04,
+                   VALE_REFE=8.0000000000000004E-4,
+                   MAILLE='CUBE',),
+                ),
+          )
+
+U2=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER2,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_ECMI_LINE'),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ),),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              CONVERGENCE=_F(
+                    ITER_GLOB_MAXI = 50,
+                    ARRET = 'OUI',
+                              ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+U2=CALC_CHAMP(reuse=U2,RESULTAT=U2,DEFORMATION=('EPSP_ELNO'))
+
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=U2,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=210.000000000,
+                   VALE_REFE=210.0,
+                   MAILLE='CUBE',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=1.1000000000000001,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=2.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U2,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 8.00000002E-04,
+                   VALE_REFE=8.0000000000000004E-4,
+                   MAILLE='CUBE',),
+                ),
+          )
+
+U3=STAT_NON_LINE(
+                     MODELE=MOMECA,
+                     CHAM_MATER=CHMATER3,
+                     COMPORTEMENT=_F(  RELATION = 'VMIS_CIN1_CHAB',
+                                    RESI_INTE_RELA = 9.99999999999999955E-7,
+                                    ITER_INTE_MAXI = 50,
+                                    ITER_INTE_PAS = 0,
+
+   ),EXCIT=(
+                     _F(
+                   CHARGE = LIAISON,
+                           ), _F(
+                   CHARGE = PRESSION,
+                   FONC_MULT = COEF,
+                           ),),
+                     INCREMENT=_F(  LIST_INST = LINST,   ),
+
+                              CONVERGENCE=_F(
+                    ITER_GLOB_MAXI = 50,
+                    ARRET = 'OUI',
+                              ),
+
+                              NEWTON=_F(
+                      REAC_INCR = 1,
+                      MATRICE = 'TANGENTE',
+                      REAC_ITER = 1,
+                              )
+
+                   )
+
+U3=CALC_CHAMP(reuse=U3,RESULTAT=U3,DEFORMATION=('EPSP_ELNO'))
+
+
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=U3,
+                   NOM_CHAM='SIEF_ELGA',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=210.000000000,
+                   VALE_REFE=210.0,
+                   MAILLE='CUBE',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=1.1000000000000001,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 1.00000000E-02,
+                   VALE_REFE=1.E-2,
+                   MAILLE='CUBE',),
+                _F(INST=2.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=U3,
+                   NOM_CHAM='EPSP_ELNO',
+                   NOEUD='NO1',
+                   NOM_CMP='EPYY',
+                   VALE_CALC= 8.00000000E-04,
+                   VALE_REFE=8.0000000000000004E-4,
+                   MAILLE='CUBE',),
+                ),
+          )
+
+TAB1=POST_RELEVE_T(     ACTION=_F(
+                          INTITULE = 'EPYY',
+                          RESULTAT = U,
+                          NOM_CHAM = 'EPSP_ELNO',
+                          NOM_CMP = 'EPYY',
+                          OPERATION = 'EXTRACTION',
+                          NOEUD = 'NO1',
+                          TOUT_ORDRE = 'OUI',
+                          )
+             )
+
+TAB2=POST_RELEVE_T(     ACTION=_F(
+                          INTITULE = 'EPYY',
+                          RESULTAT = U2,
+                          NOM_CHAM = 'EPSP_ELNO',
+                          NOM_CMP = 'EPYY',
+                          OPERATION = 'EXTRACTION',
+                          NOEUD = 'NO1',
+                          TOUT_ORDRE = 'OUI',
+                          )
+             )
+
+TAB3=POST_RELEVE_T(     ACTION=_F(
+                          INTITULE = 'EPYY',
+                          RESULTAT = U3,
+                          NOM_CHAM = 'EPSP_ELNO',
+                          NOM_CMP = 'EPYY',
+                          OPERATION = 'EXTRACTION',
+                          NOEUD = 'NO1',
+                          TOUT_ORDRE = 'OUI',
+                          )
+             )
+
+IMPR_TABLE(UNITE=25,
+           FORMAT='TABLEAU',
+           TABLE=TAB1,
+           NOM_PARA=('INST','EPYY'),
+           TITRE='ESPP_YY CINE',
+           )
+IMPR_TABLE(UNITE=25,
+           FORMAT='TABLEAU',
+           TABLE=TAB2,
+           NOM_PARA=('INST','EPYY'),
+           TITRE='ESPP_YY ECMI',
+           )
+IMPR_TABLE(UNITE=25,
+           FORMAT='TABLEAU',
+           TABLE=TAB3,
+           NOM_PARA=('INST','EPYY'),
+           TITRE='ESPP_YY CHAB',
+           )
+
+FIN()

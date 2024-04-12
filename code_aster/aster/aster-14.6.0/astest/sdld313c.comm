@@ -1,0 +1,219 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#       ANALYSE MODALE, PROBLEME MODAL GENERALISE A MATRICE K COMPLEXE
+#
+#
+# OBJECTIF POUR LA BASE DE CAS-TESTS ASTER: MODAL GENERALISE COMPLEXE.
+# INTERCOMPARAISON DES METHODES DE SOUS-ESPACES (SORENSEN ET QZ).
+#CAS_TEST__:SDLD313C
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MASRES0=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+#
+
+MASRES=CREA_MAILLAGE(MAILLAGE=MASRES0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='B',   NOEUD = 'B', ),
+        _F(NOM_GROUP_MA='C',   NOEUD = 'C', ),
+    ),
+)
+
+MODELE=AFFE_MODELE(  MAILLAGE=MASRES,AFFE=(
+                       _F(  TOUT = 'OUI', PHENOMENE = 'MECANIQUE',
+                              MODELISATION = 'DIS_T'),
+             _F(  GROUP_MA = ('B','C',),  PHENOMENE = 'MECANIQUE',
+        MODELISATION = 'DIS_T'))       )
+
+#
+RIGMAS=AFFE_CARA_ELEM(  MODELE=MODELE,DISCRET=(
+
+                _F(  GROUP_MA = 'AMORT',
+                          CARA = 'K_T_D_L',
+                          VALE = (28000., .001, .001,),
+                          AMOR_HYST = 0.1),
+                _F(  GROUP_MA = 'AMORT',
+                          CARA = 'M_T_L',
+                          VALE = (0., 0., 0.,0., 0., 0.,0., 0., 0.,
+                          0., 0., 0.,0., 0., 0.,0., 0., 0.,0., 0., 0.,),
+                          AMOR_HYST = 0.1),
+
+                _F(  MAILLE = 'K2',
+                          CARA = 'K_T_D_L',
+                          VALE = (28000., .001, .001,),
+                          AMOR_HYST = 0.1),
+                _F(  MAILLE = 'K2',
+                          CARA = 'M_T_L',
+                          VALE = (0., 0., 0.,0., 0., 0.,0., 0., 0.,
+                          0., 0., 0.,0., 0., 0.,0., 0., 0.,0., 0., 0.,),
+                          AMOR_HYST = 0.1),
+
+                _F(  GROUP_MA = 'B',
+                          CARA = 'M_T_D_N',
+                          VALE = ( 10.,)),
+
+                _F(  GROUP_MA = 'C',
+                          CARA = 'M_T_D_N',
+                          VALE = ( 5.,)))
+                        )
+
+#
+CONDLIM=AFFE_CHAR_MECA(  MODELE=MODELE,DDL_IMPO=(
+                         _F(  TOUT = 'OUI', DY = 0., DZ = 0.),
+                                  _F(  NOEUD = 'A',  DX = 0.))
+                        )
+
+RIGIELEM=CALC_MATR_ELEM(  MODELE=MODELE,       OPTION='RIGI_MECA',
+                            CARA_ELEM=RIGMAS,  CHARGE=CONDLIM     )
+
+MASSELEM=CALC_MATR_ELEM(  MODELE=MODELE,       OPTION='MASS_MECA',
+                            CARA_ELEM=RIGMAS,  CHARGE=CONDLIM     )
+
+RIGCMPLX=CALC_MATR_ELEM(  MODELE=MODELE,       OPTION='RIGI_MECA_HYST',
+                            RIGI_MECA=RIGIELEM,    CARA_ELEM=RIGMAS,
+                            CHARGE=CONDLIM )
+
+
+INCONNUS=NUME_DDL(  MATR_RIGI=RIGCMPLX )
+
+MATRRIGI=ASSE_MATRICE(  MATR_ELEM=RIGCMPLX,  NUME_DDL=INCONNUS )
+
+MATRRIGR=ASSE_MATRICE(  MATR_ELEM=RIGIELEM,  NUME_DDL=INCONNUS )
+
+MATRMASS=ASSE_MATRICE(  MATR_ELEM=MASSELEM,  NUME_DDL=INCONNUS )
+
+
+# CALCUL DES FREQUENCES PROPRES
+#-------------------------------------------------
+#
+# AVEC SORENSEN
+MODE_SO=CALC_MODES(INFO=1,
+                   MATR_RIGI=MATRRIGI,
+                   OPTION='CENTRE',
+                   CALC_FREQ=_F(NMAX_FREQ=2,
+                                FREQ=10.,
+                                ),
+                   MATR_MASS=MATRMASS,
+                   SOLVEUR=_F(METHODE='MUMPS',ELIM_LAGR='NON',),
+                   SOLVEUR_MODAL=_F(METHODE='SORENSEN',
+                                    ),
+                   )
+
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_SO,
+                   VALE_CALC=6.445680930,
+                   VALE_REFE=6.4537000000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_SO,
+                   VALE_CALC=15.561250321,
+                   VALE_REFE=15.5806,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='AMOR_REDUIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_SO,
+                   VALE_CALC=0.050000000,
+                   VALE_REFE=0.050000000000000003,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='AMOR_REDUIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_SO,
+                   VALE_CALC=0.050000000,
+                   VALE_REFE=0.050000000000000003,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                ),
+          )
+
+# AVEC QZ
+MODE_QZ=CALC_MODES(INFO=1,
+                   MATR_RIGI=MATRRIGI,
+                   OPTION='CENTRE',
+                   CALC_FREQ=_F(NMAX_FREQ=2,
+                                FREQ=10.,
+                                ),
+                   MATR_MASS=MATRMASS,
+                   SOLVEUR_MODAL=_F(TYPE_QZ='QZ_EQUI',
+                                    METHODE='QZ',
+                                    ),
+                   )
+
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_QZ,
+                   VALE_CALC=6.445680930,
+                   VALE_REFE=6.4537000000000004,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_QZ,
+                   VALE_CALC=15.561250321,
+                   VALE_REFE=15.5806,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='AMOR_REDUIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_QZ,
+                   VALE_CALC=0.050000000,
+                   VALE_REFE=0.050000000000000003,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                _F(NUME_ORDRE=2,
+                   PARA='AMOR_REDUIT',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODE_QZ,
+                   VALE_CALC=0.050000000,
+                   VALE_REFE=0.050000000000000003,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-3,),
+                ),
+          )
+
+#
+#
+FIN( )
+#

@@ -1,0 +1,87 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#  MODELISATION A : CALCUL ELASTIQUE
+#--------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'));
+
+#--------------------------------------------------------------
+# 1 - MAILLAGE ET MODELE
+#--------------------------------------------------------------
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=(_F(GROUP_MA='APPUI',),
+                             _F(OPTION='NOEUD_ORDO',
+                                NOM='FORCE',
+                                GROUP_MA='FORCE',),
+                             _F(OPTION='NOEUD_ORDO',
+                                NOM='COUPE',
+                                GROUP_MA='COUPE',),
+              _F(OPTION='NOEUD_ORDO',
+                                NOM='COUPE2',
+                                GROUP_MA='COUPE2',),
+              _F(OPTION='NOEUD_ORDO',
+                                NOM='LONH',
+                                GROUP_MA='LONH',),
+              _F(OPTION='NOEUD_ORDO',
+                                NOM='LONB',
+                                GROUP_MA='LONB',),
+                             _F(GROUP_MA='SYME_X',),
+                             _F(GROUP_MA='SYME_Z',),),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=(_F(GROUP_MA=('BETON','SYME_Z','SYME_X','FORCE',),
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D',),
+                     _F(GROUP_MA=('HA32','HA8',),
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='BARRE',),),);
+
+#--------------------------------------------------------------
+# 2- DEFINITION DES PARAMETRES MATERIAUX 
+#  ET CARACTERISTIQUES GEOMETRIQUES DES ELEMENTS DE STRUCTURE
+#--------------------------------------------------------------
+
+CARAMECA=AFFE_CARA_ELEM(MODELE=MO,
+                        BARRE=(_F(GROUP_MA='HA32',
+                                  SECTION='CERCLE',
+                                  CARA='R',
+                                  VALE=1.60000E-2,),
+                               _F(GROUP_MA='HA8',
+                                  SECTION='CERCLE',
+                                  CARA='R',
+                                  VALE=0.40000E-2,),),);
+
+BETON=DEFI_MATERIAU(ELAS=_F(E=32000.0E6,
+                            NU=0.2,),);
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=200000.E+6,
+                            NU=0.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(GROUP_MA='BETON',
+                             MATER=BETON,),
+                          _F(GROUP_MA=('HA32','HA8',),
+                             MATER=ACIER,),),);
+
+FIN();

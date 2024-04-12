@@ -1,0 +1,72 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'), )
+
+MAIL=LIRE_MAILLAGE(FORMAT='ASTER',UNITE=17)
+
+LIM = DEFI_LIST_REEL(
+   DEBUT = 0.,
+   INTERVALLE = ( _F(JUSQU_A = 2.0, PAS = 1.0,),),
+)
+
+def Temper(t,x,y,z):
+    return t*x*y*z
+
+fct1 = FORMULE(VALE='Temper(INST,X,Y,Z)',
+               Temper=Temper,
+               NOM_PARA=['INST', 'X', 'Y', 'Z'],)
+
+ch1 = CREA_CHAMP(
+   TYPE_CHAM='NOEU_NEUT_F', OPERATION= 'AFFE', MAILLAGE = MAIL ,
+   AFFE=_F(TOUT='OUI', NOM_CMP='X1', VALE_F=fct1,),
+)
+
+NEUT1 = CREA_RESU(
+   OPERATION = 'AFFE', TYPE_RESU = 'EVOL_VARC', NOM_CHAM = 'NEUT',
+   AFFE = _F(CHAM_GD = ch1, LIST_INST = LIM,),
+)
+
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=NEUT1))
+
+Noeuds={
+ 'N1' : (0.00,  0.00,  0.00),
+ 'N2' : (0.50,  0.10,  0.05),
+ 'N3' : (0.30,  0.45,  0.10),
+ 'N4' : (0.10,  0.50,  0.15),
+ 'N5' : (0.10,  0.05,  0.80),
+ 'N6' : (0.45,  0.15,  0.75),
+ 'N7' : (0.55,  0.60,  0.70),
+ 'N8' : (0.15,  0.65,  0.85),
+}
+
+mclf = {}
+mclf['RESU'] = []
+for ne in list(Noeuds.keys()):
+   for temps in [1.0 , 2.0]:
+      valeur = temps*Noeuds[ne][0]*Noeuds[ne][1]*Noeuds[ne][2]
+      mclf['RESU'].append( _F(RESULTAT=NEUT1,INST=temps,NOM_CHAM='NEUT',NOM_CMP='X1',
+                NOEUD=ne, VALE_CALC = valeur, VALE_REFE = valeur,
+                REFERENCE='ANALYTIQUE',PRECISION=1.0E-10,CRITERE='RELATIF' ),)
+
+TEST_RESU(**mclf)
+FIN()

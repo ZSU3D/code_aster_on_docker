@@ -1,0 +1,100 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mickael.abbas at edf.fr
+
+# Juste pour les besoins du cas-test.
+# Il est preferable d'utiliser :
+#       as_run --make_shared -o libumat.so src.f
+# avant de lancer l'etude.
+# On teste ici l'utilisation conjointe de deux bibliotheques (seul le nom
+# de la routine change)
+import os
+from asrun.toolbox import make_shared
+
+os.rename("fort.22", "fort.22.f")
+os.rename("fort.23", "fort.23.f")
+make_shared("libumat1.so", "fort.22.f")
+make_shared("libumat2.so", "fort.23.f")
+
+os.rename("fort.91", "umat002a.py")
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), PAR_LOT='OUI', IMPR_MACRO='NON')
+
+# donnee materiau et fonction
+
+
+# parametres elastiques
+YOUNG = 200000.0
+POISSON = 0.3
+
+# parametres loi ISOT_LINE
+SY = 437.0
+pente = 2024.74690664
+# def des materiaux
+ACIER = [None] * 3
+# unite en Pa
+C_Pa = 1.e+6
+# C_Pa = 1.
+YOUNG_Pa = YOUNG * C_Pa
+pente_Pa = pente * C_Pa
+SY_Pa = SY * C_Pa
+
+E = YOUNG
+NU = POISSON
+LAMBDA = E * NU / (1 + NU) / (1 - 2. * NU)
+MU = E / 2 / (1.0 + NU)
+LAMBD_Pa = LAMBDA * C_Pa
+MU_Pa = MU * C_Pa
+LAMBB = LAMBDA / 20.
+LAMBB_Pa = LAMBB * C_Pa
+MUB = MU / 20.
+MUB_Pa = MUB * C_Pa
+NUB = 0.
+
+ACIER[0] = DEFI_MATERIAU(ELAS=_F(E=YOUNG_Pa,
+                                 NU=POISSON,
+                                 ALPHA=11.8e-6),
+                         UMAT=_F(
+                             LISTE_COEF=(
+                                 LAMBD_Pa, MU_Pa, LAMBB_Pa, MUB_Pa, NUB)),
+                         ECRO_LINE=_F(D_SIGM_EPSI=pente_Pa, SY=SY_Pa,),)
+# unite en MPa
+ACIER[1] = DEFI_MATERIAU(ELAS=_F(E=YOUNG,
+                                 NU=POISSON,
+                                 ALPHA=11.8e-6),
+                         UMAT=_F(LISTE_COEF=(LAMBDA, MU, LAMBB, MUB, NUB)),
+                         ECRO_LINE=_F(D_SIGM_EPSI=pente, SY=SY,))
+
+compor = 'UMAT'
+
+
+# Discretisation du calcul
+# Ncal = 10
+Ncal = 7
+N_pas = 4 * [1] + [1, 5, 25, 125, 625, 3125]
+N_cas = len(N_pas)
+
+# les differents calculs effectues et les precisions sur chaque TEST_RESU
+label_cal = ['_Pa_', '_Th_', '_sym_', '_rot_'] + 6 * ['_N']
+prec_ecart = 4 * [1.E-10] + [1.E-1] + (N_cas - 5) * [1.E-2]
+prec_tgt = 1.e-8
+
+
+FIN()

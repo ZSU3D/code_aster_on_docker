@@ -1,0 +1,151 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#          IMPOSE SUR UNE FACE COURBE, AVEC UN MAILLAGE CONSTITUE DE HEXA20.
+# AUTEUR : F. LEBOUVIER DELTACAD (22/05/08)
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA = LIRE_MAILLAGE(FORMAT='MED',INFO=2)
+
+MA = DEFI_GROUP(reuse=MA, MAILLAGE=MA,
+                CREA_GROUP_NO=(_F(GROUP_MA='DROITE'),
+                               _F(GROUP_MA='GAUCHE'),
+                               _F(NOEUD='N7' , NOM = 'H'),
+                               _F(NOEUD='N58', NOM = 'I'),
+                               _F(NOEUD='N60', NOM = 'J'),
+                              ),
+                )
+
+MO=AFFE_MODELE(
+                MAILLAGE=MA,
+                AFFE=_F(  TOUT = 'OUI',
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = '3D')  )
+
+MAT=DEFI_MATERIAU(     ELAS=_F(  E = 200000.,
+                                  NU = 0.,),                 )
+
+CHMAT=AFFE_MATERIAU( MAILLAGE=MA,
+                     AFFE=_F(  TOUT = 'OUI',  MATER = MAT,)
+                    )
+
+
+
+CHBLO = AFFE_CHAR_MECA(    MODELE=MO,
+                 DDL_IMPO=_F(  GROUP_NO ='GAUCHE', DX=0.0, DY=0.0, DZ = 0.),)
+
+CHDNOR = AFFE_CHAR_MECA(    MODELE=MO,
+                 FACE_IMPO=_F( GROUP_MA ='DROITE', DNOR=0.15,),)
+
+SOL = MECA_STATIQUE( MODELE=MO,
+                     CHAM_MATER=CHMAT,
+                     EXCIT=(
+                         _F(CHARGE = CHBLO),
+                         _F(CHARGE = CHDNOR),),)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='H',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_REFE=0.1126635,
+                   VALE_CALC=0.11266351306708,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='H',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_REFE=0.1144527,
+                   VALE_CALC=0.11445272184821,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='H',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_REFE=-0.02177228,
+                   VALE_CALC=-0.021772281365546,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='I',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.10735180741318,
+                   VALE_REFE=0.1073518,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='I',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.10717960506397,
+                   VALE_REFE=0.1071796,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='I',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-0.013416015509423,
+                   VALE_REFE=-0.013416,
+                   PRECISION=1.E-3,
+                   REFERENCE='ANALYTIQUE',
+                   ),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='J',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.106087182,
+                   VALE_REFE=0.106066,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='J',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.106044853,
+                   VALE_REFE=0.106066,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='J',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=SOL,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC=-6.17576566E-16,
+                   VALE_REFE=0.0,
+                   CRITERE='ABSOLU',),
+                ),
+          )
+
+FIN()

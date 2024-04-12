@@ -1,0 +1,165 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),)
+
+MA=LIRE_MAILLAGE(UNITE=17,FORMAT='MED',)
+
+# Pour que le calcul converge sur calibre9, il faut modifier la geometrie : ALEA=1.e-11 (issue24684).
+# Mais le calcul ne converge alors plus sur athosdev !
+# ALEA=1.e-10 permet de passer sur les machines actuelles : athosdev, clap0f0q, calibre7 et calibre9
+MODI_MAILLAGE(reuse =MA, MAILLAGE=MA, DEFORME=_F(OPTION='TRAN', ALEA=1.e-10,),)
+
+
+MA=DEFI_GROUP(reuse =MA,
+   MAILLAGE=MA,
+   CREA_GROUP_NO=_F(TOUT_GROUP_MA='OUI',),)
+
+MO=AFFE_MODELE(
+   MAILLAGE=MA,
+   AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='POU_D_T_GD',),)
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=71240.0, NU=0.3,),)
+
+MAT=AFFE_MATERIAU(
+   MAILLAGE=MA,
+   AFFE=_F(TOUT='OUI', MATER=ACIER,),)
+
+CARA=AFFE_CARA_ELEM(
+   MODELE=MO,
+   POUTRE=_F(GROUP_MA='LAME', SECTION='GENERALE',
+             CARA=('A','IY','IZ','AY','AZ','JX',),
+             VALE=(18.0,0.54,1350.0,1.2,1.2,2.16,),),
+   ORIENTATION=_F(GROUP_MA='LAME', CARA='ANGL_VRIL', VALE=0.,),)
+
+CL=AFFE_CHAR_MECA(
+   MODELE=MO,
+   DDL_IMPO=_F(GROUP_NO='PA',DX=0., DY=0., DZ=0., DRX=0., DRY=0., DRZ=0.,),
+   #FORCE_NODALE=_F(GROUP_NO='PC', FZ=0.001,),
+)
+
+FORCE=AFFE_CHAR_MECA(
+   MODELE=MO,
+   FORCE_NODALE=_F(GROUP_NO='PC', FZ=0.001,  FX=1.0,),)
+
+
+FORCE_F=DEFI_FONCTION(
+   NOM_PARA='INST',
+   VALE=(0.,0.,10.0,10.0,),)
+
+tfin = 5.0
+
+TEMPS=DEFI_LIST_REEL(
+   DEBUT=0.,
+   INTERVALLE=(
+      _F(JUSQU_A=1.0,  NOMBRE=1,),
+      _F(JUSQU_A=tfin, NOMBRE=20,),),)
+
+DEFLIST=DEFI_LIST_INST(METHODE='AUTO',
+   DEFI_LIST=_F(LIST_INST = TEMPS,PAS_MINI=1.0E-12,),
+   ECHEC=_F(ACTION='DECOUPE', SUBD_METHODE='MANUEL',
+            SUBD_PAS=4, SUBD_NIVEAU = 10, SUBD_PAS_MINI = 1.0E-12,),
+   ADAPTATION=_F(EVENEMENT='SEUIL'),
+)
+
+RESO=STAT_NON_LINE(
+   INFO=1,
+   MODELE=MO,
+   CHAM_MATER=MAT,
+   CARA_ELEM=CARA,
+   EXCIT=(
+      _F(CHARGE=CL,),
+      _F(CHARGE=FORCE, FONC_MULT=FORCE_F,),),
+   COMPORTEMENT=_F(RELATION='ELAS_POUTRE_GR', DEFORMATION='GROT_GDEP',),
+   INCREMENT=_F(LIST_INST=DEFLIST, INST_FIN=tfin, ),
+   NEWTON=_F(MATRICE='TANGENTE', REAC_ITER=1,),
+   CONVERGENCE=_F(RESI_GLOB_RELA=1.0E-6, ITER_GLOB_MAXI=21,),
+   SOLVEUR=_F(METHODE='LDLT', ),
+)
+
+DEPX=RECU_FONCTION(
+   RESULTAT=RESO,
+   TOUT_ORDRE='OUI',
+   NOM_CHAM='DEPL',
+   NOM_CMP='DX',
+   GROUP_NO='PC',)
+
+DEPZ=RECU_FONCTION(
+   RESULTAT=RESO,
+   TOUT_ORDRE='OUI',
+   NOM_CHAM='DEPL',
+   NOM_CMP='DZ',
+   GROUP_NO='PC',)
+
+T_INST=RECU_TABLE(CO=RESO,NOM_PARA='INST',)
+COPIE = FORMULE(VALE='INST',
+                NOM_PARA='INST',)
+T_INST=CALC_TABLE(reuse=T_INST,
+   TABLE=T_INST,
+   ACTION=(_F(OPERATION='OPER', FORMULE=COPIE, NOM_PARA='ETA_PILOTAGE'),),)
+
+F_INST=RECU_FONCTION(TABLE=T_INST,PARA_X='INST',PARA_Y='ETA_PILOTAGE',)
+
+# ---------------------- IMPRESSION --------------------------------
+IMPR_FONCTION(
+   FORMAT='XMGRACE',
+   UNITE=29,
+   COURBE=(
+      _F(FONC_X=DEPX,FONC_Y=F_INST,LEGENDE='DX',MARQUEUR=0,),
+      _F(FONC_X=DEPZ,FONC_Y=F_INST,LEGENDE='DZ',MARQUEUR=0,), ),
+   TITRE='Reponse force-deplacement',
+   BORNE_X=(0.0,170.0,),
+   BORNE_Y=(0.0,5.0,),
+   ECHELLE_X='LIN', ECHELLE_Y='LIN',
+   GRILLE_X=20, GRILLE_Y=1,
+   LEGENDE_X='Deplacement (mm)',
+   LEGENDE_Y='Force (N)',
+)
+
+# ------------------ TESTS DE NON REGRESSION -----------------------
+IMPR_FONCTION(
+   FORMAT='TABLEAU',
+   COURBE=(
+      _F(FONCTION=DEPX,),
+      _F(FONCTION=DEPZ,),),)
+
+# TESTS DE NON REGRESSION SUR DEPX et DEPZ
+ResuRefe = [
+# PARA    DX                  DZ
+[ 1.0 ,   0.19557493473656  , 0.81849504339471  ],
+[ 1.2 ,   22.00300654158    , 45.08540123091    ],
+[ 1.4 ,   51.37065472674    , 59.12736478348    ],
+[ 1.6 ,   72.30845418011    , 61.00946861489    ],
+[ 2.0 ,   99.97155818651    , 55.98609222739    ],
+[ 3.0 ,   134.1573371202    , 39.18694695082    ],
+[ 4.0 ,   150.7072641696    , 27.66026029415    ],
+[ 5.0 ,   160.9276433402    , 20.19944462264    ],
+]
+# TOLE_MACHINE=4.e-6 pour passer sur toutes les machines car la solution est
+# numeriquement sensible (instabilite)
+motclef = {}
+motclef['VALEUR']= []
+for vpara, vdx,vdz in ResuRefe:
+   motclef['VALEUR'].append( _F(VALE_PARA=vpara, FONCTION=DEPX, VALE_CALC=vdx,
+                                TOLE_MACHINE=4.e-6, CRITERE='RELATIF',) )
+   motclef['VALEUR'].append( _F(VALE_PARA=vpara, FONCTION=DEPZ, VALE_CALC=vdz,
+                                TOLE_MACHINE=4.e-6, CRITERE='RELATIF',) )
+TEST_FONCTION(**motclef)
+
+FIN()

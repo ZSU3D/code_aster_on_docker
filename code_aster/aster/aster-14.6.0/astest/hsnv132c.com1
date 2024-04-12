@@ -1,0 +1,179 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+POURSUITE(CODE='OUI', DEBUG=_F(SDVERI='OUI'), IGNORE_ALARM=('MODELE1_63','CALCULEL_28'))
+
+DETRUIRE(CONCEPT=_F(NOM=LN))
+DETRUIRE(CONCEPT=_F(NOM=LT))
+DETRUIRE(CONCEPT=_F(NOM=FISS))
+DETRUIRE(CONCEPT=_F(NOM=MOTH))
+DETRUIRE(CONCEPT=_F(NOM=MATH))
+DETRUIRE(CONCEPT=_F(NOM=CMTH))
+DETRUIRE(CONCEPT=_F(NOM=CHTH))
+DETRUIRE(CONCEPT=_F(NOM=MODELE))
+DETRUIRE(CONCEPT=_F(NOM=MODELEK))
+DETRUIRE(CONCEPT=_F(NOM=ACIER))
+DETRUIRE(CONCEPT=_F(NOM=CHAMPMAT))
+DETRUIRE(CONCEPT=_F(NOM=CHARBLO))
+DETRUIRE(CONCEPT=_F(NOM=L_INST))
+DETRUIRE(CONCEPT=_F(NOM=UTOT))
+DETRUIRE(CONCEPT=_F(NOM=MA_XFEM))
+DETRUIRE(CONCEPT=_F(NOM=MOD_VISU))
+DETRUIRE(CONCEPT=_F(NOM=RES_XFEM))
+
+#--------------------------------------------------------------------
+#               DEFINITION DE LA FISSURE                            #
+#--------------------------------------------------------------------
+
+LN = FORMULE(VALE='Y-0.5',
+             NOM_PARA=['X', 'Y'],)
+LT = FORMULE(VALE='-X+0.5',
+             NOM_PARA=['X', 'Y'],)
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,  TYPE_ENRI_FOND='TOPOLOGIQUE',
+                    DEFI_FISS=_F(FONC_LT=LT,FONC_LN=LN,),
+                    INFO=1,
+                    );
+
+#--------------------------------------------------------------------
+#               DEBUT DU THERMIQUE                                  #
+#--------------------------------------------------------------------
+
+MOTH=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                 AFFE=_F(GROUP_MA='VOL',
+                         PHENOMENE='THERMIQUE',
+                         MODELISATION='3D',),);
+
+MOTHX=MODI_MODELE_XFEM(MODELE_IN=MOTH,FISSURE=FISS);
+
+MATH=DEFI_MATERIAU(THER=_F(LAMBDA=1.0,
+                           RHO_CP=0.0,),);
+
+CMTH=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                   AFFE=_F(TOUT='OUI',
+                           MATER=MATH,),);
+
+CHTH=AFFE_CHAR_THER(MODELE=MOTHX,
+                    TEMP_IMPO=(_F(GROUP_MA='SURFGAU',TEMP=20.0,),
+                               _F(GROUP_MA='SURFDRO',TEMP=220.0,),),
+                    ECHANGE_PAROI=(_F(FISSURE = FISS,
+                                      TEMP_CONTINUE = 'OUI',),),
+                   );
+
+THLIX=THER_LINEAIRE(MODELE=MOTHX,
+                   CHAM_MATER=CMTH,
+                   EXCIT=_F(CHARGE=CHTH,),);
+
+#--------------------------------------------------------------------
+#               FIN DU THERMIQUE                                    #
+#--------------------------------------------------------------------
+
+
+
+MODELE=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                   AFFE=(_F(GROUP_MA='VOL',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='3D',),),);
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELE,MODELE_THER=MOTHX)
+
+
+ACIER=DEFI_MATERIAU(ELAS=_F(E=205000000000.0,
+                            NU=0.3,
+                            RHO=7800.0,
+                            ALPHA=1.282E-05,),);
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELEK,
+                       AFFE=_F(GROUP_MA='VOL',MATER=ACIER,),
+                       AFFE_VARC=_F( GROUP_MA='VOL',
+                                     NOM_VARC='TEMP',
+                                     EVOL=THLIX,
+                                     VALE_REF=20.0),
+                       );
+
+
+#*********************************************************************
+#                          CONDITIONS AUX LIMITES                    *
+#*********************************************************************
+
+CHARBLO=AFFE_CHAR_MECA(MODELE=MODELEK,
+                       DDL_IMPO=(_F(GROUP_NO='SURFINF',DX=0.0,DY=0.0,),
+                                 _F(GROUP_NO='VOL',DZ=0.0, K3=0.),
+# il est necessaire de bloquer en z les ddls enrichis correspondants aux deplacements des points des levres
+# cela a une forte influence sur le deplacement resultat
+                                 _F(GROUP_NO='NHEAVI',H1Z=0.0),
+                                  ),
+                       )
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.,
+                                    NOMBRE=1))
+
+UTOT=MECA_STATIQUE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMAT,
+                   EXCIT=_F(CHARGE=CHARBLO,),
+                   INST=1,)
+
+#---------------post--------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(MODELE        = MODELEK,
+                       INFO          = 2)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),) 
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT,
+                        INFO          = 2)
+
+
+TABDEPC1= POST_RELEVE_T ( ACTION =_F(INTITULE  = 'DEPLACEMENT',
+                                   GROUP_NO  = 'PTEXTR',
+                                   RESULTAT   = UTOT,
+                                   NOM_CHAM   = 'DEPL',
+                                   NOM_CMP   = ( 'DX','DY','DZ'),
+                                   OPERATION = 'EXTRACTION',),);
+                        
+# REFERENCE : MODELISATION A (ELEMENTS CLASSIQUES)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=0.02,
+           VALE_CALC=-0.000879667796006,
+           VALE_REFE=-8.7404262899510004E-4,
+           NOM_PARA='DX',
+           TABLE=TABDEPC1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='AUTRE_ASTER',
+           PRECISION=1.E-2,
+           VALE_CALC=0.00381848009649,
+           VALE_REFE=3.8260958514619E-3,
+           NOM_PARA='DY',
+           TABLE=TABDEPC1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+FIN();

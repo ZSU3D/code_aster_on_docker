@@ -1,0 +1,308 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: emmanuel.boyere at edf.fr
+#
+#-------------------------------------------------------------------
+#                 CORRIGE TP ANALYSE MODAL N1
+#                           MODES MULTIPLES
+# OBJECTIF POUR LA BASE DE CAS-TESTS ASTER: MODAL GENERALISE REEL.
+# INTERCOMPARAISON DES METHODES DE SOUS-ESPACES (SORENSEN, LANCZOS,
+# JACOBI ET QZ).
+#-------------------------------------------------------------------
+# IMPORT PYTHON
+#import os
+#directory = "/home/xxx/ASTER/TP_MODAL/TPAM1/"
+
+#-------------------------------------------------------------------
+#                       CALCUL ASTER
+#-------------------------------------------------------------------
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),
+              IMPR_MACRO='OUI')
+
+# LECTURE ET INFO MAILLAGE
+MA=LIRE_MAILLAGE(FORMAT="ASTER",INFO=2,VERI_MAIL=_F());
+MA=DEFI_GROUP(reuse=MA,MAILLAGE=MA,
+              CREA_GROUP_MA=_F(NOM ='TOUT',TOUT = 'OUI'))
+# Attention : le test d'interpenetration peut etre long (voir la documentation).
+MACR_INFO_MAIL(MAILLAGE=MA,
+       QUALITE='OUI',
+       INTERPENETRATION='OUI',
+       CONNEXITE='OUI',
+       TAILLE='OUI',
+       PROP_CALCUL='OUI');
+
+# MODELE ET CARACTERISTIQUES POUTRE
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='POU_D_E',),);
+CARELEM=AFFE_CARA_ELEM(MODELE=MO,
+                       POUTRE=_F(GROUP_MA='TOUT',
+                                 SECTION='RECTANGLE',
+                                 CARA=('HY','HZ',),
+                                 VALE=(0.05,0.05,),),);
+
+# MATERIAU ET POIDS DU MODELE
+MAT=DEFI_MATERIAU(ELAS=_F(E=2.10E11,
+                          NU=0.3,
+                          RHO=7800.0,),);
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),);
+TABL_MAS=POST_ELEM(MODELE=MO,CHAM_MATER=CHMAT,CARA_ELEM=CARELEM,
+                   MASS_INER=_F(TOUT='OUI'));
+IMPR_TABLE(TABLE=TABL_MAS);
+
+# FIN DE LA QUESTION 0
+#FIN();
+
+# CL D'ENCASTREMENT
+CH1=AFFE_CHAR_MECA(MODELE=MO,
+                   DDL_IMPO=_F(NOEUD='A',
+                               DX=0.0,
+                               DY=0.0,
+                               DZ=0.0,
+                               DRX=0.0,
+                               DRY=0.0,
+                               DRZ=0.0,),);
+
+# CALCULS DES MATRICES DE MASSE ET DE RIGIDITE
+
+MELR1=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                     MODELE=MO,
+                     CHAM_MATER=CHMAT,
+                     CARA_ELEM=CARELEM,
+                     CHARGE=CH1,);
+MELM1=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                     MODELE=MO,
+                     CHAM_MATER=CHMAT,
+                     CARA_ELEM=CARELEM,
+                     CHARGE=CH1,);
+NUM1=NUME_DDL(MATR_RIGI=MELR1,);
+MATASSR1=ASSE_MATRICE(MATR_ELEM=MELR1,
+                      NUME_DDL=NUM1,);
+MATASSM1=ASSE_MATRICE(MATR_ELEM=MELM1,
+                      NUME_DDL=NUM1,);
+
+#--------------------------------------------------------------------
+# ANALYSE MODALE
+# QUESTION 1: CALCUL SUR LES 10 OU 11 PLUS PETITES FREQUENCES
+
+# CALCUL DES MODES AVEC CALC_MODES
+
+#------- ON TESTE LA METHODE TRI_DIAG ------------------------------------
+
+FREQ_0=CALC_MODES( OPTION='PLUS_PETITE',
+                   MATR_RIGI=MATASSR1,
+                   MATR_MASS=MATASSM1,
+                   SOLVEUR_MODAL=_F( METHODE='TRI_DIAG' ),
+                   INFO=2,
+                   CALC_FREQ=_F( NMAX_FREQ=11 ),
+                  );
+
+#------- ON TESTE LA METHODE QZ ------------------------------------
+
+FREQ_01=CALC_MODES( OPTION='PLUS_PETITE',
+                    MATR_RIGI=MATASSR1,
+                    MATR_MASS=MATASSM1,
+                    SOLVEUR_MODAL=_F( METHODE='QZ' ),
+                    INFO=2,
+                    CALC_FREQ=_F( NMAX_FREQ=11 ),
+                   );
+
+FREQ_02=CALC_MODES( OPTION='CENTRE',
+                    MATR_RIGI=MATASSR1,
+                    MATR_MASS=MATASSM1,
+                    SOLVEUR_MODAL=_F( METHODE='QZ' ),
+                    INFO=2,
+                    CALC_FREQ=_F( FREQ=2.59704E+03,
+                                  NMAX_FREQ=11 ),
+                   );
+
+FREQ_03=CALC_MODES( OPTION='TOUT',
+                    MATR_RIGI=MATASSR1,
+                    MATR_MASS=MATASSM1,
+                    SOLVEUR_MODAL=_F( METHODE='QZ' ),
+                   );
+
+# Vérification des résultats
+
+TEST_RESU(RESU=_F(NUME_ORDRE=6,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_01,
+                  VALE_CALC=2597.040657041,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=11,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_02,
+                  VALE_CALC=5769.9054933878997,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_03,
+                  VALE_CALC=167.63819422541999,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+# FIN DE LA QUESTION 1
+#FIN();
+
+# QUESTION 2: CALCUL BANDE AVEC LES QUATRES METHODES
+FREQ_SOR=CALC_MODES( OPTION='BANDE',
+                     MATR_RIGI=MATASSR1,
+                     MATR_MASS=MATASSM1,
+                     SOLVEUR_MODAL=_F( METHODE='SORENSEN' ),
+                     CALC_FREQ=_F( FREQ=(0.,6000.), ),
+                     TITRE='METHODE DE SORENSEN'
+                    );
+
+FREQ_SOR=NORM_MODE(reuse=FREQ_SOR,MODE=FREQ_SOR,NORME='EUCL',);
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=FREQ_SOR,TOUT_PARA= 'OUI',TOUT_CHAM= 'NON'),);
+
+FREQ_LAN=CALC_MODES( OPTION='BANDE',
+                     MATR_RIGI=MATASSR1,
+                     MATR_MASS=MATASSM1,
+                     SOLVEUR_MODAL=_F( METHODE='TRI_DIAG' ),
+                     CALC_FREQ=_F( FREQ=(0.,6000.), ),
+                     TITRE='METHODE DE LANCZOS'
+                    );
+
+FREQ_LAN=NORM_MODE(reuse=FREQ_LAN,MODE=FREQ_LAN,NORME='EUCL',);
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=FREQ_LAN,TOUT_PARA= 'OUI',TOUT_CHAM= 'NON'),);
+
+FREQ_JAC=CALC_MODES( OPTION='BANDE',
+                     MATR_RIGI=MATASSR1,
+                     MATR_MASS=MATASSM1,
+                     SOLVEUR_MODAL=_F( METHODE='JACOBI' ),
+                     VERI_MODE=_F( SEUIL=1e-05,),
+                     CALC_FREQ=_F( FREQ=(0.,5900.), ),
+                     TITRE='METHODE DE BATHE'
+                    );
+FREQ_JAC=NORM_MODE(reuse=FREQ_JAC,MODE=FREQ_JAC,NORME='EUCL',);
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=FREQ_JAC,TOUT_PARA= 'OUI',TOUT_CHAM= 'NON'),);
+
+FREQ_QZ=CALC_MODES( OPTION='BANDE',
+                    MATR_RIGI=MATASSR1,
+                    MATR_MASS=MATASSM1,
+                    SOLVEUR_MODAL=_F( METHODE='QZ' ),
+                    VERI_MODE=_F( SEUIL=1e-05,),
+                    CALC_FREQ=_F( FREQ=(0.,6000.) ,),
+                    TITRE='METHODE QZ'
+                  );
+
+FREQ_QZ=NORM_MODE(reuse=FREQ_QZ,MODE=FREQ_QZ,NORME='EUCL',);
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=FREQ_QZ,TOUT_PARA= 'OUI',TOUT_CHAM= 'NON'),);
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_SOR,
+                  VALE_CALC=167.63819422438999,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_LAN,
+                  VALE_CALC=1050.6045040198001,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=7,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_JAC,
+                  VALE_CALC=2942.3746290629001,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=11,
+                  PARA='FREQ',
+                  RESULTAT=FREQ_QZ,
+                  VALE_CALC=5769.9054933878997,
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+FREQ_INV=CALC_MODES( OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                     MATR_RIGI=MATASSR1,
+                     MATR_MASS=MATASSM1,
+                     VERI_MODE=_F(STURM='OUI'),
+                     CALC_FREQ=_F( FREQ=(0.,6000.) ,),
+                     TITRE='METHODE INVERSE'
+                    );
+
+FREQ_INV=NORM_MODE(reuse =FREQ_INV,MODE=FREQ_INV,NORME='EUCL',);
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=FREQ_INV,TOUT_CHAM='NON',TOUT_PARA='OUI',),);
+
+# IMPRESSION FORMAT RESULTAT DES 2 PREMIERS VECTEURS PROPRES
+IMPR_RESU(FORMAT="RESULTAT",RESU=(_F(RESULTAT=FREQ_SOR,
+                   NOM_CHAM='DEPL',
+                   NUME_ORDRE=(1,2,),
+                   NOM_CMP=('DY','DZ',),
+                   IMPR_COOR='OUI',),
+                _F(RESULTAT=FREQ_LAN,
+                   NOM_CHAM='DEPL',
+                   NUME_ORDRE=(1,2,),
+                   NOM_CMP=('DY','DZ',),
+                   IMPR_COOR='OUI',),
+                _F(RESULTAT=FREQ_JAC,
+                   NOM_CHAM='DEPL',
+                   NUME_ORDRE=(1,2,),
+                   NOM_CMP=('DY','DZ',),
+                   IMPR_COOR='OUI',),
+                _F(RESULTAT=FREQ_INV,
+                   NOM_CHAM='DEPL',
+                   NUME_ORDRE=(1,2,),
+                   NOM_CMP=('DY','DZ',),
+                   IMPR_COOR='OUI',),),);
+
+# IMPRESSION FORMAT MED DES MODES PROPRES
+IMPR_RESU(FORMAT='MED',UNITE=55,
+          RESU=(
+                _F(
+                   MAILLAGE=MA,),
+                _F(
+                   RESULTAT=FREQ_SOR,),
+                _F(
+                   RESULTAT=FREQ_LAN,),
+                _F(
+                   RESULTAT=FREQ_JAC,),),);
+
+# AFFICHAGE GIBI INTERACTIF VIA PYTHON
+#os.system('cp %spost.dcas .' %directory)
+#os.system('/logiciels/aster/outils/gibi2000.x post.dcas')
+
+# FIN DE LA QUESTION 2.
+#FIN();
+
+# QUESTION 3: AFFICHAGE AGRAF INTERACTIF VIA PYTHON
+#os.system('cp %smode.digr .' %directory)
+#os.system('agraf mode.digr')
+
+FIN();

@@ -1,0 +1,490 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# - Un effort de compression en extremite de poutre.
+# - Le chargement se fait en 2 pas, avec un stat_non_line
+# - Recuperation, avec une boucle python des blocages et des efforts de
+#     precontrainte necessaires au 2 calculs de flambement.
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ), DEBUG=_F(SDVERI='OUI'))
+
+# Lecture du maillage
+MA = LIRE_MAILLAGE(FORMAT="ASTER",)
+
+# AFFECTATION DES MODELES DE COMPORTEMENT
+MO = AFFE_MODELE(
+   MAILLAGE= MA,
+   AFFE=(
+      _F(GROUP_MA=('S002','S001',),
+         PHENOMENE= 'MECANIQUE',
+         MODELISATION= 'POU_D_TGM'),
+))
+
+GF=DEFI_GEOM_FIBRE(
+FIBRE = (
+#  Sections: /RE40X20, modele: POU_D_TGM, Epa: 4, lar: 8
+  _F( CARA = 'SURFACE', COOR_AXE_POUTRE = (0.0 , 0.0),
+      GROUP_FIBRE = ('SECF2',),
+      VALE = (
+# Nombre de fibre : 32
+        -1.75000e-02,  -7.50000e-03,   2.50000e-05,
+        -1.75000e-02,  -2.50000e-03,   2.50000e-05,
+        -1.75000e-02,   2.50000e-03,   2.50000e-05,
+        -1.75000e-02,   7.50000e-03,   2.50000e-05,
+        -1.25000e-02,  -7.50000e-03,   2.50000e-05,
+        -1.25000e-02,  -2.50000e-03,   2.50000e-05,
+        -1.25000e-02,   2.50000e-03,   2.50000e-05,
+        -1.25000e-02,   7.50000e-03,   2.50000e-05,
+        -7.50000e-03,  -7.50000e-03,   2.50000e-05,
+        -7.50000e-03,  -2.50000e-03,   2.50000e-05,
+        -7.50000e-03,   2.50000e-03,   2.50000e-05,
+        -7.50000e-03,   7.50000e-03,   2.50000e-05,
+        -2.50000e-03,  -7.50000e-03,   2.50000e-05,
+        -2.50000e-03,  -2.50000e-03,   2.50000e-05,
+        -2.50000e-03,   2.50000e-03,   2.50000e-05,
+        -2.50000e-03,   7.50000e-03,   2.50000e-05,
+         2.50000e-03,  -7.50000e-03,   2.50000e-05,
+         2.50000e-03,  -2.50000e-03,   2.50000e-05,
+         2.50000e-03,   2.50000e-03,   2.50000e-05,
+         2.50000e-03,   7.50000e-03,   2.50000e-05,
+         7.50000e-03,  -7.50000e-03,   2.50000e-05,
+         7.50000e-03,  -2.50000e-03,   2.50000e-05,
+         7.50000e-03,   2.50000e-03,   2.50000e-05,
+         7.50000e-03,   7.50000e-03,   2.50000e-05,
+         1.25000e-02,  -7.50000e-03,   2.50000e-05,
+         1.25000e-02,  -2.50000e-03,   2.50000e-05,
+         1.25000e-02,   2.50000e-03,   2.50000e-05,
+         1.25000e-02,   7.50000e-03,   2.50000e-05,
+         1.75000e-02,  -7.50000e-03,   2.50000e-05,
+         1.75000e-02,  -2.50000e-03,   2.50000e-05,
+         1.75000e-02,   2.50000e-03,   2.50000e-05,
+         1.75000e-02,   7.50000e-03,   2.50000e-05,
+# Points particuliers : 4
+        -2.00000e-02,  -1.00000e-02,   0.00000e+00,
+        -2.00000e-02,   1.00000e-02,   0.00000e+00,
+         2.00000e-02,   1.00000e-02,   0.00000e+00,
+         2.00000e-02,  -1.00000e-02,   0.00000e+00,
+# // Position des Jauges : 24
+        -2.00000e-02,  -7.50000e-03,   0.00000e+00,
+        -2.00000e-02,  -2.50000e-03,   0.00000e+00,
+        -2.00000e-02,   2.50000e-03,   0.00000e+00,
+        -2.00000e-02,   7.50000e-03,   0.00000e+00,
+        -1.75000e-02,   1.00000e-02,   0.00000e+00,
+        -1.25000e-02,   1.00000e-02,   0.00000e+00,
+        -7.50000e-03,   1.00000e-02,   0.00000e+00,
+        -2.50000e-03,   1.00000e-02,   0.00000e+00,
+         2.50000e-03,   1.00000e-02,   0.00000e+00,
+         7.50000e-03,   1.00000e-02,   0.00000e+00,
+         1.25000e-02,   1.00000e-02,   0.00000e+00,
+         1.75000e-02,   1.00000e-02,   0.00000e+00,
+         2.00000e-02,   7.50000e-03,   0.00000e+00,
+         2.00000e-02,   2.50000e-03,   0.00000e+00,
+         2.00000e-02,  -2.50000e-03,   0.00000e+00,
+         2.00000e-02,  -7.50000e-03,   0.00000e+00,
+         1.75000e-02,  -1.00000e-02,   0.00000e+00,
+         1.25000e-02,  -1.00000e-02,   0.00000e+00,
+         7.50000e-03,  -1.00000e-02,   0.00000e+00,
+         2.50000e-03,  -1.00000e-02,   0.00000e+00,
+        -2.50000e-03,  -1.00000e-02,   0.00000e+00,
+        -7.50000e-03,  -1.00000e-02,   0.00000e+00,
+        -1.25000e-02,  -1.00000e-02,   0.00000e+00,
+        -1.75000e-02,  -1.00000e-02,   0.00000e+00,
+           ), ),
+
+#  Sections: /RE40X20, modele: POU_D_TGM, Epa: 4, lar: 8
+  _F( CARA = 'SURFACE', COOR_AXE_POUTRE = (0.0 , 0.0),
+      GROUP_FIBRE = ('SECF1',),
+      VALE = (
+# Nombre de fibre : 32
+        -1.75000e-02,  -7.50000e-03,   2.50000e-05,
+        -1.75000e-02,  -2.50000e-03,   2.50000e-05,
+        -1.75000e-02,   2.50000e-03,   2.50000e-05,
+        -1.75000e-02,   7.50000e-03,   2.50000e-05,
+        -1.25000e-02,  -7.50000e-03,   2.50000e-05,
+        -1.25000e-02,  -2.50000e-03,   2.50000e-05,
+        -1.25000e-02,   2.50000e-03,   2.50000e-05,
+        -1.25000e-02,   7.50000e-03,   2.50000e-05,
+        -7.50000e-03,  -7.50000e-03,   2.50000e-05,
+        -7.50000e-03,  -2.50000e-03,   2.50000e-05,
+        -7.50000e-03,   2.50000e-03,   2.50000e-05,
+        -7.50000e-03,   7.50000e-03,   2.50000e-05,
+        -2.50000e-03,  -7.50000e-03,   2.50000e-05,
+        -2.50000e-03,  -2.50000e-03,   2.50000e-05,
+        -2.50000e-03,   2.50000e-03,   2.50000e-05,
+        -2.50000e-03,   7.50000e-03,   2.50000e-05,
+         2.50000e-03,  -7.50000e-03,   2.50000e-05,
+         2.50000e-03,  -2.50000e-03,   2.50000e-05,
+         2.50000e-03,   2.50000e-03,   2.50000e-05,
+         2.50000e-03,   7.50000e-03,   2.50000e-05,
+         7.50000e-03,  -7.50000e-03,   2.50000e-05,
+         7.50000e-03,  -2.50000e-03,   2.50000e-05,
+         7.50000e-03,   2.50000e-03,   2.50000e-05,
+         7.50000e-03,   7.50000e-03,   2.50000e-05,
+         1.25000e-02,  -7.50000e-03,   2.50000e-05,
+         1.25000e-02,  -2.50000e-03,   2.50000e-05,
+         1.25000e-02,   2.50000e-03,   2.50000e-05,
+         1.25000e-02,   7.50000e-03,   2.50000e-05,
+         1.75000e-02,  -7.50000e-03,   2.50000e-05,
+         1.75000e-02,  -2.50000e-03,   2.50000e-05,
+         1.75000e-02,   2.50000e-03,   2.50000e-05,
+         1.75000e-02,   7.50000e-03,   2.50000e-05,
+# Points particuliers : 4
+        -2.00000e-02,  -1.00000e-02,   0.00000e+00,
+        -2.00000e-02,   1.00000e-02,   0.00000e+00,
+         2.00000e-02,   1.00000e-02,   0.00000e+00,
+         2.00000e-02,  -1.00000e-02,   0.00000e+00,
+           ), ),
+),
+            )
+
+# DEFINITION DES MATERIAUX
+#            DES CARACTERISTIQUES ELASTIQUES et PLASTIQUES DES POUTRES
+# Comportement du materiau : E360.
+MAT0001 = DEFI_MATERIAU(
+   ELAS =_F( E= 2.100000e+11, NU= 3.000000e-01, RHO= 7.850000e+03,
+             ALPHA= 6.700000e-06),
+   ECRO_LINE= _F( D_SIGM_EPSI = 1.0E+08 ,
+                  SY= 400.0E+06),
+)
+
+COMPF=DEFI_COMPOR(GEOM_FIBRE=GF,MATER_SECT=MAT0001,
+                  MULTIFIBRE=(_F(GROUP_FIBRE=('SECF1','SECF2'),
+                                 MATER=MAT0001, RELATION='VMIS_ISOT_LINE'),))
+
+
+# -------------------------------------------------------
+# Affectation des materiaux
+CHMAT = AFFE_MATERIAU( MAILLAGE= MA, MODELE= MO,
+   AFFE=(
+# Pour les poutres ou les barres ou les cables
+# Elements avec le materiau : E360.
+_F( GROUP_MA= ('S002','S001'),MATER= MAT0001 ),
+      ),
+AFFE_COMPOR=_F(GROUP_MA=('S001','S002'),COMPOR=COMPF));
+
+
+# AFFECTATION DES CARACTERISTIQUES DES ELEMENTS
+CAREL = AFFE_CARA_ELEM( MODELE= MO,
+# Sections de spref /RE40X20 de modele POU_D_TGM
+POUTRE=(
+   _F(SECTION= 'GENERALE', GROUP_MA=('S002','S001',),
+   CARA= ( 'A','IY','IZ','AY',
+           'AZ','EY','EZ','JX',
+           'JG','IYR2','IZR2'),
+   VALE= ( 8.000000e-04,2.5e-08,1.05e-07,1.191790e+00,
+           1.172840e+00,0.000000e+00,0.000000e+00,7.093682e-08,
+           1.438125e-12,0.000000e+00,0.000000e+00 ) ),
+),
+GEOM_FIBRE=GF,
+MULTIFIBRE=(_F(GROUP_MA='S002',GROUP_FIBRE='SECF2', PREC_AIRE=1.0E-06, PREC_INERTIE=1.0E-06,),
+            _F(GROUP_MA='S001',GROUP_FIBRE='SECF1', PREC_AIRE=1.0E-06, PREC_INERTIE=1.0E-06,),),
+ORIENTATION=(
+# Pour les poutres
+   _F(GROUP_MA= 'S002', CARA= 'ANGL_VRIL', VALE= 9.000000e+01 ),
+   _F(GROUP_MA= 'S001', CARA= 'ANGL_VRIL', VALE= 9.000000e+01 ),
+  ),
+)
+
+
+# ----------------------------------------------------------------------
+# --------------- DEFINITION DES CHARGEMENTS VARIABLES -----------------
+
+# fonction de chargement :
+FCHG000X = DEFI_FONCTION(
+       NOM_PARA= 'INST',  VALE= (
+     0.0,      0.0,
+     1.0,  -1000.0,
+     2.0,  -2000.0,
+    ), PROL_GAUCHE= 'CONSTANT',
+       PROL_DROITE= 'CONSTANT')
+
+# fonction de chargement : constant. Valeur maxi : 0.000000e+00
+FCHG0002 = DEFI_FONCTION(
+       NOM_PARA= 'INST',  VALE= (
+     0.0000000e+00,  0.0000000e+00,
+     1.0000000e+00,  0.0000000e+00,
+    ), PROL_GAUCHE= 'CONSTANT',
+       PROL_DROITE= 'CONSTANT')
+
+TEMPS = DEFI_LIST_REEL(
+   DEBUT = 0.000000e+00,
+   INTERVALLE= _F(JUSQU_A= 2.0, PAS=1.0) )
+
+# ----------------------------------------------------------------------
+# ----------------------- DEPLACEMENTS ---------------------------------
+DEPLT = AFFE_CHAR_MECA_F(
+   MODELE= MO,
+   DDL_IMPO=(
+      _F( NOEUD= ('G00202',),
+          DX=FCHG0002, DY=FCHG0002, DZ=FCHG0002, DRX=FCHG0002 ),
+      _F( NOEUD= ('G00101',),
+          DY=FCHG0002, DZ=FCHG0002, DRX=FCHG0002 ),
+))
+
+# ----------------------------------------------------------------------
+# --------------------------- EFFORTS ----------------------------------
+FORCT = AFFE_CHAR_MECA_F(
+   MODELE= MO,
+   FORCE_NODALE=(
+      _F( NOEUD= ('G00101',),
+          FX=FCHG000X ) ) )
+
+# **********************************************************************
+#                  C A L C U L   N O N   L I N E A I R E
+# **********************************************************************
+
+STNL = STAT_NON_LINE(
+   MODELE    = MO,
+   CHAM_MATER= CHMAT,
+   CARA_ELEM = CAREL,
+   EXCIT=(
+     _F(CHARGE = DEPLT ),
+     _F(CHARGE = FORCT ),
+   ),
+   INCREMENT= _F(LIST_INST = TEMPS),
+   NEWTON= _F(MATRICE = 'TANGENTE', REAC_ITER= 1),
+   COMPORTEMENT=(
+   _F(RELATION= 'MULTIFIBRE',
+      DEFORMATION= 'PETIT',
+      GROUP_MA=('S002','S001',)),
+   ),
+)
+
+# For STRX_ELGA: no print structural elements (CARA_ELEM = None) - See #29164
+IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=STNL,NOM_CHAM=('STRX_ELGA')),
+          UNITE=70);
+
+IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=STNL,CARA_ELEM=CAREL,NOM_CHAM=('DEPL','VARI_ELGA','SIEF_ELGA'),IMPR_NOM_VARI='NON',),
+          UNITE=70);
+
+# Check IMPR_RESU / LIRE_RESU
+IMPR_RESU(FORMAT='MED',RESU=_F(RESULTAT=STNL,IMPR_NOM_VARI='NON',),UNITE=81,PROC0='NON',);
+BIS=LIRE_RESU(TYPE_RESU='EVOL_NOLI',
+              CARA_ELEM=CAREL,
+              FORMAT='MED',
+              MODELE=MO,
+              TOUT_ORDRE='OUI',
+              UNITE=81,
+              FORMAT_MED=_F(NOM_RESU='STNL',
+                            NOM_CHAM=('SIEF_ELGA'),),
+              );
+
+TEST_RESU(RESU = (_F(RESULTAT = BIS,
+                     NUME_ORDRE = 2,
+                     NOM_CHAM = 'SIEF_ELGA',
+                     NOM_CMP = 'SIXX',
+                     MAILLE = 'E00204',
+                     POINT = 1,
+                     SOUS_POINT = 60,
+                     VALE_CALC=-2500000.0,
+                     VALE_REFE = -2.5E6,
+                     REFERENCE='NON_DEFINI',),
+                  _F(RESULTAT = BIS,
+                     NUME_ORDRE = 2,
+                     NOM_CHAM = 'SIEF_ELGA',
+                     NOM_CMP = 'SIXX',
+                     MAILLE = 'E00100',
+                     POINT = 3,
+                     SOUS_POINT = 36,
+                     VALE_CALC=-2500000.0,
+                     VALE_REFE = -2.5E6,
+                     REFERENCE='NON_DEFINI',)),);
+
+FL = [None]*3
+for i in range(1,3):
+  print("Nume ordre   %d " % i)
+  inst = i * 1.0;
+
+# Matrice elementaire de rigidite
+  MELRI=CALC_MATR_ELEM(
+     OPTION='RIGI_MECA',
+     MODELE=MO,
+     CHAM_MATER=CHMAT,
+     CARA_ELEM=CAREL,
+     CHARGE=DEPLT,
+     INST= inst )
+
+# Numerotation des equations du systeme
+  NUMDDL=NUME_DDL(MATR_RIGI=MELRI,)
+
+# Matrice assemblee de rigidite
+  MASRI=ASSE_MATRICE(
+    MATR_ELEM=MELRI,
+    NUME_DDL=NUMDDL,)
+
+# Prise en compte de la precontrainte au niveau elementaire
+  VASFO=CREA_CHAMP(
+    TYPE_CHAM='ELGA_SIEF_R',
+    OPERATION='EXTR',
+    RESULTAT=STNL,
+    NOM_CHAM='SIEF_ELGA',
+    NUME_ORDRE= i )
+
+  VASFI=CREA_CHAMP(
+    TYPE_CHAM='ELGA_STRX_R',
+    OPERATION='EXTR',
+    RESULTAT=STNL,
+    NOM_CHAM='STRX_ELGA',
+    NUME_ORDRE= i )
+
+# Matrice elementaire de rigidite geometrique
+  MELGEO=CALC_MATR_ELEM(
+    OPTION='RIGI_GEOM',
+    CHAM_MATER=CHMAT,
+    MODELE=MO,
+    CARA_ELEM=CAREL,
+    SIEF_ELGA=VASFO,
+    STRX_ELGA=VASFI)
+
+# Matrice assemblee de rigidite geometrique
+  MASGEO=ASSE_MATRICE(
+    MATR_ELEM=MELGEO,
+    NUME_DDL=NUMDDL,)
+
+# Calcul modal avec precontrainte
+# Creation du nom du concept de flambement
+  FL[ i ]=CALC_MODES(MATR_RIGI=MASRI,
+                       VERI_MODE=_F(STOP_ERREUR='NON',
+                                    ),
+                       TYPE_RESU='MODE_FLAMB',
+                       MATR_RIGI_GEOM=MASGEO,
+                       CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=6,
+                                         ),
+                       OPTION='PLUS_PETITE',
+                       )
+
+
+  FL[ i ]=NORM_MODE(
+    reuse =FL[ i ],
+    MODE  =FL[ i ],
+    NORME ='TRAN',)
+  DETRUIRE( CONCEPT= _F( NOM= MELRI ) )
+  DETRUIRE( CONCEPT= _F( NOM= NUMDDL ) )
+  DETRUIRE( CONCEPT= _F( NOM= MASRI ) )
+  DETRUIRE( CONCEPT= _F( NOM= VASFO ) )
+  DETRUIRE( CONCEPT= _F( NOM= VASFI ) )
+  DETRUIRE( CONCEPT= _F( NOM= MELGEO ) )
+  DETRUIRE( CONCEPT= _F( NOM= MASGEO ) )
+
+
+
+# correspondance des modes calcules avec les modes de la doc
+
+# MODES CALC  MODES DOC
+#     6           2/Iy
+#     5           4/Iz
+#     4           3/Iz
+#     3           1/Iy
+#     2           2/Iz
+#     1           1/Iz
+
+
+
+
+TEST_RESU(RESU=(
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=2.87844636758,
+                   VALE_REFE=2.8786346169843959,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=12.0853832421,
+                   VALE_REFE=12.090265391334462,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=11.5158505595,
+                   VALE_REFE=11.514538467937584,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=25.9537971718,
+                   VALE_REFE=25.907711552859563,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=6,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=48.3024125394,
+                   VALE_REFE=48.361061565337849,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_2,
+                   VALE_CALC=46.3704792914,
+                   VALE_REFE=46.058153871750335,
+                   PRECISION=7.E-3,),
+
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=1,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=5.75689273516,
+                   VALE_REFE=5.7572692339687919,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=3,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=24.1707664843,
+                   VALE_REFE=24.180530782668924,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=23.0317011189,
+                   VALE_REFE=23.029076935875167,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=4,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=51.9075943435,
+                   VALE_REFE=51.815423105719127,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=6,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=96.6048250787,
+                   VALE_REFE=96.722123130675698,
+                   PRECISION=2.E-3,),
+                _F(PARA='CHAR_CRIT',
+                   NUME_MODE=5,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=FL_1,
+                   VALE_CALC=92.7409585829,
+                   VALE_REFE=92.11630774350067,
+                   PRECISION=7.E-3,),
+                ),
+          )
+
+FIN()

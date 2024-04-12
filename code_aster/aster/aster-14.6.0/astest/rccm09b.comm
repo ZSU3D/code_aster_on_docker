@@ -1,0 +1,294 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAILLAGE=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAILLAGE = DEFI_GROUP(reuse =MAILLAGE,MAILLAGE=MAILLAGE,
+                      CREA_GROUP_NO=(_F(TOUT_GROUP_MA = 'OUI',),
+                                     _F(INTERSEC = ('LEXT','LINF'),
+                                        NOM = 'GBLOC'),
+                                    _F(OPTION = 'NOEUD_ORDO',
+                                       GROUP_MA = 'LSUP',
+                                       NOM = 'GSUP'), ),
+                      );
+
+MAILLAGE = MODI_MAILLAGE(reuse = MAILLAGE,  MAILLAGE = MAILLAGE,
+                         MODI_MAILLE = _F(OPTION = 'NOEUD_QUART',
+                                         GROUP_NO_FOND = 'PF0',),
+                        );
+
+MAILLAGE=MODI_MAILLAGE(reuse =MAILLAGE, MAILLAGE=MAILLAGE,
+                       ORIE_PEAU_2D=(_F(GROUP_MA='LSUP',),),
+                       );
+#
+# MODELE, MATERIAU
+#
+MODEMECA=AFFE_MODELE(MAILLAGE=MAILLAGE,
+                     AFFE=_F(GROUP_MA = ('SCYL','LSUP'),
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='D_PLAN',),);
+
+rayon = 0.046
+MAT=DEFI_MATERIAU(  ELAS=_F( E = 200000.,  NU = 0.3,  ALPHA = 1.0E-5),
+                    RCCM=_F(  M_KE = 1.7,
+                              N_KE = 0.3,
+                              SM = 200.,
+                              SY_02 = 200.,
+                              A_AMORC = 7091,
+                              B_AMORC = -0.1823,
+                              R_AMORC = 1.63,
+                              D_AMORC = rayon,
+                              ), )
+
+MATERIO=AFFE_MATERIAU (MAILLAGE=MAILLAGE,
+                       AFFE=_F(GROUP_MA = 'SCYL',
+                                MATER=MAT,
+                                ),);
+
+#
+#  Conditions aux limites
+#
+BLOCAGE = AFFE_CHAR_MECA(MODELE=MODEMECA,
+                         DDL_IMPO=(_F(GROUP_NO='PF0',   DY=0.0,),
+                                   _F(GROUP_NO='GBLOC', DY=0.0,DX=0.0,),),);
+
+
+FORC_IMP = AFFE_CHAR_MECA(MODELE=MODEMECA,
+                          FORCE_CONTOUR=(_F(GROUP_MA='LSUP',  FY= 3.,),
+                                         _F(GROUP_MA='LINF2', FY=-3.,),),);
+
+#
+# Transitoire 1
+#
+LINST1=DEFI_LIST_REEL(   DEBUT=0.,
+                        INTERVALLE=_F(  JUSQU_A = 1.,  PAS = 1.)  )
+
+FMUL1=DEFI_FONCTION(  NOM_PARA='INST',
+                       VALE=( 0.0,  0.0,
+                              1.0,  100.0,  )   )
+
+RESU1=MECA_STATIQUE(MODELE=MODEMECA,
+                       CHAM_MATER=MATERIO,
+                       LIST_INST=LINST1,
+                       EXCIT=(_F(CHARGE=BLOCAGE,),
+                              _F(CHARGE=FORC_IMP,FONC_MULT = FMUL1),),
+                  );
+RESU1=CALC_CHAMP(reuse=RESU1,RESULTAT=RESU1,CONTRAINTE=('SIGM_ELNO'))
+
+
+RESU1=CALC_CHAMP(reuse=RESU1, RESULTAT=RESU1,
+              CONTRAINTE='SIGM_NOEU',);
+
+Xo = 143. ;
+Xr = Xo - rayon ;
+TAB_SIG1 = MACR_LIGN_COUPE( RESULTAT=RESU1,
+                            NOM_CHAM='SIGM_NOEU',
+                            LIGN_COUPE=_F(TYPE='ARC',
+                                          NB_POINTS= 16,
+                                          COOR_ORIG= (Xr, 0.),
+                                          CENTRE= (Xo, 0.),
+                                          ANGLE=360.,
+                                          REPERE='CYLINDRIQUE',),);
+IMPR_TABLE(TABLE = TAB_SIG1)
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MAILLAGE, SYME='NON',
+                    FOND_FISS=_F( GROUP_NO = 'PF0',),
+                    LEVRE_SUP=_F( GROUP_MA = 'LFIS'),
+                    LEVRE_INF=_F( GROUP_MA = 'LFISI'),)
+
+TABK = POST_K1_K2_K3(FOND_FISS = FISS,
+                     RESULTAT = RESU1,
+                     INFO=2,
+                     );
+
+IMPR_TABLE(TABLE=TABK,);
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=2857.86044221,
+           VALE_REFE=2873.9000000000001,
+           NOM_PARA='K1',
+           TABLE=TABK,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=1.0,),
+           )
+
+#
+# Transitoire 2
+#
+LINST2=DEFI_LIST_REEL(   DEBUT=0.,
+                        INTERVALLE=_F(  JUSQU_A = 2.,  PAS = 1.)  )
+
+FMUL2=DEFI_FONCTION(  NOM_PARA='INST',
+                       VALE=( 0.0,  10.0,
+                              1.0,  110.0,
+                              2.0,  50.0,  )   );
+
+RESU2=MECA_STATIQUE(MODELE=MODEMECA,
+                    CHAM_MATER=MATERIO,
+                    LIST_INST=LINST2,
+                    EXCIT=(_F(CHARGE=BLOCAGE,),
+                           _F(CHARGE=FORC_IMP,FONC_MULT = FMUL2),),
+                  );
+RESU2=CALC_CHAMP(reuse=RESU2,RESULTAT=RESU2,CONTRAINTE=('SIGM_ELNO'))
+
+
+RESU2=CALC_CHAMP(reuse=RESU2, RESULTAT=RESU2,
+              CONTRAINTE='SIGM_NOEU',);
+
+TAB_SIG2 = MACR_LIGN_COUPE( RESULTAT=RESU2,
+                            NOM_CHAM='SIGM_NOEU',
+                            LIGN_COUPE=_F(TYPE='ARC',
+                                          NB_POINTS= 16,
+                                          COOR_ORIG= (Xr, 0.),
+                                          CENTRE= (Xo, 0.),
+                                          ANGLE=360.,
+                                          REPERE='CYLINDRIQUE',),)
+IMPR_TABLE(TABLE = TAB_SIG2)
+
+#
+# Calcul du facteur d amorcage
+#
+FAMOR=POST_RCCM(TYPE_RESU_MECA = 'EVOLUTION',
+                OPTION = 'AMORCAGE',
+                TYPE_RESU = 'VALE_MAX',
+                MATER=MAT,
+                INFO=2,
+                TITRE='Calcul du facteur d amorcage',
+                TRANSITOIRE=(_F(TABL_SIGM_THETA = TAB_SIG1,
+                                INST = (0., 1. ),
+                                NB_OCCUR = 1 ),
+                             _F(TABL_SIGM_THETA = TAB_SIG2,
+                                INST = (0., 1., 2., ),
+                                NB_OCCUR = 1 ),),
+                 )
+
+IMPR_TABLE(TABLE = FAMOR)
+
+TEST_TABLE(
+           VALE_CALC=0.00114690281088,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=90.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.590067008463,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.14999999999999999,
+           VALE_CALC=0.590067008463,
+           VALE_REFE=0.52900000000000003,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+FAMOR2=POST_RCCM(TYPE_RESU_MECA = 'EVOLUTION',
+                 OPTION = 'AMORCAGE',
+                 TYPE_RESU = 'VALE_MAX',
+                 MATER=MAT,
+                 TITRE='Calcul du facteur d amorcage',
+                 TRANSITOIRE=(_F(TABL_SIGM_THETA = TAB_SIG1,
+                                 INST = (0., 1. ),
+                                 NB_OCCUR = 2 ),
+                              _F(TABL_SIGM_THETA = TAB_SIG2,
+                                 INST = (0., 1., 2., ),
+                                 NB_OCCUR = 1 ),),
+                 )
+
+IMPR_TABLE(TABLE = FAMOR2 )
+
+TEST_TABLE(
+           VALE_CALC=0.00160921586331,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR2,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=90.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.827921233976,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR2,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.14999999999999999,
+           VALE_CALC=0.827921233976,
+           VALE_REFE=0.74199999999999999,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR2,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+FAMOR3=POST_RCCM(TYPE_RESU_MECA = 'EVOLUTION',
+                 OPTION = 'AMORCAGE',
+                 TYPE_RESU = 'VALE_MAX',
+                 MATER=MAT,
+                 TITRE='Calcul du facteur d amorcage',
+                 TRANSITOIRE=(_F(TABL_SIGM_THETA = TAB_SIG1,
+                                 INST = (0., 1. ),
+                                 NB_OCCUR = 1 ),
+                              _F(TABL_SIGM_THETA = TAB_SIG2,
+                                 INST = (0., 1., 2., ),
+                                 NB_OCCUR = 3 ),),
+                 )
+
+IMPR_TABLE(TABLE = FAMOR3 )
+
+TEST_TABLE(
+           VALE_CALC=0.00241362732771,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR3,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=90.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1.24178077104,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR3,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.14999999999999999,
+           VALE_CALC=1.24178077104,
+           VALE_REFE=1.113,
+           NOM_PARA='FACT_AMORCAGE',
+           TABLE=FAMOR3,
+           FILTRE=_F(NOM_PARA='THETA',
+                     VALE=180.0,),
+           )
+
+FIN( )

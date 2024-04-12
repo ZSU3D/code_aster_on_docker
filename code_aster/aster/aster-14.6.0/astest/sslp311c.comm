@@ -1,0 +1,230 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#       PLAQUE RECTANGULAIRE FINIE SOUMISE A L'ACTION D'UNE TRACTION
+#       THETA = 45 DEGRES
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+#
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',  )
+
+MO=AFFE_MODELE(  MAILLAGE=MA, 
+      AFFE=_F( TOUT = 'OUI',PHENOMENE = 'MECANIQUE',MODELISATION = 'C_PLAN'))
+
+#
+MAT1=DEFI_MATERIAU(ELAS=_F(  E = 2.E12, NU = 0.3, RHO = 0., ALPHA = 0.))
+
+MAT2=DEFI_MATERIAU(ELAS=_F(  E = 2.E11, NU = 0.3, RHO = 0., ALPHA = 0.))
+
+#
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=(
+                           _F(  GROUP_MA = 'VTOT1',  MATER = MAT1),
+                           _F(  GROUP_MA = 'LP3P4',  MATER = MAT1),
+                           _F(  GROUP_MA = 'LP2P3',  MATER = MAT1),
+                           _F(  GROUP_MA = 'VTOT2',  MATER = MAT2),
+                           _F(  GROUP_MA = 'LP7P8',  MATER = MAT2),
+                           _F(  GROUP_MA = 'LP6P7',  MATER = MAT2))
+                       )
+
+#
+#
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA, 
+                     CREA_GROUP_NO=_F( 
+                         GROUP_MA = ( 'LP3P4',  'LP2P3',  
+                                      'LP6P7',  'LP7P8',  ))
+                 )
+
+#
+CH=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=( 
+            _F(  GROUP_NO = 'LP6P7',   DY = 0.),
+                     _F(  GROUP_NO = 'LP7P8',   DY = 0.),
+                     _F(  GROUP_NO = 'P6',      DX = 0.)),FORCE_CONTOUR=(
+            
+                     _F(  GROUP_MA = 'LP3P4',  FY = 100.E6), 
+                     _F(  GROUP_MA = 'LP2P3',  FY = 100.E6))
+
+                          )
+
+#
+CHAMDEPL=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT, 
+                              EXCIT=_F( CHARGE = CH)
+                          )
+
+#
+# POINT DROIT
+#
+
+FOND1=DEFI_FOND_FISS(MAILLAGE=MA,SYME='NON',
+                     FOND_FISS=_F(GROUP_NO='P0',),
+                     LEVRE_SUP=_F(GROUP_MA = 'LEVR_SUP',),
+                     LEVRE_INF=_F(GROUP_MA = 'LEVR_INF',),
+                     );
+
+#
+G01A=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.,
+                         FOND_FISS=FOND1,
+                        R_SUP=0.001875E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=57.0391830852,
+           VALE_REFE=59.412239999999997,
+           NOM_PARA='G',
+           TABLE=G01A,)
+
+
+#
+G01B=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.001875E-2,
+                         FOND_FISS=FOND1,
+                         R_SUP=0.003750E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=59.5053220995,
+           VALE_REFE=59.412239999999997,
+           NOM_PARA='G',
+           TABLE=G01B,)
+
+
+#
+G01C=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.003750E-2,
+                         FOND_FISS=FOND1,
+                         R_SUP=0.005625E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=59.5162161435,
+           VALE_REFE=59.412239999999997,
+           NOM_PARA='G',
+           TABLE=G01C,)
+
+#
+G01D=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.005625E-2,
+                         FOND_FISS=FOND1,
+                         R_SUP=0.007500E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-2,
+           VALE_CALC=59.5187559739,
+           VALE_REFE=59.412239999999997,
+           NOM_PARA='G',
+           TABLE=G01D,)
+
+#
+# POINT GAUCHE
+#
+FOND2=DEFI_FOND_FISS(MAILLAGE=MA,SYME='NON',
+                     FOND_FISS=_F(GROUP_NO='P0G',),
+                     LEVRE_SUP=_F(GROUP_MA = 'LEVR_SUP',),
+                     LEVRE_INF=_F(GROUP_MA = 'LEVR_INF',),
+                     );
+
+#
+G02A=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.,
+                         FOND_FISS=FOND2,
+                         R_SUP=0.001875E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=54.8159180326,
+           VALE_REFE=57.382620000000003,
+           NOM_PARA='G',
+           TABLE=G02A,)
+
+
+#
+G02B=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.001875E-2,
+                         FOND_FISS=FOND2,
+                         R_SUP=0.003750E-2,),
+                     )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=57.16857198,
+           VALE_REFE=57.382620000000003,
+           NOM_PARA='G',
+           TABLE=G02B,)
+
+
+#
+G02C=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.003750E-2,
+                         FOND_FISS=FOND2,
+                         R_SUP=0.005625E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=57.1863575951,
+           VALE_REFE=57.382620000000003,
+           NOM_PARA='G',
+           TABLE=G02C,)
+
+
+#
+G02D=CALC_G(    RESULTAT=CHAMDEPL,
+                THETA=_F(
+                         R_INF=0.005625E-2,
+                         FOND_FISS=FOND2,
+                         R_SUP=0.007500E-2,),
+                      )
+
+#
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-3,
+           VALE_CALC=57.1890219611,
+           VALE_REFE=57.382620000000003,
+           NOM_PARA='G',
+           TABLE=G02D,)
+
+FIN()

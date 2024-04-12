@@ -1,0 +1,117 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: TPLV103B
+# CAS TEST TPLV103B
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+MAIL = LIRE_MAILLAGE(FORMAT='IDEAS',
+                     UNITE=19,
+                     )
+
+TIMP1=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=0.0         )
+
+TIMP2=DEFI_CONSTANTE(    NOM_RESU='FLUN',  VALE=100.0         )
+
+#  MATERI =DEFI_MATERIAU(THER_ORTHO: ( LAMBDA_L: 1.
+#          LAMBDA_T: 0.5 LAMBDA_N: 3. RHO_CP:2.0 ));
+
+
+MATERI=DEFI_MATERIAU( THER_ORTH=_F(  LAMBDA_L = 3.,
+          LAMBDA_T = 0.5, LAMBDA_N = 1., RHO_CP = 2.0))
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAIL,
+                AFFE=_F(  TOUT = 'OUI', MATER = MATERI) )
+
+MOTH=AFFE_MODELE(  MAILLAGE=MAIL,
+                     AFFE=_F( TOUT = 'OUI', MODELISATION = 'PLAN',
+                                      PHENOMENE = 'THERMIQUE'))
+
+ESSAI=AFFE_CARA_ELEM(MODELE=MOTH,
+
+                MASSIF=_F(
+                GROUP_MA = ('VOLUME',),
+                ANGL_AXE = (0.,0.,),
+                ORIG_AXE = (0.,0.,))
+                      )
+
+CHTH1=AFFE_CHAR_THER_F(  MODELE=MOTH,
+
+                   TEMP_IMPO=_F( GROUP_NO = 'TEMPIM1',  TEMP = TIMP1)
+
+         )
+
+CHTH2=AFFE_CHAR_THER_F(  MODELE=MOTH,
+
+                   TEMP_IMPO=_F( GROUP_NO = 'TEMPIM2',  TEMP = TIMP2)
+
+         )
+
+LR8=DEFI_LIST_REEL(        DEBUT=0.,
+       INTERVALLE=_F(    JUSQU_A = 10.0,   NOMBRE = 2)
+                       )
+
+TEMPE=THER_LINEAIRE(        MODELE=MOTH,
+           ETAT_INIT=_F( STATIONNAIRE = 'OUI'),
+          INCREMENT=_F( LIST_INST = LR8),
+           PARM_THETA=0.8,
+             CHAM_MATER=CHMAT,EXCIT=( _F( CHARGE = CHTH1),
+          _F( CHARGE = CHTH2)),
+           CARA_ELEM=ESSAI
+             )
+
+T2=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='NOEU_TEMP_R',
+                NOM_CHAM='TEMP', RESULTAT=TEMPE, NUME_ORDRE=2)
+
+TEMPE=CALC_CHAMP(reuse=TEMPE,RESULTAT=TEMPE,THERMIQUE=('FLUX_ELNO','FLUX_ELGA'))
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOEUD='N66',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=100.000000000,
+                   VALE_REFE=100.0,),
+                _F(NUME_ORDRE=2,
+                   GROUP_NO='TEMPMIL',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=50.000000000,
+                   VALE_REFE=50.0,),
+                _F(NUME_ORDRE=2,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=TEMPE,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOEUD='N66',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=15.951249140,
+                   VALE_REFE=15.9155,
+                   PRECISION=5.0000000000000001E-3,
+                   MAILLE='M50',),
+                ),
+          )
+
+FIN()
+#

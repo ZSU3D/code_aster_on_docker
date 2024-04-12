@@ -1,0 +1,346 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# ROTATIONS SSNV138A
+#
+#
+# MODELISATION : POU_D_T_GD
+#
+# MAILLAGE     : SEG2
+#
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+#
+
+MA1=LIRE_MAILLAGE(FORMAT="ASTER",  )
+
+MA1=DEFI_GROUP( reuse=MA1,   MAILLAGE=MA1,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+#
+
+MO1=AFFE_MODELE(  MAILLAGE=MA1,
+          AFFE=_F( TOUT = 'OUI', MODELISATION = 'POU_D_T_GD',
+          PHENOMENE = 'MECANIQUE') )
+
+#
+
+MAT=DEFI_MATERIAU(   ELAS=_F(  E = 12.E6,  NU = 0.,  ALPHA = 0.)
+                        )
+
+#
+
+CHMAT1=AFFE_MATERIAU(   MAILLAGE=MA1,
+                        AFFE=_F(  TOUT = 'OUI',  MATER = MAT)
+                        )
+
+#
+#
+
+CHA1=AFFE_CHAR_MECA(   MODELE=MO1,
+#
+# COND. LIM. :  ENCASTREMENT
+#
+                       DDL_IMPO=_F( NOEUD = 'NO01',  DX = 0., DY = 0., DZ = 0.,
+                                    DRX = 0., DRY = 0., DRZ = 0.)
+                        )
+
+
+CHA2=AFFE_CHAR_MECA(   MODELE=MO1,
+                       FORCE_NODALE=_F( NOEUD = 'NO11',
+                                        MY = -100.)
+                        )
+#
+
+CARA1=AFFE_CARA_ELEM(  MODELE=MO1,
+                       POUTRE=_F( GROUP_MA = 'TOUT',
+                                  SECTION = 'GENERALE',
+                                  CARA = ( 'A', 'IY', 'IZ', 'AY', 'AZ', 'JX', ),
+        VALE = (  0.1, .08333333333E-03, .083333333333E-01,1.2, 1.2,  3.12334E-04, ))
+                             )
+
+# CF SSNV138D
+CARA2=AFFE_CARA_ELEM(MODELE=MO1,
+                     INFO=2,
+                     POUTRE=_F(GROUP_MA='TOUT',
+                               SECTION='RECTANGLE',
+                               CARA=('HY','HZ',),
+                               VALE=(1.0,0.1,),),);
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=6.5,
+                                    NOMBRE=65,),);
+
+#
+
+D_FONC=DEFI_FONCTION( NOM_PARA='INST',
+                      VALE=(0., 0.,
+                            100., 100.,))
+
+#
+#
+DEFLIST =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST = L_INST),
+                        ECHEC=_F(ACTION        = 'DECOUPE',
+                                 SUBD_METHODE  = 'MANUEL',
+                                 SUBD_PAS=4,
+                                 SUBD_PAS_MINI=1e-08,),)
+
+
+NONLI=STAT_NON_LINE(  MODELE=MO1,
+                      CHAM_MATER=CHMAT1,
+                      CARA_ELEM=CARA1,
+                      EXCIT=(_F(CHARGE=CHA1,),
+                             _F(CHARGE=CHA2,
+                                FONC_MULT=D_FONC,),),
+                      COMPORTEMENT=_F(RELATION='ELAS_POUTRE_GR',
+                                   DEFORMATION='GROT_GDEP',),
+                      INCREMENT=_F(LIST_INST=DEFLIST),
+                      NEWTON=_F(MATRICE='TANGENTE',
+                                REAC_ITER=1,),
+                      CONVERGENCE=_F(RESI_GLOB_RELA=1e-05,
+                                     ITER_GLOB_MAXI=20,),
+                      ARCHIVAGE=_F(LIST_INST=L_INST,  ),);
+
+NONLI=CALC_CHAMP(reuse =NONLI,
+                 CONTRAINTE=('SIEF_ELNO'),
+                 RESULTAT=NONLI,);
+
+
+TAB_DEPL=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLACEMENT',
+                                 NOEUD='NO11',
+                                 RESULTAT=NONLI,
+                                 NOM_CHAM='DEPL',
+                                 TOUT_CMP='OUI',
+                                 OPERATION='EXTRACTION',),);
+
+U_CALC=RECU_FONCTION(TABLE=TAB_DEPL,
+                     PARA_X='INST',
+                     PARA_Y='DX',);
+
+V_CALC=RECU_FONCTION(TABLE=TAB_DEPL,
+                     PARA_X='INST',
+                     PARA_Y='DZ',);
+
+DRY_CALC=RECU_FONCTION(TABLE=TAB_DEPL,
+                       PARA_X='INST',
+                       PARA_Y='DRY',);
+
+
+
+IMPR_TABLE(TABLE=TAB_DEPL,
+           FORMAT='TABLEAU',);
+
+TAB_EFFO=POST_RELEVE_T(ACTION=_F(INTITULE='MOMENTS',
+                                 NOEUD='NO01',
+                                 RESULTAT=NONLI,
+                                 NOM_CHAM='SIEF_ELNO',
+                                 TOUT_CMP='OUI',
+                                 OPERATION='EXTRACTION',),);
+
+IMPR_TABLE(TABLE=TAB_EFFO,
+           FORMAT='TABLEAU',);
+
+
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-0.30000018135583,
+                        VALE_REFE=-0.29999999999999999,
+                        VALE_PARA=0.29999999999999999,
+                        REFERENCE='ANALYTIQUE',
+                        NOM_PARA='INST',
+                        FONCTION=DRY_CALC,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-0.60000000002249,
+                        VALE_REFE=-0.59999999999999998,
+                        VALE_PARA=0.59999999999999998,
+                        REFERENCE='ANALYTIQUE',
+                        NOM_PARA='INST',
+                        FONCTION=DRY_CALC,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-0.99999422329248,
+                        VALE_REFE=-1.0,
+                        VALE_PARA=1.0,
+                        REFERENCE='ANALYTIQUE',
+                        NOM_PARA='INST',
+                        FONCTION=DRY_CALC,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-2.999999992085,
+                        VALE_REFE=-3.0,
+                        VALE_PARA=3.0,
+                        REFERENCE='ANALYTIQUE',
+                        NOM_PARA='INST',
+                        FONCTION=DRY_CALC,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-5.999927401094,
+                        VALE_REFE=-6.0,
+                        VALE_PARA=6.0,
+                        REFERENCE='ANALYTIQUE',
+                        NOM_PARA='INST',
+                        FONCTION=DRY_CALC,),
+              )
+
+TEST_RESU(RESU=_F(INST=0.29999999999999999,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DRY',
+                  VALE_CALC=-0.300000181356,
+                  VALE_REFE=-0.29999999999999999,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.59999999999999998,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DRY',
+                  VALE_CALC=-0.600000000022,
+                  VALE_REFE=-0.59999999999999998,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+#
+#
+# REFERENCE ANALYTIQUE
+
+U_REFE = FORMULE(VALE='10*(sin(INST)/INST-1)',
+                 NOM_PARA='INST',)
+
+V_REFE = FORMULE(VALE='10*(1-cos(INST))/INST',
+                 NOM_PARA='INST',)
+#
+
+INST1=0.3
+U1=10*(sin(INST1)/INST1-1)
+V1=10*(1-cos(INST1))/INST1
+INST2=0.6
+U2=10*(sin(INST2)/INST2-1)
+V2=10*(1-cos(INST2))/INST2
+INST3=3.0
+U3=10*(sin(INST3)/INST3-1)
+V3=10*(1-cos(INST3))/INST3
+INST4=6.0
+U4=10*(sin(INST4)/INST4-1)
+V4=10*(1-cos(INST4))/INST4
+
+TEST_RESU(RESU=_F(INST=0.29999999999999999,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.148957244381,
+                  VALE_REFE=-0.14932644462201439,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.59999999999999998,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DX',
+                  VALE_CALC=-0.587880355709,
+                  VALE_REFE=-0.58929211008274307,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=3.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DX',
+                  VALE_CALC=-9.52783129832,
+                  VALE_REFE=-9.5295999731337755,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=6.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DX',
+                  VALE_CALC=-10.4728851886,
+                  VALE_REFE=-10.465692496998209,
+                  CRITERE='RELATIF',
+                  PRECISION=3.0000000000000001E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=0.29999999999999999,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DZ',
+                  VALE_CALC=1.4888405936,
+                  VALE_REFE=1.488783695813134,
+                  CRITERE='RELATIF',),
+          )
+
+TEST_RESU(RESU=_F(INST=0.59999999999999998,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DZ',
+                  VALE_CALC=2.91150979176,
+                  VALE_REFE=2.9110730848386948,
+                  CRITERE='RELATIF',),
+          )
+
+TEST_RESU(RESU=_F(INST=3.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DZ',
+                  VALE_CALC=6.65824869459,
+                  VALE_REFE=6.6333083220014855,
+                  CRITERE='RELATIF',
+                  PRECISION=5.0E-3,),
+          )
+
+TEST_RESU(RESU=_F(INST=6.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=NONLI,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO11',
+                  NOM_CMP='DZ',
+                  VALE_CALC=0.0674383079075,
+                  VALE_REFE=0.066382855582723388,
+                  CRITERE='RELATIF',
+                  PRECISION=0.02, ),
+          )
+
+#
+FIN( )

@@ -1,0 +1,817 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#                 FISSURE PARALLELE A L'INTERFACE
+#
+# ELEMENTS QUADRATIQUES
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),);
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI',),FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='D_PLAN',),);
+
+TRAC1=DEFI_FONCTION(NOM_PARA='EPSI',
+                    VALE=(0.00155,310.0,0.4,600.0,1.0,700.0,),
+                    PROL_DROITE='LINEAIRE',);
+
+TRAC2=DEFI_FONCTION(NOM_PARA='EPSI',
+                    VALE=(0.00221,442.0,0.4,600.0,1.0,650.0,),
+                    PROL_DROITE='LINEAIRE',);
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E=200000.0,
+                           NU=0.3,
+                           ALPHA=0.0,),
+                   TRACTION=_F(SIGM=TRAC1,),);
+
+MAT2=DEFI_MATERIAU(ELAS=_F(E=200000.0,
+                           NU=0.3,
+                           ALPHA=0.0,),
+                   TRACTION=_F(SIGM=TRAC2,),);
+
+MAT3=DEFI_MATERIAU(ELAS=_F(E=60000000000.0,
+                           NU=0.3,
+                           ALPHA=0.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=(_F(GROUP_MA='AUSTENI',
+                             MATER=MAT1,),
+                          _F(GROUP_MA='FERRITI',
+                             MATER=MAT2,),
+                          _F(GROUP_MA='GOUP',
+                             MATER=MAT3,),),);
+
+CL=AFFE_CHAR_MECA(MODELE=MO,
+                  DDL_IMPO=(_F(GROUP_NO='PB',
+                               DX=0.0,),
+                            _F(GROUP_NO='PB',
+                               DY=0.0,),
+                            _F(GROUP_NO='PA',
+                               DX=0.0,),),);
+
+CH=AFFE_CHAR_MECA(MODELE=MO,
+                  DDL_IMPO=_F(GROUP_NO='PA',
+                              DY=1.0,),);
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,0.0,1.0,1.0,),
+                    PROL_DROITE='LINEAIRE',
+                    PROL_GAUCHE='LINEAIRE',);
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=(_F(JUSQU_A=0.4,
+                                     NOMBRE=40,),
+                                  _F(JUSQU_A=1.0,
+                                     NOMBRE=180,),),);
+
+CHAMDEPL=STAT_NON_LINE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=(_F(CHARGE=CL,),
+                              _F(CHARGE=CH,
+                                 FONC_MULT=RAMPE,),),
+                       COMPORTEMENT=(_F(RELATION='ELAS_VMIS_TRAC',
+                                    GROUP_MA=('AUSTENI','FERRITI',),),
+                                 _F(RELATION='ELAS',
+                                    GROUP_MA='GOUP',),),
+                       INCREMENT=_F(LIST_INST=L_INST,),
+                       NEWTON=_F(MATRICE='TANGENTE',
+                                 REAC_ITER=1,),
+                       CONVERGENCE=_F(RESI_GLOB_RELA=0.001,),);
+
+CHAMDEPL=CALC_CHAMP(reuse=CHAMDEPL,RESULTAT=CHAMDEPL,CONTRAINTE=('SIGM_ELNO'),VARI_INTERNE=('VARI_ELNO'))
+
+#
+
+FOND=DEFI_FOND_FISS(MAILLAGE=MA,SYME='NON',
+                    FOND_FISS=_F(GROUP_NO='PFI1',),
+                    LEVRE_SUP=_F(GROUP_MA = 'LEVR_SUP',),
+                    LEVRE_INF=_F(GROUP_MA = 'LEVR_INF',),
+                    );
+
+#
+# CALCUL DE G THETA POUR LE CHAMP THETA0
+# --------------------------------------
+
+G5_0=CALC_G(THETA=_F(
+                     R_INF=0.02,
+                     R_SUP=0.18,
+                     FOND_FISS=FOND,
+                     ),
+           RESULTAT=CHAMDEPL,NUME_ORDRE=5,
+            );
+#
+
+G10_0=CALC_G(THETA=_F(
+                      R_INF=0.02,
+                      FOND_FISS=FOND,
+                      R_SUP=0.18,
+                      ),
+           RESULTAT=CHAMDEPL,NUME_ORDRE=10,
+             );
+#
+
+G20_0=CALC_G(THETA=_F(
+                      R_INF=0.02,
+                      R_SUP=0.18,
+                      FOND_FISS=FOND,
+                      ),
+           RESULTAT=CHAMDEPL,NUME_ORDRE=20,
+             );
+#
+
+G30_0=CALC_G(THETA=_F(
+                      R_INF=0.02,
+                      R_SUP=0.18,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=30,
+             );
+#
+
+G40_0=CALC_G(THETA=_F(
+                      R_INF=0.02,
+                      R_SUP=0.18,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=40,
+             );
+#
+
+G70_0=CALC_G(THETA=_F(
+                      R_INF=0.02,
+                      R_SUP=0.18,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=70,
+             );
+#
+
+G100_0=CALC_G(THETA=_F(
+                       R_INF=0.02,
+                       R_SUP=0.18,
+                       FOND_FISS=FOND,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=100,
+              );
+#
+
+G130_0=CALC_G(THETA=_F(
+                       R_INF=0.02,
+                       R_SUP=0.18,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=130,
+               );
+#
+
+G160_0=CALC_G(THETA=_F(
+                       R_INF=0.02,
+                       R_SUP=0.18,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=160,
+               );
+#
+
+G190_0=CALC_G(THETA=_F(
+                       R_INF=0.02,
+                       R_SUP=0.18,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=190,
+               );
+#
+
+G220_0=CALC_G(THETA=_F(
+                       R_INF=0.02,
+                       R_SUP=0.18,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=220,
+               );
+#
+#
+# CALCUL DE G THETA POUR LE CHAMP THETA1
+# --------------------------------------
+
+G5_1=CALC_G(THETA=_F(
+                     R_INF=0.2,
+                     R_SUP=1.0,
+                     FOND_FISS=FOND,
+                     ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=5,
+             );
+#
+
+G10_1=CALC_G(THETA=_F(
+                      R_INF=0.2,
+                      R_SUP=1.0,
+                      FOND_FISS=FOND,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=10,
+              );
+#
+
+G20_1=CALC_G(THETA=_F(
+                      R_INF=0.2,
+                      R_SUP=1.0,
+                      FOND_FISS=FOND,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=20,
+              );
+#
+
+G30_1=CALC_G(THETA=_F(
+                      R_INF=0.2,
+                      R_SUP=1.0,
+                      FOND_FISS=FOND,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=30,
+              );
+#
+
+G40_1=CALC_G(THETA=_F(
+                      R_INF=0.2,
+                      R_SUP=1.0,
+                      FOND_FISS=FOND,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=40,
+              );
+#
+
+G70_1=CALC_G(THETA=_F(
+                      R_INF=0.2,
+                      R_SUP=1.0,
+                      FOND_FISS=FOND,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=70,
+              );
+#
+
+G100_1=CALC_G(THETA=_F(
+                       R_INF=0.2,
+                       R_SUP=1.0,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=100,
+               );
+#
+
+G130_1=CALC_G(THETA=_F(
+                       R_INF=0.2,
+                       R_SUP=1.0,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=130,
+               );
+#
+
+G160_1=CALC_G(THETA=_F(
+                       R_INF=0.2,
+                       R_SUP=1.0,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=160,
+               );
+#
+
+G190_1=CALC_G(THETA=_F(
+                       R_INF=0.2,
+                       R_SUP=1.0,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=190,
+               );
+#
+
+G220_1=CALC_G(THETA=_F(
+                       R_INF=0.2,
+                       R_SUP=1.0,
+                       FOND_FISS=FOND,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=220,
+               );
+#
+#
+# CALCUL DE G THETA POUR LE CHAMP THETA2
+# --------------------------------------
+
+G5_2=CALC_G(THETA=_F(
+                     R_INF=1.0,
+                     R_SUP=2.0,
+                     FOND_FISS=FOND,
+                     ),
+           RESULTAT=CHAMDEPL,NUME_ORDRE=5,
+            );
+#
+
+G10_2=CALC_G(THETA=_F(
+                      R_INF=1.0,
+                      R_SUP=2.0,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=10,
+             );
+#
+
+G20_2=CALC_G(THETA=_F(
+                      R_INF=1.0,
+                      R_SUP=2.0,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=20,
+             );
+#
+
+G30_2=CALC_G(THETA=_F(
+                      R_INF=1.0,
+                      R_SUP=2.0,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=30,
+             );
+#
+
+G40_2=CALC_G(THETA=_F(
+                      R_INF=1.0,
+                      R_SUP=2.0,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=40,
+             );
+#
+
+G70_2=CALC_G(THETA=_F(
+                      R_INF=1.0,
+                      R_SUP=2.0,
+                      FOND_FISS=FOND,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=70,
+             );
+#
+
+G100_2=CALC_G(THETA=_F(
+                       R_INF=1.0,
+                       R_SUP=2.0,
+                       FOND_FISS=FOND,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=100,
+              );
+#
+
+G130_2=CALC_G(THETA=_F(
+                       R_INF=1.0,
+                       R_SUP=2.0,
+                       FOND_FISS=FOND,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=130,
+              );
+#
+
+G160_2=CALC_G(THETA=_F(
+                       R_INF=1.0,
+                       R_SUP=2.0,
+                       FOND_FISS=FOND,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=160,
+              );
+#
+
+G190_2=CALC_G(THETA=_F(
+                       R_INF=1.0,
+                       FOND_FISS=FOND,
+                       R_SUP=2.0,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=190,
+              );
+#
+
+G220_2=CALC_G(THETA=_F(
+                       R_INF=1.0,
+                       FOND_FISS=FOND,
+                       R_SUP=2.0,
+                       ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=220,
+              );
+#
+# CALCUL DE G THETA POUR LE CHAMP THETA3
+# --------------------------------------
+
+G5_3=CALC_G(THETA=_F(
+                     R_INF=2.0,
+                     FOND_FISS=FOND,
+                     R_SUP=3.0,
+                     ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=5,
+             );
+#
+
+G10_3=CALC_G(THETA=_F(
+                      R_INF=2.0,
+                      FOND_FISS=FOND,
+                      R_SUP=3.0,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=10,
+              );
+#
+
+G20_3=CALC_G(THETA=_F(
+                      R_INF=2.0,
+                      FOND_FISS=FOND,
+                      R_SUP=3.0,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=20,
+              );
+#
+
+G30_3=CALC_G(THETA=_F(
+                      R_INF=2.0,
+                      FOND_FISS=FOND,
+                      R_SUP=3.0,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=30,
+              );
+#
+
+G40_3=CALC_G(THETA=_F(
+                      R_INF=2.0,
+                      FOND_FISS=FOND,
+                      R_SUP=3.0,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=40,
+              );
+#
+
+G70_3=CALC_G(THETA=_F(
+                      R_INF=2.0,
+                      FOND_FISS=FOND,
+                      R_SUP=3.0,
+                      ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=70,
+              );
+#
+
+G100_3=CALC_G(THETA=_F(
+                       R_INF=2.0,
+                       FOND_FISS=FOND,
+                       R_SUP=3.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=100,
+               );
+#
+
+G130_3=CALC_G(THETA=_F(
+                       R_INF=2.0,
+                       FOND_FISS=FOND,
+                       R_SUP=3.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=130,
+               );
+#
+
+G160_3=CALC_G(THETA=_F(
+                       R_INF=2.0,
+                       FOND_FISS=FOND,
+                       R_SUP=3.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=160,
+               );
+#
+
+G190_3=CALC_G(THETA=_F(
+                       R_INF=2.0,
+                       FOND_FISS=FOND,
+                       R_SUP=3.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=190,
+               );
+#
+
+G220_3=CALC_G(THETA=_F(
+                       R_INF=2.0,
+                       FOND_FISS=FOND,
+                       R_SUP=3.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=220,
+               );
+#
+# CALCUL DE G THETA POUR LE CHAMP THETA4
+# --------------------------------------
+
+G5_4=CALC_G(THETA=_F(
+                     R_INF=3.0,
+                     FOND_FISS=FOND,
+                     R_SUP=5.0,
+                     ),
+             RESULTAT=CHAMDEPL,NUME_ORDRE=5,
+            );
+#
+
+G10_4=CALC_G(THETA=_F(
+                      R_INF=3.0,
+                      FOND_FISS=FOND,
+                      R_SUP=5.0,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=10,
+             );
+#
+
+G20_4=CALC_G(THETA=_F(
+                      R_INF=3.0,
+                      FOND_FISS=FOND,
+                      R_SUP=5.0,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=20,
+             );
+#
+
+G30_4=CALC_G(THETA=_F(
+                      R_INF=3.0,
+                      FOND_FISS=FOND,
+                      R_SUP=5.0,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=30,
+            );
+#
+
+G40_4=CALC_G(THETA=_F(
+                      R_INF=3.0,
+                      FOND_FISS=FOND,
+                      R_SUP=5.0,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=40,
+             );
+#
+
+G70_4=CALC_G(THETA=_F(
+                      R_INF=3.0,
+                      FOND_FISS=FOND,
+                      R_SUP=5.0,
+                      ),
+            RESULTAT=CHAMDEPL,NUME_ORDRE=70,
+             );
+#
+
+G100_4=CALC_G(THETA=_F(
+                       R_INF=3.0,
+                       FOND_FISS=FOND,
+                       R_SUP=5.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=100,
+               );
+#
+
+G130_4=CALC_G(THETA=_F(
+                       R_INF=3.0,
+                       FOND_FISS=FOND,
+                       R_SUP=5.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=130,
+               );
+#
+
+G160_4=CALC_G(THETA=_F(
+                       R_INF=3.0,
+                       FOND_FISS=FOND,
+                       R_SUP=5.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=160,
+               );
+#
+
+G190_4=CALC_G(THETA=_F(
+                       R_INF=3.0,
+                       FOND_FISS=FOND,
+                       R_SUP=5.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=190,
+               );
+#
+
+G220_4=CALC_G(THETA=_F(
+                       R_INF=3.0,
+                       FOND_FISS=FOND,
+                       R_SUP=5.0,
+                       ),
+              RESULTAT=CHAMDEPL,NUME_ORDRE=220,
+               );
+#
+#
+# IMPRESSION DES RESULTATS COURONNE 0
+# -----------------------------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.070000000000000007,
+           VALE_CALC=6.22838135034,
+           VALE_REFE=5.8243999999999998,
+           NOM_PARA='G',
+           TABLE=G20_0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=23.0849659109,
+           VALE_REFE=22.600000000000001,
+           NOM_PARA='G',
+           TABLE=G40_0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=47.1559140355,
+           VALE_REFE=47.240000000000002,
+           NOM_PARA='G',
+           TABLE=G100_0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=72.8160314418,
+           VALE_REFE=74.703999999999994,
+           NOM_PARA='G',
+           TABLE=G160_0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=99.2475087152,
+           VALE_REFE=103.73999999999999,
+           NOM_PARA='G',
+           TABLE=G220_0,)
+
+#
+# IMPRESSION DES RESULTATS COURONNE 1
+# -----------------------------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.089999999999999997,
+           VALE_CALC=5.31688254391,
+           VALE_REFE=5.8243999999999998,
+           NOM_PARA='G',
+           TABLE=G20_1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10000000000000001,
+           VALE_CALC=20.7148997684,
+           VALE_REFE=22.600000000000001,
+           NOM_PARA='G',
+           TABLE=G40_1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.089999999999999997,
+           VALE_CALC=43.7815403832,
+           VALE_REFE=47.240000000000002,
+           NOM_PARA='G',
+           TABLE=G100_1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.092999999999999999,
+           VALE_CALC=68.6244058089,
+           VALE_REFE=74.703999999999994,
+           NOM_PARA='G',
+           TABLE=G160_1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.105,
+           VALE_CALC=94.2008902167,
+           VALE_REFE=103.73999999999999,
+           NOM_PARA='G',
+           TABLE=G220_1,)
+
+#
+# IMPRESSION DES RESULTATS COURONNE 2
+# -----------------------------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.080000000000000002,
+           VALE_CALC=5.39545595578,
+           VALE_REFE=5.8243999999999998,
+           NOM_PARA='G',
+           TABLE=G20_2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.070000000000000007,
+           VALE_CALC=21.060843573,
+           VALE_REFE=22.600000000000001,
+           NOM_PARA='G',
+           TABLE=G40_2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.070000000000000007,
+           VALE_CALC=44.2056893913,
+           VALE_REFE=47.240000000000002,
+           NOM_PARA='G',
+           TABLE=G100_2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.082000000000000003,
+           VALE_CALC=69.0649247713,
+           VALE_REFE=74.703999999999994,
+           NOM_PARA='G',
+           TABLE=G160_2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10000000000000001,
+           VALE_CALC=94.6594065096,
+           VALE_REFE=103.73999999999999,
+           NOM_PARA='G',
+           TABLE=G220_2,)
+
+#
+# IMPRESSION DES RESULTATS COURONNE 3
+# -----------------------------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10000000000000001,
+           VALE_CALC=5.26961507766,
+           VALE_REFE=5.8243999999999998,
+           NOM_PARA='G',
+           TABLE=G20_3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.11,
+           VALE_CALC=20.2068823651,
+           VALE_REFE=22.600000000000001,
+           NOM_PARA='G',
+           TABLE=G40_3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10000000000000001,
+           VALE_CALC=42.5670031493,
+           VALE_REFE=47.240000000000002,
+           NOM_PARA='G',
+           TABLE=G100_3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10299999999999999,
+           VALE_CALC=67.183083789,
+           VALE_REFE=74.703999999999994,
+           NOM_PARA='G',
+           TABLE=G160_3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.112,
+           VALE_CALC=92.5867214602,
+           VALE_REFE=103.73999999999999,
+           NOM_PARA='G',
+           TABLE=G220_3,)
+
+#
+# IMPRESSION DES RESULTATS COURONNE 4
+# -----------------------------------
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.080000000000000002,
+           VALE_CALC=5.36024583279,
+           VALE_REFE=5.8243999999999998,
+           NOM_PARA='G',
+           TABLE=G20_4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.089999999999999997,
+           VALE_CALC=20.7910157881,
+           VALE_REFE=22.600000000000001,
+           NOM_PARA='G',
+           TABLE=G40_4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.080000000000000002,
+           VALE_CALC=43.7030083389,
+           VALE_REFE=47.240000000000002,
+           NOM_PARA='G',
+           TABLE=G100_4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.089999999999999997,
+           VALE_CALC=68.39062384,
+           VALE_REFE=74.703999999999994,
+           NOM_PARA='G',
+           TABLE=G160_4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.10100000000000001,
+           VALE_CALC=93.8319290873,
+           VALE_REFE=103.73999999999999,
+           NOM_PARA='G',
+           TABLE=G220_4,)
+
+#
+
+FIN();
+#

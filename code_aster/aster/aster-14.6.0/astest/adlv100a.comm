@@ -1,0 +1,155 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+# 
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+#      PISTON COUPLE A UNE COLONNE DE FLUIDE
+#              CAS TEST ADLV100A
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),
+      RESERVE_CPU=_F(VALE=60))
+
+MAYA = LIRE_MAILLAGE(FORMAT='MED',)
+
+COLONNE = AFFE_MODELE(AFFE=(_F(GROUP_MA=('HEXAEAU', 'HEXAAIR'),
+                               MODELISATION='3D_FLUIDE',
+                               PHENOMENE='MECANIQUE'),
+                            _F(GROUP_MA=('COUPEAU', 'COUPAIR'),
+                               MODELISATION='FLUI_STRU',
+                               PHENOMENE='MECANIQUE'),
+                            _F(GROUP_MA='HEXAPIST',
+                               MODELISATION='3D',
+                               PHENOMENE='MECANIQUE')),
+                      MAILLAGE=MAYA)
+
+COLNUL = AFFE_MODELE(AFFE=_F(GROUP_MA='HEXAEAU',
+                             MODELISATION='3D_FLUIDE',
+                             PHENOMENE='MECANIQUE'),
+                     MAILLAGE=MAYA)
+
+EAU = DEFI_MATERIAU(FLUIDE=_F(CELE_R=1400.0,
+                              RHO=1000.0))
+
+AIR = DEFI_MATERIAU(FLUIDE=_F(CELE_R=340.0,
+                              RHO=1.2))
+
+ACIER = DEFI_MATERIAU(ELAS=_F(E=2e+11,
+                              NU=0.3,
+                              RHO=7800.0))
+
+CHAMPMAT = AFFE_MATERIAU(AFFE=(_F(GROUP_MA=('HEXAEAU', 'COUPEAU'),
+                                  MATER=EAU),
+                               _F(GROUP_MA=('HEXAAIR', 'COUPAIR'),
+                                  MATER=AIR),
+                               _F(GROUP_MA='HEXAPIST',
+                                  MATER=ACIER)),
+                         MAILLAGE=MAYA)
+
+# Test for ZERO matrix (issue25454)
+NULL = DEFI_MATERIAU(FLUIDE=_F(CELE_R=0.0,
+                               RHO=0.0))
+
+CHAMPNUL = AFFE_MATERIAU(AFFE=_F(GROUP_MA='HEXAEAU',
+                                 MATER=NULL),
+                         MAILLAGE=MAYA)
+
+SURFLIBR = AFFE_CHAR_MECA(ARETE_IMPO=_F(GROUP_MA=('ELEMEDGE', ),
+                                        PHI=0.0),
+                          DDL_IMPO=_F(GROUP_NO='NOEUSURF',
+                                      PRES=0.0),
+                          FACE_IMPO=_F(GROUP_MA=('ELEMSURF', ),
+                                       PHI=0.0),
+                          MODELE=COLONNE)
+
+GUIDAGE = AFFE_CHAR_MECA(DDL_IMPO=_F(DY=0.0,
+                                     DZ=0.0,
+                                     GROUP_NO=('NOEUPIST', )),
+                         MODELE=COLONNE)
+
+MASSES = POST_ELEM(CHAM_MATER=CHAMPMAT,
+                   MASS_INER=_F(TOUT='OUI'),
+                   MODELE=COLONNE)
+
+MATELE_K = CALC_MATR_ELEM(CHAM_MATER=CHAMPMAT,
+                          CHARGE=(SURFLIBR, GUIDAGE),
+                          MODELE=COLONNE,
+                          OPTION='RIGI_MECA')
+
+MATELE_M = CALC_MATR_ELEM(CHAM_MATER=CHAMPMAT,
+                          CHARGE=(SURFLIBR, GUIDAGE),
+                          MODELE=COLONNE,
+                          OPTION='MASS_MECA')
+
+NUM = NUME_DDL(MATR_RIGI=MATELE_K)
+
+MATASK = ASSE_MATRICE(MATR_ELEM=MATELE_K,
+                      NUME_DDL=NUM)
+
+MATASM = ASSE_MATRICE(MATR_ELEM=MATELE_M,
+                      NUME_DDL=NUM)
+
+MODES = CALC_MODES(CALC_FREQ=_F(FREQ=(10.0, 20.0)),
+                   MATR_MASS=MATASM,
+                   MATR_RIGI=MATASK,
+                   OPTION='AJUSTE',
+                   SOLVEUR=_F(METHODE='MULT_FRONT'),
+                   SOLVEUR_MODAL=_F(PREC_AJUSTE=0.0001,
+                                    PREC_INV=1e-07))
+
+TEST_TABLE(NOM_PARA='MASSE',
+           TABLE=MASSES,
+           VALE_CALC=0.612725)
+
+TEST_TABLE(NOM_PARA='CDG_X',
+           TABLE=MASSES,
+           VALE_CALC=0.05486811)
+
+TEST_TABLE(NOM_PARA='IX_G',
+           TABLE=MASSES,
+           VALE_CALC=0.000255302083)
+
+TEST_TABLE(NOM_PARA='IY_G',
+           TABLE=MASSES,
+           VALE_CALC=0.00031984386)
+
+TEST_TABLE(NOM_PARA='IZ_G',
+           TABLE=MASSES,
+           VALE_CALC=0.00031984386)
+
+TEST_RESU(RESU=_F(CRITERE='RELATIF',
+                  NUME_ORDRE=1,
+                  PARA='FREQ',
+                  PRECISION=0.005,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=MODES,
+                  VALE_CALC=13.827697948,
+                  VALE_REFE=13.8285))
+
+MATK_0 = CALC_MATR_ELEM(CHAM_MATER=CHAMPNUL,
+                        MODELE=COLNUL,
+                        OPTION='RIGI_MECA')
+
+MATM_0 = CALC_MATR_ELEM(CHAM_MATER=CHAMPNUL,
+                        MODELE=COLNUL,
+                        OPTION='MASS_MECA')
+
+TEST_RESU(OBJET=_F(NOM='MATM_0         .M01.RESL',
+                   VALE_CALC=0.0))
+
+TEST_RESU(OBJET=_F(NOM='MATK_0  .ME001     .RESL',
+                   VALE_CALC=0.0))
+
+FIN()

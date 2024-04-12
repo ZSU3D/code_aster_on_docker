@@ -1,0 +1,347 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+"""
+Build some data files (dest: share/aster)
+
+- 'profile.sh': environment script
+- 'config.txt': needed by as_run
+- 'external_programs.js': definition of external programs called from code_aster
+"""
+
+import pickle
+import json
+import os
+import os.path as osp
+import re
+import sys
+from itertools import chain
+from subprocess import PIPE, Popen
+
+from waflib import Configure, Errors, Logs, Utils
+
+
+def options(self):
+    group = self.get_option_group("code_aster options")
+    # default=False in libaster, True in code_aster
+    group.add_option('--legacy', dest='legacy',
+                     default=True, action='store_true',
+                     help='create some legacy files')
+    group.add_option('--nolegacy', dest='legacy',
+                     action='store_false',
+                     help='do not create legacy files')
+    group.add_option('--singularity-image', dest='singularityimage',
+                     default=None, action='store',
+                     help='Singularity image used for executions')
+
+    group = self.get_option_group("Configuration options")
+    group.add_option('--with-data', dest='with_data',
+                    action='store', default=None,
+                    help='location of the data repository (default: ../data)')
+
+    group = self.add_option_group('External programs options')
+    group.add_option('--with-prog-metis', action='store_true', default=None,
+                     dest='with_prog_metis',
+                     help='Force support of metis program')
+    group.add_option('--with-prog-gmsh', action='store_true', default=None,
+                     dest='with_prog_gmsh',
+                     help='Force support of gmsh program')
+    group.add_option('--with-prog-salome', action='store_true', default=None,
+                     dest='with_prog_salome',
+                     help='Force support of salome program')
+    group.add_option('--with-prog-miss3d', action='store_true', default=None,
+                     dest='with_prog_miss3d',
+                     help='Force support of miss3d program')
+    group.add_option('--with-prog-homard', action='store_true', default=None,
+                     dest='with_prog_homard',
+                     help='Force support of homard program')
+    group.add_option('--with-prog-ecrevisse', action='store_true',
+                     default=None, dest='with_prog_ecrevisse',
+                     help='Force support of ecrevisse program')
+    group.add_option('--with-prog-xmgrace', action='store_true', default=None,
+                     dest='with_prog_xmgrace',
+                     help='Force support of xmgrace program')
+    group.add_option('--with-prog-mfront', action='store_true', default=None,
+                     dest='with_prog_mfront',
+                     help='Force support of mfront program')
+
+
+def configure(self):
+    self.add_os_flags('ADDMEM')
+    self.env.legacy = self.options.legacy
+    self.env.singularityimage = self.options.singularityimage
+    if self.env.singularityimage:
+        self.start_msg('Singularity image')
+        self.end_msg(self.env.singularityimage)
+
+    dict_conv = self.env2dict(osp.dirname(self.path.abspath()))
+    self.env['ASTER_ENVIRON'] = pickle.dumps(dict_conv)
+
+    self.getAsrunTmp()
+    self.check_external_programs()
+    self.configure_data()
+
+
+@Configure.conf
+def configure_data(self):
+    opts = self.options
+    self.start_msg("Checking for 'data' repository")
+    self.env.data_path = None
+
+    default = osp.join(self.path.parent.parent.abspath(), 'data')
+    data_path = osp.abspath(opts.with_data or default)
+    if osp.isdir(data_path):
+        self.end_msg(data_path)
+        self.env.data_path = data_path
+    elif opts.with_data is None:
+        self.end_msg("{0} not found".format(data_path), 'YELLOW')
+    else:
+        raise Errors.ConfigurationError("{0} not found".format(data_path))
+
+
+def build(self):
+    # src/srcbin distinction exists for exec mode (644 vs 755)
+    src = ['CTestTestfile.cmake.tmpl', 'external_programs.js.tmpl']
+    tgt = ['CTestTestfile.cmake', 'external_programs.js']
+    if self.env.legacy:
+        src.extend(['config.txt.tmpl', 'profile.sh.tmpl'])
+        tgt.extend(['config.txt', 'profile.sh'])
+    srcbin = ['execute_codeaster.tmpl', 'create_install_script']
+    tgtbin = ['execute_codeaster', 'create_install_script']
+    try:
+        dict_conv = pickle.loads(self.env['ASTER_ENVIRON'])
+    except:
+        Logs.error("ASTER_ENVIRON not found. Please run 'waf configure...'")
+        raise Errors.BuildError
+    change_tests(dict_conv, self.env.install_tests)
+    self(
+        features='subst',
+        name='data_files',
+        source=src,
+        target=tgt,
+        install_path=self.env.ASTERDATADIR,
+        vars=['ASTER_ENVIRON', 'EXTERNAL_PROGRAMS', 'install_tests'],
+        PROGRAMS_JSON=json.dumps(self.env['EXTERNAL_PROGRAMS'], sort_keys=True,
+                                 indent=4, separators=(',', ': ')),
+        **dict_conv
+    )
+    if srcbin:
+        self(
+            features='subst',
+            name='data_files',
+            source=srcbin,
+            target=tgtbin,
+            install_path=self.env.ASTERDATADIR,
+            vars=['ASTER_ENVIRON', 'EXTERNAL_PROGRAMS', 'install_tests'],
+            PROGRAMS_JSON=json.dumps(self.env['EXTERNAL_PROGRAMS'],
+                                    sort_keys=True, indent=4,
+                                     separators=(',', ': ')),
+            chmod=Utils.O755,
+            **dict_conv
+        )
+    if self.env.singularityimage:
+        self.symlink_as("${PREFIX}/share/aster/image", self.env.singularityimage)
+
+    # without substitution
+    self.install_files(self.env.ASTERDATADIR, ["post_install"],
+                       chmod=Utils.O755)
+    # install files from data repository
+    if self.env.data_path:
+        data_path = osp.relpath(self.env.data_path,
+                                self.path.get_src().abspath())
+        data_node = self.path.get_src().find_node(data_path)
+
+        dest = osp.join(self.env.ASTERDATADIR, 'datg')
+        files = data_node.ant_glob('datg/*.datg')
+        self.install_files(dest, files)
+
+        dest = osp.join(self.env.ASTERDATADIR, 'materiau')
+        files = data_node.ant_glob('materiau/*.NOMI')
+        self.install_files(dest, files)
+
+        dest = osp.join(self.env.ASTERDATADIR, 'tests_data')
+        files = data_node.ant_glob('tests_data/*')
+        self.install_files(dest, files)
+
+
+SRCTEST_TMPL = """SRCTEST        | src     | -     | %s"""
+
+
+@Configure.conf
+def env2dict(self, src):
+    """build dict informations"""
+    self.start_msg('Store execution environment')
+    env = self.env.derive()
+    env['LD_LIBRARY_PATH'] = os.environ.get(
+        'LD_LIBRARY_PATH', '').split(os.pathsep)
+    ld_path = self.remove_duplicates(
+        chain(*[Utils.to_list(env[name]) for name in (
+            'LIBPATH', 'LIBDIR', 'LD_LIBRARY_PATH', 'ASTERLIBDIR')
+                if env[name]]))
+    sep = os.pathsep + '\\\n'
+    dico = {}
+    dico['DEFINES'] = ' '.join([d.split('=')[0] for d in env['DEFINES']])
+    py_path = self.remove_duplicates(Utils.to_list(env['CFG_PYTHONPATH']))
+    dico['PYTHONHOME'] = env['CFG_PYTHONHOME']
+    dico['PYTHON_DIRNAME'] = osp.dirname(env['PYTHON'][0])
+    # as_run compatibility
+    if env.ASRUN_MPI_VERSION:
+        dico['DEFINES'] += ' _USE_MPI'
+    dico['LD_LIBRARY_PATH'] = sep.join(ld_path)
+    dico['CFG_PYTHONPATH'] = sep.join(py_path)
+    dico['SRC'] = src
+    dico['FC'] = env.FC[0]
+    flags = [' '.join(env[i]) for i in list(env.keys()) if i.startswith('FCFLAGS')]
+    dico['FCFLAGS'] = ' '.join(flags)
+    dico['OPT_ENV'] = env['OPT_ENV'] and os.linesep.join(env['OPT_ENV']) or ''
+    dico['OPT_ENV_FOOTER'] = env['OPT_ENV_FOOTER'] \
+        and os.linesep.join(env['OPT_ENV_FOOTER']) or ''
+    try:
+        addmem = env['ADDMEM']
+        if addmem and type(addmem) in (list, tuple):
+            addmem = addmem[0]
+        env['ADDMEM'] = int(addmem)
+    except TypeError:
+        env['ADDMEM'] = 250
+    dico['ADDMEM'] = env['ADDMEM']
+    dico['srctest'] = os.linesep.join([
+        SRCTEST_TMPL % '%(SRC)s/astest' % dico,
+        SRCTEST_TMPL % '%(SRC)s/../validation/astest' % dico])
+    text = ""
+    if env['MFRONT']:
+        tfel = osp.dirname(osp.dirname(env['MFRONT'][0]))
+        text += os.linesep.join([
+            "# MFront specific",
+            "export TFELHOME={}".format(tfel),
+            "export PATH=${TFELHOME}/bin:$PATH"
+        ])
+    dico['MFRONT_SPECIFIC'] = text
+    dico['ASRUN_TMPDIR'] = env.ASRUN_TMPDIR
+    dico['ASTERDATADIR'] = env['ASTERDATADIR']
+    dico['ASTER_TAG'] = '.'.join([str(i) for i in env['ASTER_VERSION'][0]])
+    dico['BIN_NODBG'] = '{PREFIX}/bin/aster{astervers}'.format(**env)
+    dico['BIN_DBG'] = '{PREFIX}/bin/asterd{astervers}'.format(**env)
+    if env.singularityimage:
+        dico['BIN_NODBG'] = 'execute_codeaster'
+        dico['BIN_DBG'] = 'execute_codeaster'
+        dico['BIND_PREFIX'] = '--bind @PREFIX@:@PREFIX@'
+    else:
+        dico['BIND_PREFIX'] = ''
+    self.end_msg("yes")
+
+    self.start_msg('Build list of testcases')
+    seq = 'testlist.*sequential'
+    mpi = 'testlist.*parallel'
+    valid = osp.join(src, '..', 'validation')
+    dico['ASTER_TEST_FILES_SEQ'] = _build_testlist(src, seq)
+    dico['ASTER_TEST_FILES_PAR'] = _build_testlist(src, mpi)
+    dico['ASTER_TEST_FILES_VALID_SEQ'] = _build_testlist(valid, seq)
+    dico['ASTER_TEST_FILES_VALID_PAR'] = _build_testlist(valid, mpi)
+    self.end_msg("yes")
+    return dico
+
+
+def _build_testlist(path, filter_expr):
+    if not osp.exists(osp.join(path, 'astest')):
+        return ''
+    cmd = ['grep', '-l', filter_expr,
+           osp.join(path, 'astest', '*.export')]
+    proc = Popen(' '.join(cmd), stdout=PIPE, stderr=PIPE, shell=True)
+    out = proc.communicate()[0].decode()
+    tests = [osp.splitext(osp.basename(i))[0] for i in out.split()]
+    return os.linesep.join(tests)
+
+
+def change_tests(dico, install_tests):
+    """Because install_tests can be added at build stage"""
+    if install_tests:
+        dico['srctest'] = SRCTEST_TMPL % '$ASTER_VERSION_DIR/tests'
+
+
+@Configure.conf
+def getAsrunTmp(self):
+    """Ask as_run for tmpdir"""
+    self.start_msg('Set tmp directory for `salome test`')
+    # cmake syntax
+    tmpdir = "$ENV{ASTER_TMPDIR}"
+    if os.environ.get('ASTER_TMPDIR'):
+        tmpdir = os.environ['ASTER_TMPDIR']
+    self.end_msg(tmpdir)
+    self.env.ASRUN_TMPDIR = tmpdir
+    return tmpdir
+
+
+@Configure.conf
+def check_external_programs(self):
+    _check_prog(self, 'gmsh', ['gmsh'],
+                add_paths=['${GMSH_BIN_DIR}'])
+
+    _check_prog(self, 'salome', ['salome'],
+                add_paths=['${ABSOLUTE_APPLI_PATH}'])
+
+    _check_prog(self, 'miss3d', ['run_miss3d'],
+                add_paths=['${MISS3D_DIR}'])
+
+    _check_prog(self, 'homard', ['homard'],
+                add_paths=[osp.join('${HOMARD_ASTER_ROOT_DIR}', 'ASTER_HOMARD')])
+
+    _check_prog(self, 'ecrevisse', ['ecrevisse'],
+                add_paths=['${ECREVISSE_ROOT_DIR}'])
+
+    mfront='mfront' + self.env.TFELSUFFIX
+    _check_prog(self, 'mfront', [mfront],
+                add_paths=['${MFRONT_ROOT_DIR}'])
+
+    _check_prog(self, 'xmgrace', ['xmgrace', 'gracebat'])
+
+    dict_ext = {}
+    for key in list(self.env.keys()):
+        if not key.startswith('PROG_'):
+            continue
+        prog = re.sub('^PROG_', '', key)
+        if key.startswith('PROG_mfront'):
+            prog = 'mfront'
+        dict_ext[prog] = self.env[key][0]
+    self.env['EXTERNAL_PROGRAMS'] = dict_ext
+
+
+def _check_prog(self, name, programs, add_paths=None):
+    opts = self.options
+    paths0 = self.environ.get('PATH', '').split(os.pathsep)
+    paths1 = [i for i in paths0 if 'outils' not in i]
+    # try first without 'outils' in $PATH
+    to_check = [paths1, paths0]
+    add_paths = [osp.expandvars(i) for i in add_paths or []]
+    with_prog = getattr(opts, 'with_prog_' + name, None)
+
+    while to_check:
+        success = True
+        paths = to_check.pop(0)
+        for prog in programs:
+            try:
+                self.find_program(prog, var='PROG_' + prog,
+                                  path_list=add_paths + paths)
+            except Errors.ConfigurationError:
+                success = False
+                break
+        if success:
+            break
+    if not success and with_prog:
+        raise Errors.ConfigurationError("not found in $PATH: {0}"
+                                        .format(programs))

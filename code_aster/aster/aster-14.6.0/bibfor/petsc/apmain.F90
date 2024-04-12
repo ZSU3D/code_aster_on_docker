@@ -1,0 +1,544 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine apmain(action, kptsc, rsolu, vcine, istop,&
+                  iret)
+!
+#include "asterf_types.h"
+#include "asterf_petsc.h"
+use aster_petsc_module
+use petsc_data_module
+use saddle_point_module
+use lmp_module, only : lmp_update
+!
+    implicit none
+!
+!
+! person_in_charge: natacha.bereux at edf.fr
+! aslint:disable=
+!
+    character(len=*) :: action
+    integer :: kptsc
+    real(kind=8) :: rsolu(*)
+    character(len=19) :: vcine
+    integer :: istop, iret
+!--------------------------------------------------------------
+!
+! IN  : ACTION :
+!     /'DETR_MAT': POUR DETRUIRE L'INSTANCE PETSC ASSOCIEE A UNE MATRICE
+!     /'PRERES'  : POUR CONSTRUIRE LE PRECONDITIONNEUR
+!                 (ATTENTION EN // LA CONSTRUCTION DE CERTAINS PC EST
+!                  RETARDEE)
+!     /'RESOUD'  : POUR RESOUDRE LE SYSTEME LINEAIRE
+!
+! IN  : KPTSC (I): INDICE DES INSTANCES PETSC DANS Ap,Kp
+! I/O : RSOLU (R): EN ENTREE : VECTEUR SECOND MEMBRE (REEL)
+!                  EN SORTIE : VECTEUR SOLUTION      (REEL)
+!                 (SI ACTION=RESOUD)
+! IN  : VCINE (K19): NOM DU CHAM_NO DE CHARGEMENT CINEMATIQUE
+!                   (SI ACTION=RESOUD)
+! IN  : ISTOP (I)  : COMPORTEMENT EN CAS D'ERREUR
+! OUT : IRET  (I)  : CODE RETOUR
+!---------------------------------------------------------------
+#include "jeveux.h"
+#include "asterc/asmpi_comm.h"
+#include "asterc/matfpe.h"
+#include "asterfort/apalmc.h"
+#include "asterfort/apalmd.h"
+#include "asterfort/apksp.h"
+#include "asterfort/apmamc.h"
+#include "asterfort/apmamd.h"
+#include "asterfort/appcpr.h"
+#include "asterfort/appcrs.h"
+#include "asterfort/ap2foi.h"
+#include "asterfort/apsolu.h"
+#include "asterfort/apvsmb.h"
+#include "asterfort/asmpi_info.h"
+#include "asterfort/assert.h"
+#include "asterfort/csmbgg.h"
+#include "asterfort/detrsd.h"
+#include "asterfort/dismoi.h"
+#include "asterfort/exisd.h"
+#include "asterfort/filter_smd.h"
+#include "asterfort/infniv.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jeexin.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/mrconl.h"
+#include "asterfort/mtdscr.h"
+#include "asterfort/utmess.h"
+#include "asterfort/uttcpu.h"
+!
+#ifdef _HAVE_PETSC
+!----------------------------------------------------------------
+!
+!     VARIABLES LOCALES
+    integer :: ifm, niv, ierd, nmaxit, ptserr
+    integer :: lmat, idvalc, icode
+    integer, dimension(:), pointer :: slvi => null()
+    mpi_int :: rang, nbproc
+    mpi_int :: mpicomm
+!
+    character(len=24) :: precon, algo, valk(2)
+    character(len=24), dimension(:), pointer :: slvk  => null()
+    character(len=19) :: nomat, nosolv
+    character(len=14) :: nonu
+    character(len=3) :: matd
+    character(len=1) :: rouc
+!
+    real(kind=8) :: divtol, resipc
+    real(kind=8), dimension(:), pointer :: slvr => null()
+    complex(kind=8) :: cbid
+!
+    aster_logical :: lmd
+    aster_logical, parameter :: dbg=.false.
+
+!
+!----------------------------------------------------------------
+!     Variables PETSc
+!
+    PetscInt :: its, maxits
+    PetscErrorCode ::  ierr
+    PetscReal :: rtol, atol, dtol
+    Vec :: r
+    PetscScalar :: ires, fres
+    KSPConvergedReason :: indic
+    Mat :: a
+    KSP :: ksp
+    PC :: pc
+!----------------------------------------------------------------
+    cbid = dcmplx(0.d0, 0.d0)
+    call jemarq()
+!
+!   -- COMMUNICATEUR MPI DE TRAVAIL
+    call asmpi_comm('GET', mpicomm)
+!
+!   -- ON DESACTIVE LA LEVEE D'EXCEPTION FPE DANS LES BIBLIOTHEQUES MATHEMATIQUES
+    call matfpe(-1)
+!
+    call infniv(ifm, niv)
+    call asmpi_info(rank=rang, size=nbproc)
+!
+!     -- LECTURE DU COMMUN
+    nomat = nomat_courant
+    nonu = nonu_courant
+    nosolv = nosols(kptsc)
+!
+    call exisd('MATR_ASSE', nomat, icode)
+    if (icode == 0 ) then
+!   si la matrice n'existe pas, on peut quand meme
+!   vouloir la detruire, mais c'est la seule action
+!   autorisee
+       ASSERT( action == 'DETR_MAT' )
+    else
+        call jeveuo(nosolv//'.SLVK', 'L', vk24=slvk)
+        precon = slvk(2)
+        algo = slvk(6)
+        call dismoi('MATR_DISTRIBUEE', nomat, 'MATR_ASSE', repk=matd)
+        lmd = matd.eq.'OUI'
+!
+    endif
+!
+!
+    if (action .eq. 'PRERES') then
+!     ----------------------------
+!
+!        1.1 CREATION ET PREALLOCATION DE LA MATRICE PETSc :
+!        ---------------------------------------------------
+!
+        if (lmd) then
+            call apalmd(kptsc)
+        else
+            call apalmc(kptsc)
+        endif
+!
+!        1.2 COPIE DE LA MATRICE ASTER VERS LA MATRICE PETSc :
+!        -----------------------------------------------------
+!
+        if (lmd) then
+            call apmamd(kptsc)
+        else
+            call apmamc(kptsc)
+        endif
+!
+!        1.3 ASSEMBLAGE DE LA MATRICE PETSc :
+!        ------------------------------------
+!
+        call MatAssemblyBegin(ap(kptsc), MAT_FINAL_ASSEMBLY, ierr)
+        ASSERT(ierr.eq.0)
+        call MatAssemblyEnd(ap(kptsc), MAT_FINAL_ASSEMBLY, ierr)
+        ASSERT(ierr.eq.0)
+!
+        if ( precon == 'BLOC_LAGR' ) then
+            call convert_mat_to_saddle_point( nomat, ap(kptsc) )
+        endif
+!
+!        1.4 CREATION DU PRECONDITIONNEUR PETSc (EXTRAIT DU KSP) :
+!        ---------------------------------------------------------
+!
+        call KSPCreate(mpicomm, kp(kptsc), ierr)
+        ASSERT(ierr.eq.0)
+        !
+        call KSPSetOperators( kp(kptsc), ap(kptsc), ap(kptsc), ierr )
+
+        ASSERT(ierr == 0)
+        !
+        !  Initialisation du préconditionneur
+        !
+        call appcpr(kptsc)
+!
+    else if (action.eq.'RESOUD') then
+!     ---------------------------------
+!
+!        2.0 RECUPERATION DES POINTEURS DANS LE COMMUN :
+!        -----------------------------------------------
+!
+        a = ap(kptsc)
+        ksp = kp(kptsc)
+!
+!        2.1 PRETRAITEMENT DU SECOND MEMBRE :
+!        ------------------------------------
+!
+!        -- MISE A L'ECHELLE DES LAGRANGES DANS LE SECOND MEMBRE
+        call mtdscr(nomat)
+        call jeveuo(nomat//'.&INT', 'L', lmat)
+        call mrconl('MULT', lmat, 0, 'R', rsolu, 1)
+!
+!        -- MISE A ZERO DES TERMES NON CINEMATIQUES DONT LE PROC
+!           COURANT N'EST PAS SEUL PROPRIETAIRE
+        call filter_smd(nomat, rsolu)
+!        -- PRISE EN COMPTE DES CHARGES CINEMATIQUES :
+        call jeexin(vcine//'.VALE', ierd)
+        if (ierd .ne. 0) then
+            call jeveuo(vcine//'.VALE', 'L', idvalc)
+            call jelira(vcine//'.VALE', 'TYPE', cval=rouc)
+            ASSERT(rouc.eq.'R')
+            call csmbgg(lmat, rsolu, zr(idvalc), [cbid], [cbid],&
+                        'R')
+        endif
+!
+!        2.2 CREATION DU VECTEUR SECOND MEMBRE PETSc :
+!        ---------------------------------------------
+!
+        call apvsmb(kptsc, lmd, rsolu)
+!
+!        2.3 PARAMETRES DU KSP :
+!        -----------------------
+!
+        call apksp(kptsc)
+!
+!        2.3b CREATION DES PRECONDITIONNEURS RETARDES :
+!        ----------------------------------------------
+!
+        call appcrs(kptsc, lmd)
+!
+!        2.4 RESOLUTION :
+!        ----------------
+!
+        call VecDuplicate(b, x, ierr)
+        ASSERT(ierr.eq.0)
+
+        call KSPSolve(ksp, b, x, ierr)
+!
+!        2.5 DIAGNOSTIC :
+!        ----------------
+!
+!       ARRET ANORMAL DU KSP
+        if (ierr .gt. 0) call utmess('F', 'PETSC_13')
+!
+!       ANALYSE DE LA CONVERGENCE DU KSP
+        call KSPGetConvergedReason(ksp, indic, ierr)
+        ASSERT(ierr.eq.0)
+        call KSPGetIterationNumber(ksp, its, ierr)
+        ASSERT(ierr.eq.0)
+
+!
+!       -- si LDLT_SP et its > maxits, on essaye une 2eme fois
+!       -- apres avoir actualise le preconditionneur :
+        if ((indic .eq. KSP_DIVERGED_ITS) .and. (precon.eq.'LDLT_SP')) then
+            call ap2foi(kptsc, mpicomm, nosolv, lmd, indic,its)
+!           -- ksp a ete modifie par ap2foi :
+            ksp = kp(kptsc)
+        endif
+!
+!
+!       ANALYSE DES CAUSES ET EMISSION EVENTUELLE D'UN MESSAGE
+!       EN CAS DE DIVERGENCE
+        if (indic .lt. 0) then
+            call KSPGetTolerances(ksp, rtol, atol, dtol, maxits,&
+                                  ierr)
+            ASSERT(ierr.eq.0)
+!
+
+            if (indic .eq. KSP_DIVERGED_ITS) then
+!               -- NOMBRE MAX D'ITERATIONS
+                if ( istop == 0 ) then
+!                  ERREUR <F>
+                   nmaxit=maxits
+                   call utmess('F', 'PETSC_5', si=nmaxit )
+                else if ( istop == 2 ) then
+!                  ON CONTINUE ET ON REMONTE UN CODE D'ERREUR
+                   iret = 1
+                   goto 999
+                else
+                   ASSERT (.false.)
+                endif
+!
+            else if (indic.eq.KSP_DIVERGED_DTOL) then
+!               DIVERGENCE
+                if ( istop == 0 ) then
+!                  ERREUR <F>
+                  divtol = dtol
+                  call utmess('F', 'PETSC_6', sr=divtol)
+                else if ( istop == 2 ) then
+!                  ON CONTINUE ET ON REMONTE UN CODE D'ERREUR
+                   iret = 1
+                   goto 999
+                else
+                   ASSERT (.false.)
+                endif
+!
+            else if (indic.eq.KSP_DIVERGED_BREAKDOWN) then
+!               BREAKDOWN
+                if ( istop == 0 ) then
+!                  ERREUR <F>
+                   call utmess('F', 'PETSC_7')
+                else if ( istop == 2 ) then
+!                  ON CONTINUE ET ON REMONTE UN CODE D'ERREUR
+                   iret = 1
+                   goto 999
+                else
+                   ASSERT (.false.)
+                endif
+!
+            else if (indic.eq.KSP_DIVERGED_NONSYMMETRIC) then
+!               MATRICE NON SYMETRIQUE
+                call utmess('F', 'PETSC_9')
+
+!
+            else if (indic.eq.KSP_DIVERGED_INDEFINITE_PC) then
+!              PRECONDITIONNEUR NON DEFINI
+                call utmess('F', 'PETSC_10')
+!
+            else if (indic.eq.KSP_DIVERGED_NANORINF) then
+!               NANORINF
+                if ( istop == 0 ) then
+!                  ERREUR <F>
+                   call utmess('F', 'PETSC_8')
+                else if ( istop == 2 ) then
+!                  ON CONTINUE ET ON REMONTE UN CODE D'ERREUR
+                   iret = 1
+                   goto 999
+                else
+                   ASSERT (.false.)
+                endif
+!
+            else if (indic.eq.KSP_DIVERGED_INDEFINITE_MAT) then
+!               MATRICE NON DEFINIE
+                call utmess('F', 'PETSC_11')
+!
+            else
+!              AUTRE ERREUR
+                ptserr = indic
+                call utmess('F', 'PETSC_12', si=ptserr)
+            endif
+        endif
+!
+!        2.5b VERIFICATION DE LA SOLUTION :
+!        ----------------------------------
+!
+!        -- DOIT-ON VERIFIER LE CRITERE EN NORME NON PRECONDITIONNEE ?
+        call jeveuo(nosolv//'.SLVR', 'L', vr=slvr)
+        resipc = slvr(4)
+!
+        if (resipc .ge. 0.d0) then
+            call VecDuplicate(x, r, ierr)
+            ASSERT(ierr.eq.0)
+!           r = Ax
+            call MatMult(ap(kptsc), x, r, ierr)
+            ASSERT(ierr.eq.0)
+!           r = b - Ax
+            call VecAYPX(r, -1.d0, b, ierr)
+            ASSERT(ierr.eq.0)
+!           fres = ||r||_2
+            call VecNorm(r, norm_2, fres, ierr)
+            ASSERT(ierr.eq.0)
+!           ires = ||b||_2
+            call VecNorm(b, norm_2, ires, ierr)
+            ASSERT(ierr.eq.0)
+!
+            call VecDestroy(r, ierr)
+            ASSERT(ierr.eq.0)
+!
+            call KSPGetTolerances(ksp, rtol, atol, dtol, maxits,&
+                                  ierr)
+            ASSERT(ierr.eq.0)
+!
+            if (fres .gt. sqrt(rtol)*ires) then
+                call utmess('F', 'PETSC_16')
+            endif
+        endif
+!
+!        2.6 RECOPIE DE LA SOLUTION :
+!        ----------------------------
+        call apsolu(kptsc, lmd, rsolu)
+!
+
+!        2.7 UTILISATION DU LMP EN 2ND NIVEAU
+!        -------------------------------------
+
+        call jeveuo(nosolv//'.SLVK', 'L', vk24=slvk)
+        algo = slvk(6)
+        if  ( algo == 'GMRES_LMP' ) then
+            call KSPGetPC( ksp, pc, ierr )
+            ASSERT( ierr == 0 )
+            call lmp_update( pc, ksp, ierr )
+            ASSERT( ierr == 0 )
+        endif
+!
+!         2.8 NETTOYAGE PETSc (VECTEURS) :
+!         --------------------------------
+!
+!        -- EN CAS D'ERREUR DANS LES ITERATIONS DE KRYLOV ON SAUTE ICI
+999     continue
+        call VecDestroy(b, ierr)
+        ASSERT(ierr.eq.0)
+        call VecDestroy(x, ierr)
+        ASSERT(ierr.eq.0)
+!
+!        -- PRECONDITIONNEUR UTILISE
+!
+!        -- TRAITEMENT PARTICULIER DU PRECONDITIONNEUR LAGRANGIEN AUGMENTE
+        if (precon .eq. 'BLOC_LAGR') then
+!
+!           ON STOCKE LE NOMBRE D'ITERATIONS DU KSP
+            call KSPGetIterationNumber(ksp, maxits, ierr)
+            ASSERT(ierr.eq.0)
+            nmaxit = maxits
+            call jeveuo(nosolv//'.SLVI', 'E', vi=slvi)
+            slvi(5) = nmaxit
+        endif
+!
+!        -- TRAITEMENT PARTICULIER DU PRECONDITIONNEUR LDLT_SP
+        if (precon .eq. 'LDLT_SP') then
+!           MENAGE
+            spsomu = slvk(3)(1:19)
+            call detrsd('SOLVEUR', spsomu)
+            spsomu = ' '
+!
+            call VecDestroy(xlocal, ierr)
+            ASSERT(ierr.eq.0)
+#if PETSC_VERSION_LT(3,8,0)
+            xlocal = PETSC_NULL_OBJECT
+#else
+            xlocal = PETSC_NULL_VEC
+#endif
+            call VecDestroy(xglobal, ierr)
+            ASSERT( ierr == 0 )
+#if PETSC_VERSION_LT(3,8,0)
+            xglobal = PETSC_NULL_OBJECT
+#else
+            xglobal = PETSC_NULL_VEC
+#endif
+            call VecScatterDestroy(xscatt, ierr)
+            ASSERT( ierr == 0 )
+#if PETSC_VERSION_LT(3,8,0)
+            xscatt = PETSC_NULL_OBJECT
+#else
+            xscatt = PETSC_NULL_VECSCATTER
+#endif
+!           ON STOCKE LE NOMBRE D'ITERATIONS DU KSP
+            call KSPGetIterationNumber(ksp, maxits, ierr)
+            ASSERT(ierr.eq.0)
+            nmaxit = maxits
+            call jeveuo(nosolv//'.SLVI', 'E', vi=slvi)
+            slvi(5) = nmaxit
+        endif
+!
+    else if (action.eq.'DETR_MAT') then
+!     -----------------------------------
+!
+!        3.0 RECUPERATION DES POINTEURS :
+!        --------------------------------
+!
+        a = ap(kptsc)
+        ksp = kp(kptsc)
+!
+!        3.1 NETTOYAGE PETSc :
+!        ---------------------
+!
+!        -- DESTRUCTION DES OBJETS PETSC GENERAUX
+        call MatDestroy(a, ierr)
+        ASSERT(ierr.eq.0)
+!
+#if PETSC_VERSION_LT(3,8,0)
+        call KSPDestroy(ksp, ierr)
+        ASSERT(ierr.eq.0)
+#else
+        if ( ksp /= PETSC_NULL_KSP) then
+           call KSPDestroy(ksp, ierr)
+           ASSERT(ierr.eq.0)
+        endif
+#endif
+!
+!        -- SUPRESSION DE L'INSTANCE PETSC
+        nomats(kptsc) = ' '
+        nosols(kptsc) = ' '
+        nonus(kptsc) = ' '
+#if PETSC_VERSION_LT(3,8,0)
+        ap(kptsc) = PETSC_NULL_OBJECT
+        kp(kptsc) = PETSC_NULL_OBJECT
+#else
+        ap(kptsc) = PETSC_NULL_MAT
+        kp(kptsc) = PETSC_NULL_KSP
+#endif
+        tblocs(kptsc) = -1
+!
+!        -- PRECONDITIONNEUR UTILISE
+!
+        if (precon .eq. 'LDLT_SP') then
+!           MENAGE
+            spmat = ' '
+            spsolv = ' '
+        endif
+!
+    else
+        ASSERT(.false.)
+    endif
+!
+!     -- ON REACTIVE LA LEVEE D'EXCEPTION
+    call matfpe(1)
+!
+    call jedema()
+!
+#else
+    character(len=1) :: kdummy
+    integer :: idummy
+    real(kind=8) :: rdummy
+    kdummy = action(1:1)
+    idummy = kptsc
+    rdummy = rsolu(1)
+    kdummy = vcine(1:1)
+    idummy = istop
+    idummy = iret
+    ASSERT(.false.)
+#endif
+!
+end subroutine

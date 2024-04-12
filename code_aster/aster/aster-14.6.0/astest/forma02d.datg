@@ -1,0 +1,136 @@
+# -*- coding: utf-8 -*-
+
+import math
+import salome
+salome.salome_init()
+from salome.geom import geomBuilder
+import GEOM
+geompy = geomBuilder.New(salome.myStudy)
+import SMESH
+from salome.smesh import smeshBuilder
+smesh = smeshBuilder.New(salome.myStudy)
+
+#############Chemin pour l'export du maillage resultat############
+import os
+ExportPATH=os.getcwd()
+##################################################################
+
+#===================================================
+#                  PARAMETRES
+#                  ----------
+#===================================================
+# RC rayon de courbure du coude (m)
+# L  longueur des tuyaux droits (m)
+
+Rc = 0.6;
+L = 3;
+Rac2sur2 = math.sqrt(2)/2
+
+
+#===================================================
+#                  GEOMETRIE
+#                  ---------
+#===================================================
+
+P1 = geompy.MakeVertex(0,0,0);
+P2 = geompy.MakeVertex(0,L,0);
+P3 = geompy.MakeVertex(Rc,L+Rc,0);
+P4 = geompy.MakeVertex(Rc+L,L+Rc,0);
+P5 = geompy.MakeVertex(Rc*(1-Rac2sur2),L+Rc*Rac2sur2,0);
+
+edge1 = geompy.MakeLineTwoPnt(P1,P2);
+edge2 = geompy.MakeLineTwoPnt(P3,P4);
+arc1 = geompy.MakeArc(P2, P5, P3);
+
+
+# Création de la géométrie générale
+#------------------------------------
+GeoCoude = geompy.MakeWire([edge1,arc1,edge2])
+
+# Publication dans l'étude
+#---------------------------
+id_GeoCoude=geompy.addToStudy( GeoCoude, "GeoCoude" )
+
+
+# Création des groupes
+#---------------------------
+# On crée des groupes à partir des entitées de construction
+
+
+BASE = geompy.GetSame(GeoCoude,P1)
+geompy.addToStudyInFather(GeoCoude,BASE,"BASE")
+
+EFOND = geompy.GetSame(GeoCoude,P4)
+geompy.addToStudyInFather(GeoCoude,EFOND,"EFOND")
+
+TUY1 = geompy.GetSame(GeoCoude,edge1)
+geompy.addToStudyInFather(GeoCoude,TUY1,"TUY1")
+
+TUY2 = geompy.GetSame(GeoCoude,edge2)
+geompy.addToStudyInFather(GeoCoude,TUY2,"TUY2")
+
+COUDE = geompy.GetSame(GeoCoude,arc1)
+geompy.addToStudyInFather(GeoCoude,COUDE,"COUDE")
+
+TUYAU = geompy.CreateGroup(GeoCoude, geompy.ShapeType["EDGE"])
+geompy.AddObject(TUYAU, geompy.GetSubShapeID(GeoCoude,TUY1))
+geompy.AddObject(TUYAU, geompy.GetSubShapeID(GeoCoude,TUY2))
+geompy.AddObject(TUYAU, geompy.GetSubShapeID(GeoCoude,COUDE))
+geompy.addToStudyInFather( GeoCoude, TUYAU, "TUYAU" )
+
+
+#===================================================
+#                  MAILLAGE
+#                  --------
+#===================================================
+
+maillageCoude = smesh.Mesh(GeoCoude, "MeshCoude")
+
+# Algorithmes et hypotheses globales
+# ----------------------------------
+
+# 1D global
+nbSegments = 5
+nbSegmentsCoude = 20
+algo = maillageCoude.Segment()
+algo.NumberOfSegments(nbSegments)
+
+# Calcul
+# ------
+maillageCoude.Compute()
+
+
+# maillage plus fin sur le coude
+Nb_Segments_coude = smesh.CreateHypothesis('NumberOfSegments')
+Nb_Segments_coude.SetNumberOfSegments( nbSegmentsCoude )
+Nb_Segments_coude.SetDistrType( 0 )
+
+maillageCoude.AddHypothesis(algo,COUDE)
+maillageCoude.AddHypothesis(Nb_Segments_coude,COUDE)
+
+# Calcul
+# ------
+maillageCoude.Compute()
+
+
+# Création des groupes du maillage
+#---------------------------------
+maillageCoude.Group(BASE, "BASE" )
+maillageCoude.Group(EFOND, "EFOND" )
+maillageCoude.Group(TUY1, "TUY1" )
+maillageCoude.Group(TUY2, "TUY2" )
+maillageCoude.Group(COUDE, "COUDE" )
+maillageCoude.Group(TUYAU, "TUYAU" )
+
+
+########Export du maillage au format MMED########
+maillageCoude.ExportMED( r''+ExportPATH+'forma02d.mmed'+'', 0, SMESH.MED_V2_2 , 1 )
+
+
+# Mise à jour de l'arbre
+#---------------------------
+# Si on a une interface graphique...
+if salome.sg.hasDesktop():
+   gg = salome.ImportComponentGUI("GEOM")
+   gg.createAndDisplayFitAllGO(id_GeoCoude)
+   salome.sg.updateObjBrowser(1)

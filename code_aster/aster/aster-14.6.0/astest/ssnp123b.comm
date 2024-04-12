@@ -1,0 +1,213 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+# DEFINITION DU PROBLEME
+#=======================
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA='SURF',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='D_PLAN_INCO_UPG',),);
+YOUNG=200000.0
+SIGY=200.0
+
+MATERIAU=DEFI_MATERIAU(ELAS=_F(E=YOUNG,
+                               NU=0.3,),
+                       ECRO_LINE=_F(D_SIGM_EPSI=1000.0,
+                                    SY=SIGY,),);
+
+CH_MATER=AFFE_MATERIAU(MAILLAGE=MA,
+                       AFFE=_F(TOUT='OUI',
+                               MATER=MATERIAU,),);
+
+SYMETRIE=AFFE_CHAR_MECA(MODELE=MO,
+                        FACE_IMPO=(_F(GROUP_MA=('LCD','LBC',),
+                                      DY=0.0,),
+                                   _F(GROUP_MA=('LDE','LEF',),
+                                      DX=0.0,),),);
+
+TRACTION=AFFE_CHAR_MECA(MODELE=MO,
+                        FACE_IMPO=_F(GROUP_MA='LFG',
+                                     DY=0.1,),);
+
+# Dummy time step is added to test PRECISION keyword in MACR_LIGN_COUPE
+INSTANTS=DEFI_LIST_REEL(DEBUT=0.0,
+                        INTERVALLE=(_F(JUSQU_A=1.0,
+                                      NOMBRE=5,),
+                                    _F(JUSQU_A=1.000001,
+                                      NOMBRE=1,),
+                                    ),);
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,0.0,1.0,1.0,),PROL_DROITE='LINEAIRE',);
+
+DEFLIST =DEFI_LIST_INST(DEFI_LIST=_F(LIST_INST =INSTANTS ),)
+
+# CALCUL
+#========
+
+RESU=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=CH_MATER,
+                   EXCIT=(_F(CHARGE=TRACTION,
+                             FONC_MULT=RAMPE,),
+                          _F(CHARGE=SYMETRIE,),),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),
+                   INCREMENT=_F(LIST_INST=DEFLIST,INST_FIN=1.0,),
+                   NEWTON=_F(REAC_ITER=1,),
+                   CONVERGENCE=_F(EPSI_REFE=SIGY/YOUNG,
+                                  SIGM_REFE=SIGY,
+                                  RESI_REFE_RELA=1.E-4,),
+                   SOLVEUR=_F(METHODE='MUMPS',),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS,),);
+
+# Dummy calculation to test PRECISION keyword in MACR_LIGN_COUPE
+RESU_2=STAT_NON_LINE(ETAT_INIT=_F(EVOL_NOLI=RESU,),
+                   MODELE=MO,
+                   CHAM_MATER=CH_MATER,
+                   EXCIT=(_F(CHARGE=TRACTION,
+                             FONC_MULT=RAMPE,),
+                          _F(CHARGE=SYMETRIE,),),
+                   COMPORTEMENT=_F(RELATION='VMIS_ISOT_LINE',),
+                   INCREMENT=_F(LIST_INST=DEFLIST),
+                   NEWTON=_F(REAC_ITER=1,),
+                   CONVERGENCE=_F(EPSI_REFE=SIGY/YOUNG,
+                                  SIGM_REFE=SIGY,
+                                  RESI_REFE_RELA=1.E-4,),
+                   SOLVEUR=_F(METHODE='MUMPS',),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS,),);
+
+# POST TRAITEMENT
+#=================
+
+RESU=CALC_CHAMP(reuse=RESU,RESULTAT=RESU,CONTRAINTE=('SIGM_ELNO'))
+
+
+RESU=CALC_ERREUR(reuse =RESU,
+               RESULTAT=RESU,
+               OPTION=('ERME_ELEM','ERME_ELNO',),);
+
+RESU=CALC_CHAMP(reuse =RESU,
+             RESULTAT=RESU,
+             CONTRAINTE='SIGM_NOEU',);
+
+RESU_2=CALC_CHAMP(reuse =RESU_2,
+             RESULTAT=RESU_2,
+             CONTRAINTE='SIGM_NOEU',);
+
+# test PRECISION which is needed to discriminate between possible choices
+S_T=MACR_LIGN_COUPE(RESULTAT=RESU_2,  NOM_CHAM='SIGM_NOEU', INST=1.0, CRITERE='ABSOLU',PRECISION=0.0000005,
+                  LIGN_COUPE=(
+                     _F(TYPE='SEGMENT', NB_POINTS=11, INTITULE='S_EXT', NOM_CMP='SIYY',
+                        COOR_ORIG=(0.0, 1.0,),
+                        COOR_EXTR=(5.0, 1.0,),
+                 )))
+
+
+
+#IMPR_TABLE(TABLE=S_T,);
+
+
+# TESTS NON REGRESSION
+#======================
+
+TEST_TABLE(
+           VALE_CALC=234.17369549492,
+           NOM_PARA='SIYY',
+           TABLE=S_T,
+           FILTRE=_F(NOM_PARA='COOR_X', VALE=0.0,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=241.963621081,
+           NOM_PARA='SIYY',
+           TABLE=S_T,
+           FILTRE=_F(NOM_PARA='COOR_X', VALE=1.,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=298.02665342,
+           NOM_PARA='SIYY',
+           TABLE=S_T,
+           FILTRE=_F(NOM_PARA='COOR_X', VALE=3.,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=68.3876262862,
+           NOM_PARA='SIYY',
+           TABLE=S_T,
+           FILTRE=_F(NOM_PARA='COOR_X', VALE=4.5,),
+           )
+
+#--------------------------------------------------------------------------------
+#
+#  TEST SUR L'ESTIMATEUR D'ERREUR EN RESIDU
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  POINT=1,
+                  RESULTAT=RESU,
+                  NOM_CHAM='ERME_ELEM',
+                  NOM_CMP='NUEST',
+                  VALE_CALC=1.2580199421582E-04,
+                  CRITERE='RELATIF',
+                  MAILLE='M20',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='ERME_ELNO',
+                  NOEUD='N20',
+                  NOM_CMP='ERREST',
+                  VALE_CALC=3.0812887111053E-05,
+                  CRITERE='RELATIF',
+                  MAILLE='M20',
+                  ),
+          )
+
+#--------------------------------------------------------------------------------
+#
+#  TEST SUR LES CONTRAINTES AU POINT B
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_ELNO',
+                  NOEUD='N20',
+                  NOM_CMP='SIYY',
+                  VALE_CALC=439.88472897788,
+                  CRITERE='RELATIF',
+                  MAILLE='M20',
+                  ),
+          )
+
+TEST_RESU(RESU=_F(INST=1.0,
+                  RESULTAT=RESU,
+                  NOM_CHAM='SIGM_ELNO',
+                  NOEUD='N20',
+                  NOM_CMP='SIXX',
+                  VALE_CALC=-0.25767300107652,
+                  CRITERE='RELATIF',
+                  MAILLE='M20',
+                  ),
+          )
+
+FIN();

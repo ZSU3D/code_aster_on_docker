@@ -1,0 +1,111 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# PARTIE 2 : CALCUL MECANIQUE ET POST TRAITEMENT SANS RUPTURE
+
+POURSUITE(CODE='OUI', DEBUG=_F(SDVERI='OUI'),);
+
+########
+# Lecture et modification du maillage raffine
+########
+
+MA = LIRE_MAILLAGE(FORMAT='MED', UNITE=41);
+
+MA = MODI_MAILLAGE(reuse=MA,
+                   MAILLAGE=MA,
+                   ORIE_PEAU_3D=_F(GROUP_MA=('FACE_AV', 'FACE_SUP', 'FACE_LAT', 'FACE_INF'),),);
+
+########
+# Materiau
+########
+
+MAT = DEFI_MATERIAU(ELAS=_F(E=2e+11, NU=0.3),);
+
+MATE = AFFE_MATERIAU(AFFE=_F(MATER=MAT, 
+                             TOUT='OUI'), 
+                     MAILLAGE=MA,);
+
+########
+# Modele
+########
+
+MO = AFFE_MODELE(AFFE=_F(MODELISATION='3D', 
+                         PHENOMENE='MECANIQUE', 
+                         TOUT='OUI'),
+                 MAILLAGE=MA,);
+
+########
+# Definition de la fissure
+########
+
+FISS = DEFI_FISS_XFEM(DEFI_FISS=_F(CENTRE=(0.0, 0.0, 0.0),
+                                   DEMI_GRAND_AXE=2.0,
+                                   DEMI_PETIT_AXE=2.0,
+                                   FORM_FISS='ELLIPSE',
+                                   VECT_X=(1.0, 0.0, 0.0),
+                                   VECT_Y=(0.0, 1.0, 0.0),),
+                      MAILLAGE=MA,);
+
+########
+# Prise en compte du modele enrichi
+########
+
+MOXFEM = MODI_MODELE_XFEM(FISSURE=FISS, MODELE_IN=MO);
+
+########
+# Conditions limites
+########
+
+CHAR = AFFE_CHAR_MECA(DDL_IMPO=(_F(DZ=0.0, GROUP_NO='D',),
+                                _F(DY=0.0, GROUP_MA='FACE_AV',),
+                                _F(DX=0.0, GROUP_MA='FACE_LAT',),),
+                      MODELE=MOXFEM,
+                      PRES_REP=_F(GROUP_MA=('FACE_SUP', 'FACE_INF'), 
+                                  PRES=-1000000.0),);
+
+########
+# Calcul mecanique
+########
+
+RESU = MECA_STATIQUE(CHAM_MATER=MATE, 
+                     EXCIT=_F(CHARGE=CHAR), 
+                     MODELE=MOXFEM,);
+
+########
+# Post traitement pour la visualisation
+########
+
+MA_VISU = POST_MAIL_XFEM(MODELE=MOXFEM);
+
+MO_VISU = AFFE_MODELE(AFFE=_F(MODELISATION='3D',
+                              PHENOMENE='MECANIQUE', 
+                              TOUT='OUI'),
+                      MAILLAGE=MA_VISU,);
+
+RES_VISU = POST_CHAM_XFEM(MODELE_VISU=MO_VISU, 
+                          RESULTAT=RESU);
+
+RES_VISU = CALC_CHAMP(reuse=RES_VISU,
+                      CONTRAINTE='SIGM_NOEU',
+                      CRITERES='SIEQ_NOEU',
+                      RESULTAT=RES_VISU,);
+
+IMPR_RESU(FORMAT='MED', RESU=_F(RESULTAT=RES_VISU), UNITE=81);
+
+FIN();

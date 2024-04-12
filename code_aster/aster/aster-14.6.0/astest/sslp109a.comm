@@ -1,0 +1,123 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET', ), DEBUG=_F(SDVERI='NON'))
+
+MAILLAGE  =  LIRE_MAILLAGE(FORMAT='MED')
+
+
+TEMPS     = DEFI_LIST_REEL( DEBUT=0.0,
+                            INTERVALLE=_F(JUSQU_A=1.0,
+                                          NOMBRE=1,)
+                           )
+
+MATER      = DEFI_MATERIAU( ELAS = _F(E  = 1.0,
+                                      NU = 0.,),
+                                     ),
+
+CHMAT      = AFFE_MATERIAU(MAILLAGE=MAILLAGE,
+                           AFFE=_F(TOUT='OUI',
+                                   MATER=MATER),
+                          ),
+
+COEF1      = DEFI_FONCTION( NOM_PARA    = 'INST',
+                            PROL_DROITE = 'LINEAIRE',
+                            VALE=( 0.0,  0.0,
+                                   1.0,  1.0E-6,),
+                          )
+
+MO         = AFFE_MODELE(MAILLAGE=MAILLAGE,
+                         AFFE=_F(TOUT='OUI',
+                                 PHENOMENE='MECANIQUE',
+                                 MODELISATION='D_PLAN',),
+                        );
+
+#***********************************************************************
+#    CHARGEMENT MECANIQUE
+#***********************************************************************
+
+CH_U1  = AFFE_CHAR_CINE( MODELE    = MO,
+                         MECA_IMPO = _F( GROUP_NO  = 'nod1',
+                                         DX        =  0.,)
+                        )
+
+CH_U2  = AFFE_CHAR_CINE( MODELE    = MO,
+                         MECA_IMPO = _F( GROUP_NO  = 'nod2',
+                                         DX        =  1.,)
+                        )
+
+CH_U3  = AFFE_CHAR_CINE( MODELE    = MO,
+                         MECA_IMPO = _F( GROUP_NO  = 'nod3',
+                                         DY        =  0.,)
+                        )
+
+CH_U4  = AFFE_CHAR_CINE( MODELE    = MO,
+                         MECA_IMPO = _F( GROUP_NO  = 'nod4',
+                                         DY        =  0.,)
+                        )
+
+EVOL   = STAT_NON_LINE( MODELE     = MO,INFO=1,
+                        CHAM_MATER = CHMAT,
+                        EXCIT      = ( _F( CHARGE       = CH_U1),
+                                       _F( CHARGE       = CH_U2,
+                                           FONC_MULT    = COEF1),
+                                       _F( CHARGE       = CH_U3),
+                                       _F( CHARGE       = CH_U4),
+                                     ),
+                        CRIT_STAB  = _F( TYPE           ='STABILITE',
+                                         RIGI_GEOM      = 'NON',
+                                         NMAX_CHAR_CRIT        = 1,
+                                         DDL_STAB       = ('DX','DY')
+                                        ),
+                        COMPORTEMENT  = _F( TOUT           = 'OUI',
+                                         RELATION       = 'ELAS',
+                                         ),
+                        NEWTON     = _F( MATRICE        = 'TANGENTE',
+                                         REAC_ITER      = 1,),
+                        CONVERGENCE= _F( RESI_GLOB_RELA = 1.E-6,),
+                        INCREMENT  = _F( LIST_INST      = TEMPS,),
+                        AFFICHAGE  = _F( INFO_RESIDU    = 'OUI',)
+                     )
+
+#***********************************************************************
+#    TEST DU CRITERE DE STABILITE
+#***********************************************************************
+
+TABSPEC0=RECU_TABLE(CO=EVOL,
+                    NOM_TABLE='ANALYSE_MODALE',);
+
+IMPR_TABLE(TABLE=TABSPEC0);
+
+TEST_TABLE(
+                  VALE_CALC=0.14644660940673,
+           NOM_PARA='CHAR_STAB',
+           TABLE=TABSPEC0,
+           FILTRE=(
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='TYPE_MODE',
+                      VALE_K='MODE_STAB',),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='NUME_MODE',
+                      VALE_I=1,),
+                   _F(NOM_PARA='INST',
+                      VALE=1.0,),
+                   ),
+           )
+
+FIN();

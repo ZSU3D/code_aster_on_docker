@@ -1,0 +1,413 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI',),);
+
+
+## ANGLE NAUTIQUE UTILISES PAR ASTER (A. Nautique classique)
+#
+ALPHA = 40.
+
+
+
+UN=DEFI_CONSTANTE(VALE=1.)
+ZERO=DEFI_CONSTANTE(VALE=0.)
+
+
+
+
+PLIMP = 0.E6
+
+#CONTRAINTES TOTALES ASSOCIÉES AU REPERE GLOBAL DES CONTRAINTES IN SITU
+
+SIGXX=-25.E+6
+SIGYY=-22.E+6
+SIGZZ=-29.E+6
+SIGXY=0.
+SIGXZ=0.
+SIGYZ=0.
+
+
+
+# COEFFICIENTS DE BIOT REPERE LN
+CBIOTL = 0.3
+CBIOTT = 0.6
+
+
+
+
+
+#CONTRAINTE DE PRESSION DE FLUIDE DANS LE REPERE GLOBAL (ICI NULLE CAR LA PRESSION EST NULLE PARTOUT
+SIPXX0=0.
+SIPYY0=0.
+SIPZZ0=0.
+SIPXY0=0.
+SIPXZ0=0.
+SIPYZ0=0.
+
+
+
+
+#CONTRAINTES  EFFECTIVES
+SIEFX=SIGXX-SIPXX0
+SIEFY=SIGYY-SIPYY0
+SIEFZ=SIGZZ-SIPZZ0
+SIEFXY=SIGXY-SIPXY0
+SIEFXZ=SIGXZ-SIPXZ0
+SIEFYZ=SIGYZ-SIPYZ0
+
+
+# MODULE DE YOUNG
+YOUNG=9.E9
+
+#COEFFICIENT DE POISSON
+POISSON=0.24
+
+## PRESREP CONFINEMENT INITIAL
+
+PRESREPX = -(SIGXX)
+#***********************************************************************
+#    MAILLAGE
+#***********************************************************************
+MAILIN=LIRE_MAILLAGE(FORMAT='MED',)
+
+MAIL = CREA_MAILLAGE(MAILLAGE  = MAILIN,
+                     LINE_QUAD = _F(TOUT = 'OUI'),
+                     )
+MAIL=DEFI_GROUP(reuse=MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_MA=(_F(NOM='ROCHE',GROUP_MA='GM11'),
+                               _F(NOM='HAUT',GROUP_MA='GM6'),
+                               _F(NOM='BAS',GROUP_MA='GM8'),
+                               _F(NOM='GAUCHE',GROUP_MA='GM7'),
+                               _F(NOM='DROITE',GROUP_MA='GM9'),
+                                                            ),);
+MAIL=DEFI_GROUP(reuse=MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_NO=(_F(GROUP_MA='ROCHE',),
+                               _F(GROUP_MA='DROITE',),
+                               _F(GROUP_MA='GAUCHE',),
+                               _F(GROUP_MA='HAUT',),
+                               _F(GROUP_MA='BAS'),),);
+
+MAIL=MODI_MAILLAGE(reuse=MAIL,
+                   MAILLAGE=MAIL,
+                   ORIE_PEAU_2D=_F(GROUP_MA=('HAUT',
+                                             'BAS',
+                                             'GAUCHE',
+                                             'DROITE',
+                                             ),),);
+MAIL=DEFI_GROUP( reuse=MAIL,
+                 MAILLAGE=MAIL,
+                 CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+
+#***********************************************************************
+#    CARACTERISTIQUES DU MATERIAU
+#***********************************************************************
+# Remarque : Les coefficient sont equivalent a une isotropie transveres avec LN plan d
+#isotropie et N l axe d'anisotropie
+#
+VISCOLIQ=DEFI_CONSTANTE(VALE=1.E-3)
+
+DVISCOL=DEFI_CONSTANTE(VALE=0.)
+
+# PERMEABILITE INTRINSEQUE
+KINT=DEFI_CONSTANTE(VALE=5.E-20)
+
+
+MAT=DEFI_MATERIAU(
+       ELAS_ORTH=_F(
+
+           E_L  = YOUNG,
+           E_T  = 2*YOUNG,
+           E_N  = YOUNG,
+           RHO = 2700,
+           NU_LN = POISSON,
+           NU_LT = 2*POISSON,
+           NU_TN = 2*POISSON,
+           G_LT = 8.88E+9,
+           G_LN = 8.88E+9,
+           G_TN = 8.88E+9,
+               ),
+        COMP_THM = 'LIQU_SATU',
+  THM_LIQU=_F(
+     RHO = 1000.,
+     UN_SUR_K = 0.,
+     VISC = VISCOLIQ,
+     D_VISC_TEMP = DVISCOL,),
+  THM_DIFFU=_F(
+     RHO=2410.,
+     BIOT_L=CBIOTL,
+     BIOT_T=CBIOTT,
+     BIOT_N=CBIOTT,
+     PESA_X=0.0,
+     PESA_Y=0.0,
+     PESA_Z=0.0,
+     PERMIN_L=KINT,
+     PERMIN_T=KINT,
+           ),
+ THM_INIT=_F(PRE1 = 0.,
+             PORO = 0.14,),
+     );
+
+
+#***********************************************************************
+#    LISTE DES INSTANTS DE CALCUL
+#***********************************************************************
+
+TEMPS1=DEFI_LIST_REEL(DEBUT=0.,
+                      INTERVALLE=(_F(JUSQU_A = 1.,NOMBRE = 10,),),
+                     );
+
+##################################################################################################
+#
+#                         PHASE 1 : MECA PURE
+#
+##################################################################################################
+
+MODELM=AFFE_MODELE(MAILLAGE=MAIL,
+            AFFE=_F(TOUT='OUI',
+      PHENOMENE = 'MECANIQUE',
+             MODELISATION ='D_PLAN',),
+        );
+
+
+ORIREP=AFFE_CARA_ELEM(MODELE=MODELM,
+       MASSIF=( _F(GROUP_MA=('TOUT',),
+      ANGL_REP=(ALPHA),
+                        ),),
+    );
+
+CHMAT1=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=_F(TOUT='OUI',
+                     MATER = MAT,),
+                    );
+
+#***********************************************************************
+#        CONDITIONS INITIALES POUR LES CHAMPS DE CONTRAINTES ET DE
+#                  DEPLACEMENTS POUR LA PHASE 1
+#***********************************************************************
+
+SIGIM=CREA_CHAMP(TYPE_CHAM='ELGA_SIEF_R',
+                  OPERATION='AFFE',
+                  MODELE=MODELM,
+    AFFE=(_F(TOUT='OUI',
+      NOM_CMP=('SIXX','SIYY','SIZZ','SIXY',
+            ),
+      VALE=(SIEFX,SIEFY,SIEFZ,SIEFXY,
+         ),),
+                          ),
+                   );
+
+DEP0M=CREA_CHAMP(MAILLAGE=MAIL,
+     OPERATION='AFFE',
+     TYPE_CHAM='NOEU_DEPL_R',
+     AFFE=(_F(TOUT='OUI',
+       NOM_CMP = 'DX',
+       VALE=0.,),
+                         _F(TOUT='OUI',
+       NOM_CMP = 'DY',
+       VALE=0.,),
+                ),
+                  );
+
+#***********************************************************************
+#             CHARGEMENT MECANIQUE (CONDITIONS AUX LIMITES)
+#***********************************************************************
+
+
+
+CH_PREY=AFFE_CHAR_CINE(MODELE=MODELM,
+                      MECA_IMPO=(_F(GROUP_MA='HAUT', DY=1.,),),
+                      );
+COEF=DEFI_FONCTION(      NOM_PARA='INST',
+                          PROL_DROITE='LINEAIRE',
+                          PROL_GAUCHE='CONSTANT',
+                         VALE=( 0.,  0.0,
+                                1.0,  -0.01, )
+                       )
+CH_PREX=AFFE_CHAR_MECA(MODELE=MODELM,
+                      PRES_REP=(_F(GROUP_MA='DROITE', PRES=PRESREPX,),),
+                      );
+
+
+CH_SYM2=AFFE_CHAR_CINE(MODELE=MODELM,
+                      MECA_IMPO=(
+                                 _F(GROUP_MA='GAUCHE', DX=0.0,   ),
+                                 _F(GROUP_MA='BAS',    DY=0.0,   ),
+                                ),
+                      );
+
+
+#*****************************************************************
+#              CALCUL  MECA
+#*****************************************************************
+
+UM=STAT_NON_LINE(MODELE=MODELM,
+   CHAM_MATER=CHMAT1,
+         CARA_ELEM=ORIREP,
+   EXCIT=(
+                        _F(CHARGE = CH_SYM2,),
+                        _F(CHARGE = CH_PREY,FONC_MULT =COEF ),
+                        _F(CHARGE = CH_PREX,),
+                       ),
+       ETAT_INIT=_F(SIGM=SIGIM,
+                   DEPL=DEP0M,),
+   COMPORTEMENT=_F(RELATION = 'ELAS',
+         ),
+   NEWTON=_F(MATRICE ='TANGENTE',
+                           REAC_ITER=1,),
+   CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-12,
+           ITER_GLOB_MAXI = 50,),
+   INCREMENT=_F(LIST_INST = TEMPS1,
+         INST_FIN=1.,
+              ),
+                );
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=UM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N32',
+                   NOM_CMP='DX',
+                   VALE_CALC=0.003686006982,
+                   ),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=UM,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N32',
+                   NOM_CMP='DY',
+                   VALE_CALC=-0.00498193875881,
+                   ),
+                ),
+          )
+
+
+#*****************************************************************
+#             MODELISATION HM EQUIVALENTE
+#*****************************************************************
+
+PHASE1=AFFE_MODELE(MAILLAGE=MAIL,
+            AFFE=_F(TOUT='OUI',
+      PHENOMENE = 'MECANIQUE',
+             MODELISATION ='D_PLAN_HMS',),
+        );
+
+CH_PREYP=AFFE_CHAR_CINE(MODELE=PHASE1,
+                      MECA_IMPO=(_F(GROUP_MA='HAUT', DY=1.,),),
+                      );
+
+CH_PREXP=AFFE_CHAR_MECA(MODELE=PHASE1,
+                      PRES_REP=(_F(GROUP_MA='DROITE', PRES=PRESREPX,),),
+                      );
+
+
+CH_SYM2P=AFFE_CHAR_CINE(MODELE=PHASE1,
+                      MECA_IMPO=(
+                                 _F(GROUP_MA='GAUCHE', DX=0.0,   ),
+                                 _F(GROUP_MA='BAS',    DY=0.0,   ),
+                                ),
+                      );
+
+# CI
+SIGINI=CREA_CHAMP(TYPE_CHAM='CART_SIEF_R',
+                  OPERATION='AFFE',
+                  MODELE=PHASE1,
+    AFFE=(_F(TOUT='OUI',
+      NOM_CMP=('SIXX','SIYY','SIZZ',
+         'SIXY','SIYZ','SIXZ',
+                                     'SIPXX','SIPYY','SIPZZ',
+                                     'SIPXY','SIPXZ','SIPYZ',
+                                     'M11','FH11X','FH11Y','FH11Z',),
+      VALE=(SIEFX,SIEFY,SIEFZ,
+         SIEFXY,SIEFXZ,SIEFYZ,
+                                 SIPXX0,SIPYY0,SIPZZ0,
+                                 SIPXY0,SIPXZ0,SIPYZ0,
+         0.,0.,0.,0.,),),
+                          ),
+                   );
+
+DEPINIT=CREA_CHAMP(MAILLAGE=MAIL,
+     OPERATION='AFFE',
+     TYPE_CHAM='NOEU_DEPL_R',
+     AFFE=(_F(TOUT='OUI',
+       NOM_CMP = 'DX',
+       VALE=0.,),
+                         _F(TOUT='OUI',
+       NOM_CMP = 'DY',
+       VALE=0.,),
+                         _F(TOUT='OUI',
+       NOM_CMP = 'PRE1',
+       VALE=0.,),
+                ),
+                  );
+
+CH_P=AFFE_CHAR_CINE(MODELE=PHASE1,
+                      MECA_IMPO=(_F(TOUT='OUI', PRE1=PLIMP,),
+                                 ),);
+
+#*****************************************************************
+#              CALCUL HM
+#*****************************************************************
+
+U0=STAT_NON_LINE(MODELE=PHASE1,
+    CHAM_MATER=CHMAT1,
+                 CARA_ELEM=ORIREP,
+   EXCIT=(
+                        _F(CHARGE = CH_SYM2P,),
+                        _F(CHARGE = CH_PREYP,FONC_MULT =COEF ),
+                        _F(CHARGE = CH_PREXP,),
+                        _F(CHARGE = CH_P,),
+                       ),
+                 ETAT_INIT=_F(SIGM=SIGINI,
+                   DEPL=DEPINIT,),
+   COMPORTEMENT=_F(RELATION = 'KIT_HM',
+         RELATION_KIT = ('ELAS',
+                  'LIQU_SATU',
+                  'HYDR_UTIL',),),
+   NEWTON=_F(MATRICE ='TANGENTE',
+                           REAC_ITER=1,),
+   CONVERGENCE=_F(RESI_GLOB_RELA = 1.E-12,
+           ITER_GLOB_MAXI = 50,),
+   INCREMENT=_F(LIST_INST = TEMPS1,
+         INST_FIN=1.,
+             ),
+                );
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N32',
+                   NOM_CMP='DX',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=0.003686006982,
+                   VALE_CALC=0.003686006982,
+                   ),
+                _F(NUME_ORDRE=10,
+                   RESULTAT=U0,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N32',
+                   NOM_CMP='DY',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=-0.00498193875881,
+                   VALE_CALC=-0.00498193875881,
+                   ),
+                ),
+          )
+FIN();

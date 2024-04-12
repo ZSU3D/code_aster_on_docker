@@ -1,0 +1,195 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS TEST DOM4 DU MANUEL DE VALIDATION DE POSTDAM VERSION 1.0
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+TAUN=DEFI_FONCTION(   NOM_PARA='INST',
+                        VALE=(   0.,      0.,
+                                 1.,   1000.,
+                                 2.,      0.,  )  )
+
+MAT1=DEFI_MATERIAU(       ELAS=_F(  E = 200000.,
+                                    NU = 0.3),
+                          FATIGUE=_F(  A0 = 55.81,
+                                    A1 = -43.06,
+                                    A2 = 11.91,
+                                    A3 = -1.16,
+                                    E_REFE = 200000.,
+                                    SL = 180.),
+                             RCCM=_F(  N_KE = 0.3,
+                                    M_KE = 1.7,
+                                    SM = 126.)  )
+
+TAB_1=POST_FATIGUE(    CHARGEMENT='UNIAXIAL',
+                         HISTOIRE=_F(  SIGM = TAUN),
+                         COMPTAGE='RAINFLOW',
+                          DOMMAGE='WOHLER',
+                            MATER=MAT1,
+                            CUMUL='LINEAIRE',
+                              INFO=2                 )
+
+TEST_TABLE(
+           VALE_CALC=1000.0,
+           VALE_REFE=1000.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MAX',
+           TABLE=TAB_1,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           VALE_REFE=0.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MIN',
+           TABLE=TAB_1,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2.8585032708678E-4,
+           VALE_REFE=2.858503E-4,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMMAGE',
+           TABLE=TAB_1,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2.8585032708678E-4,
+           VALE_REFE=2.858503E-4,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMM_CUMU',
+           TABLE=TAB_1,)
+
+#-----------------------------------------------------------------------
+TAB_2=POST_FATIGUE(      CHARGEMENT='UNIAXIAL',
+                           HISTOIRE=_F(  SIGM = TAUN),
+                           COMPTAGE='RAINFLOW',
+                            DOMMAGE='WOHLER',
+                            CORR_KE='RCCM',
+                              MATER=MAT1,
+                              CUMUL='LINEAIRE',
+                               INFO=2                 )
+
+TEST_TABLE(
+           VALE_CALC=1000.0,
+           VALE_REFE=1000.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MAX',
+           TABLE=TAB_2,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           VALE_REFE=0.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MIN',
+           TABLE=TAB_2,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.012249412111037,
+           VALE_REFE=0.0122494,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMMAGE',
+           TABLE=TAB_2,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.012249412111037,
+           VALE_REFE=0.0122494,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMM_CUMU',
+           TABLE=TAB_2,)
+
+#-----------------------------------------------------------------------
+MAT2=DEFI_MATERIAU(    FATIGUE=_F(  A_BASQUIN = 1.001730939E-14,
+                                    BETA_BASQUIN = 4.065) )
+
+TAB_3=POST_FATIGUE(      CHARGEMENT='UNIAXIAL',
+                           HISTOIRE=_F(  SIGM = TAUN),
+                           COMPTAGE='RAINFLOW',
+                            DOMMAGE='WOHLER',
+                               MATER=MAT2,
+                              CUMUL='LINEAIRE',
+                               INFO=1                )
+
+TEST_TABLE(
+           VALE_CALC=1000.0,
+           VALE_REFE=1000.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MAX',
+           TABLE=TAB_3,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=0.0,
+           VALE_REFE=0.0,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='VALE_MIN',
+           TABLE=TAB_3,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=9.3770051607256E-4,
+           VALE_REFE=9.377005E-4,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMMAGE',
+           TABLE=TAB_3,
+           FILTRE=_F(NOM_PARA='CYCLE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(
+           VALE_CALC=9.3770051607256E-4,
+           VALE_REFE=9.377005E-4,
+           PRECISION=1.E-05,
+           REFERENCE='SOURCE_EXTERNE',
+           NOM_PARA='DOMM_CUMU',
+           TABLE=TAB_3,)
+
+FIN( )
+#

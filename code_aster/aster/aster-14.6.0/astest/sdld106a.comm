@@ -1,0 +1,282 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+      DEBUG=_F(SDVERI='NON'),
+      IGNORE_ALARM='CALCULEL3_40',);
+
+POUTRE=LIRE_MAILLAGE(FORMAT="ASTER",)
+
+MODELE=AFFE_MODELE(MAILLAGE=POUTRE,
+                   AFFE=_F(TOUT='OUI',
+                   PHENOMENE='MECANIQUE',
+                   MODELISATION='2D_DIS_TR'))
+
+k1 = 4.*pi*pi
+m1 = 100.
+c1 = 4.e-1*pi  # amortissement reduit de 0.01
+k2 = 1.e10
+m2 = 0.
+
+CHAMPCAR=AFFE_CARA_ELEM(MODELE=MODELE,
+                        DISCRET_2D=(_F(GROUP_MA='GROUP_MA_LIAISON',
+                                       CARA='K_TR_D_L',
+                                       VALE=(k1,k2,k2,),),
+                                    _F(GROUP_MA='GROUP_MA_MOBILE',
+                                       CARA='M_TR_N',
+                                       VALE=(m1,m2,m1,m2,m2,m2,),),
+                                    _F(GROUP_MA='GROUP_MA_MOBILE',
+                                       CARA='A_TR_D_N',
+                                       VALE=(0.,0.,0.,),),
+                                    _F(GROUP_MA='GROUP_MA_LIAISON',
+                                       CARA='A_TR_D_L',
+                                       VALE=(c1,c1,c1,),),),);
+
+CHARGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                      DDL_IMPO=(_F(GROUP_NO='GROUP_NO_FIXE',
+                                   DX=0.,DY=0.,DRZ=0.,),),);
+
+RIGIELEM=CALC_MATR_ELEM(MODELE=MODELE,
+                        CHARGE=CHARGE,
+                        CARA_ELEM=CHAMPCAR,
+                        OPTION='RIGI_MECA');
+
+MASSELEM=CALC_MATR_ELEM(MODELE=MODELE,
+                        CHARGE=CHARGE,
+                        CARA_ELEM=CHAMPCAR,
+                        OPTION='MASS_MECA',);
+
+AMORELEM=CALC_MATR_ELEM(MODELE=MODELE,
+                        CARA_ELEM=CHAMPCAR,
+                        OPTION='AMOR_MECA');
+
+NUMEROTA=NUME_DDL(MATR_RIGI=RIGIELEM,);
+
+MATRRIGI=ASSE_MATRICE(MATR_ELEM=RIGIELEM,
+                      NUME_DDL=NUMEROTA,);
+
+MATRMASS=ASSE_MATRICE(MATR_ELEM=MASSELEM,
+                      NUME_DDL=NUMEROTA,);
+
+MATRAMOR=ASSE_MATRICE(MATR_ELEM=AMORELEM,
+                      NUME_DDL=NUMEROTA,);
+
+def sqrt(x):
+    return x**.5
+
+f1 = sqrt(k1/(4.*pi*pi*m1))
+f1e = f1*(1.+1.e-4)
+
+MODES=CALC_MODES(MATR_RIGI=MATRRIGI,
+                 OPTION='CENTRE',
+                 CALC_FREQ=_F(NMAX_FREQ=1,
+                              FREQ=(f1e,),
+                              ),
+                 MATR_MASS=MATRMASS,
+                 )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=MODES,
+                   VALE_CALC=0.100000000,
+                   VALE_REFE=0.10000000000000001,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-4,),
+                _F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MODES,
+                   VALE_CALC=0.10000000000000001,
+
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+I_DEBUT = 0.
+I_FIN = 1.
+
+fext = 1.
+
+CHF=AFFE_CHAR_MECA(MODELE=MODELE,
+                   FORCE_NODALE=(_F(GROUP_NO='GROUP_NO_MOBILE',
+                                    FX=fext),),);
+
+
+
+
+L_TEMPS=DEFI_LIST_REEL(DEBUT=I_DEBUT,
+                       INTERVALLE=_F(JUSQU_A=I_FIN,
+                                     NOMBRE=100,),);
+
+FORCE = FORMULE(VALE='sin(INST)',
+                NOM_PARA='INST',)
+
+FC=CALC_FONC_INTERP(FONCTION=FORCE,
+                    LIST_PARA=L_TEMPS,
+                    NOM_PARA='INST',
+                    PROL_GAUCHE='CONSTANT',
+                    PROL_DROITE='CONSTANT',);
+
+F_DEBUT = 0.5*f1
+F_FIN = 1.5*f1
+
+L_FREQ=DEFI_LIST_REEL(DEBUT=F_DEBUT,
+                      INTERVALLE=_F(JUSQU_A=F_FIN,
+                                    NOMBRE=2,),);
+
+DYTRN=DYNA_VIBRA(TYPE_CALCUL='TRAN',
+                 BASE_CALCUL='PHYS',
+                 MODELE=MODELE,
+                 CARA_ELEM=CHAMPCAR,
+                 MATR_MASS=MATRMASS,
+                 MATR_RIGI=MATRRIGI,
+                 INCREMENT=_F(LIST_INST=L_TEMPS,),
+                 EXCIT=(_F(FONC_MULT=FC,
+                           CHARGE=CHF),),
+                 SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),);
+
+# Test for two loads in DYNA_VIBRA, see issue23772
+CHF2=AFFE_CHAR_MECA(MODELE=MODELE,
+                   FORCE_NODALE=(_F(GROUP_NO='GROUP_NO_MOBILE',
+                                    FX=fext),),);
+
+#pour test couverture FONC_MULT_C dans CALC_CHAMP
+quart = 1./4.
+moitie = 0.5
+FCMPLX=DEFI_FONCTION(    NOM_PARA='FREQ',
+                         PROL_DROITE='CONSTANT',
+                         PROL_GAUCHE='CONSTANT',
+                         VALE_C=(F_DEBUT, quart, 0., F_FIN, quart, 0.,) )
+
+CHFX=AFFE_CHAR_MECA(MODELE=MODELE,
+                   FORCE_NODALE=(_F(GROUP_NO='GROUP_NO_MOBILE',
+                                    FX=fext),),);
+
+DYHAN=DYNA_VIBRA(TYPE_CALCUL='HARM',
+                 BASE_CALCUL='PHYS',
+                 MODELE=MODELE,
+                 CARA_ELEM=CHAMPCAR,
+                 MATR_MASS=MATRMASS,
+                 MATR_RIGI=MATRRIGI,
+                 MATR_AMOR=MATRAMOR,
+                 LIST_FREQ=L_FREQ,
+                 TOUT_CHAM='OUI',
+                 EXCIT=(_F(COEF_MULT_C=quart+0.j,PUIS_PULS=0,
+                           CHARGE=CHF),
+                        _F(FONC_MULT_C=FCMPLX,    #quart
+                           CHARGE=CHFX),
+                        _F(COEF_MULT=moitie,PHAS_DEG=0.,
+                           CHARGE=CHF2),
+                        ),
+             );
+
+DYHAN=CALC_CHAMP(reuse=DYHAN,RESULTAT=DYHAN,
+                 EXCIT=(_F(COEF_MULT_C=quart+0.j,PUIS_PULS=0,
+                           CHARGE=CHF),
+                        _F(FONC_MULT_C=FCMPLX,    #quart
+                           CHARGE=CHFX),
+                        _F(COEF_MULT=moitie,PHAS_DEG=0.,
+                           CHARGE=CHF2),
+                        ),
+                 FORCE=('FORC_NODA','REAC_NODA',),
+               )
+
+# Tester le calcul de la masse des elements 2D_DIS_TR
+MASSE=POST_ELEM(MODELE=MODELE, CARA_ELEM=CHAMPCAR, MASS_INER=_F( TOUT = 'OUI'),)
+TEST_TABLE(TABLE=MASSE, NOM_PARA='MASSE', VALE_CALC=100.0,)
+
+omega2 = k1/m1
+omega = sqrt(omega2)
+
+
+TEST_RESU(RESU=(_F(GROUP_NO='GROUP_NO_MOBILE',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYTRN,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC= 1.55350935E-03,
+                   VALE_REFE=1.5534672964451714E-3,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-4,),
+                _F(GROUP_NO='GROUP_NO_MOBILE',
+                   INST=1.0,
+                   RESULTAT=DYTRN,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=1.5535093481451E-3,
+
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+omeg = 2.*pi*F_FIN
+xx=fext/(k1+(1.j)*omeg*c1-omeg*omeg*m1)
+
+TEST_RESU(RESU=(_F(GROUP_NO='GROUP_NO_MOBILE',
+                   VALE_CALC_C=xx,
+                   VALE_REFE_C=xx,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=DYHAN,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   FREQ=F_FIN,
+                   CRITERE='RELATIF',
+                  ),
+                ),
+          )
+
+fn=fext-(1.j)*omeg*c1*xx+omeg*omeg*m1*xx
+
+TEST_RESU(RESU=(
+                _F(FREQ=F_FIN,
+                   RESULTAT=DYHAN,
+                   NOM_CHAM='FORC_NODA',
+                   GROUP_NO='GROUP_NO_MOBILE',
+                   NOM_CMP='DX',
+                   VALE_CALC_C=fn,
+                   VALE_REFE_C=fn,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                  ),
+        ),)
+
+
+rn = -fn   #force ext nulle a l'encastrement (a amortissement pres)
+ 
+TEST_RESU(RESU=(
+                _F(FREQ=F_FIN,
+                   RESULTAT=DYHAN,
+                   NOM_CHAM='REAC_NODA',
+                   GROUP_NO='GROUP_NO_FIXE',
+                   NOM_CMP='DX',
+                   VALE_CALC_C=rn,
+                   VALE_REFE_C=rn,
+                   REFERENCE='ANALYTIQUE',
+                   CRITERE='RELATIF',
+                 ),
+        ),)
+
+
+FIN()

@@ -1,0 +1,46 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# but : couvrir la routine xajuls_stop (DEFI_FISS_XFEM)
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'),IGNORE_ALARM=('XFEM_63'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+L = 1.
+n = 3
+h = L/n
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA,
+                    DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                 PFON_ORIG  = (-0.5*h, 0., 0.),
+                                 PFON_EXTR  = ( 0.5*h, 0., 0.),),
+                    )
+
+TABBID=CREA_TABLE(TITRE='',
+                  LISTE=_F(LISTE_I=[1],
+                           PARA='BOOLEEN'),)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC_I=1,
+           VALE_REFE_I=1,
+           NOM_PARA='BOOLEEN',
+           TABLE=TABBID,)
+
+FIN()

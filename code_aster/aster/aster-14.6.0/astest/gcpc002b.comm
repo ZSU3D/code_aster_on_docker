@@ -1,0 +1,503 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# TEST DE PERFORMANCE ANCIENNEMENT NOMME SSLV130G
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=210000.0,
+                          NU=.3,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),);
+
+CHA=AFFE_CHAR_MECA(MODELE=MO,
+                   DDL_IMPO=(_F(GROUP_NO='SUPY',
+                                DY=0.,),
+                             _F(GROUP_NO='APPUI',
+                                DX=0.,),
+                             _F(GROUP_NO='SUPZ',
+                                DZ=0.,),
+                             _F(GROUP_NO='CHARGE',
+                                DX=-1.,),),);
+
+MEL=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                   MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   CHARGE=CHA,);
+
+NU=NUME_DDL(MATR_RIGI=MEL);
+
+MATAS=ASSE_MATRICE(MATR_ELEM=MEL,
+                   NUME_DDL=NU,);
+
+VEL=CALC_VECT_ELEM(OPTION='CHAR_MECA',
+                   CHARGE=CHA,);
+
+VECAS=ASSE_VECTEUR(VECT_ELEM=VEL,
+                   NUME_DDL=NU,);
+
+# GCP + LDLT_INC
+KMATAS=FACTORISER(MATR_ASSE=MATAS, METHODE='GCPC',PRE_COND='LDLT_INC');
+
+DEP=RESOUDRE(MATR=MATAS,
+             CHAM_NO=VECAS,
+             RESI_RELA=1.0E-10,
+             MATR_PREC=KMATAS,);
+
+RESU=CREA_RESU(OPERATION='AFFE',
+               TYPE_RESU='EVOL_ELAS',
+               NOM_CHAM='DEPL',
+               AFFE=_F(CHAM_GD=DEP,
+                       INST=0.,
+                       MODELE=MO,
+                       CHAM_MATER=CHMAT,),);
+
+RESU=CALC_CHAMP(reuse=RESU,RESULTAT=RESU,INST=0.,CONTRAINTE=('SIGM_ELNO'))
+
+
+TEST_RESU(CHAM_NO=(_F(NOEUD='NO13943',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.000658548109721,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO13943',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0644277126553,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO13943',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00639262924851,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0008683125328,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0613567233467,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00622435391347,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00113148204592,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0587349549049,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00606448762204,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00235370977177,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.043550933506,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00453808691136,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00317245291675,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0282443763462,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00292784111843,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00367588165967,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.0125845496861,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00121932645475,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00383041995051,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.00312782599216,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.000483199833355,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00358353205127,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.018952798181,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00215082927648,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00295115695138,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.0348509568784,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00376792442159,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00173396380856,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.0509950063271,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00497486874744,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15866',
+                      CRITERE='ABSOLU',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-2.22303621414E-12,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15866',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP,
+                      VALE_CALC=-0.0672259950205,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   _F(NOEUD='NO15866',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP,
+                      VALE_CALC=0.00582039507448,
+                      TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                      ),
+                   ),
+          )
+
+#
+# VALEUR DU TENSEUR DES CONTRAINTES PROVENANT D'UN CALCUL PAR PERMAS
+
+TEST_RESU(RESU=(_F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIXX',
+                   VALE_CALC=-3.55460890393,
+                   VALE_REFE=-3.5204,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   PRECISION=0.015,
+                   MAILLE='MA4204',),
+                _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIXY',
+                   VALE_CALC=-1.78556345777,
+                   VALE_REFE=-1.8101,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   PRECISION=0.015,
+                   MAILLE='MA4204',),
+                _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIYY',
+                   VALE_CALC=53.8840063525,
+                   VALE_REFE=53.9140,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   PRECISION=1.E-3,
+                   MAILLE='MA4204',),
+                _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIXZ',
+                   VALE_CALC=-0.69591144058,
+                   VALE_REFE=-0.71499999999999997,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   PRECISION=0.04,
+                   MAILLE='MA4204',),
+                _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIYZ',
+                   VALE_CALC=-1.03484387053,
+                   VALE_REFE=-1.0373000000000001,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   PRECISION=7.7E-3,
+                   MAILLE='MA4204',),
+                _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='SIGM_ELNO',
+                   NOEUD='NO15854',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC=-1.13193679892,
+                   VALE_REFE=-1.0671999999999999,
+                   PRECISION=0.065199999999999994,
+                   TOLE_MACHINE=1.E-3,                # TODO TOLE_MACHINE
+                   MAILLE='MA4204',),
+                ),
+          )
+
+# GCP + LDLT_SP
+MATAS=FACTORISER(reuse=MATAS,MATR_ASSE=MATAS,METHODE='GCPC', PRE_COND='LDLT_SP',
+                 PCENT_PIVOT=30);
+
+DEP2=RESOUDRE(MATR=MATAS,
+             CHAM_NO=VECAS,
+             RESI_RELA=1.0E-8,
+             MATR_PREC=MATAS,);
+
+TEST_RESU(CHAM_NO=(_F(NOEUD='NO13943',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.000658548952509,),
+                   _F(NOEUD='NO13943',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0644277135535,),
+                   _F(NOEUD='NO13943',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00639262970244,),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.000868313366399,),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0613567241845,),
+                   _F(NOEUD='NO13944',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00622435433652,),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00113148283712,),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0587349557008,),
+                   _F(NOEUD='NO15854',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00606448788928,),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00235371052823,),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.043550934249,),
+                   _F(NOEUD='NO15855',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00453808739783,),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00317245366255,),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0282443769477,),
+                   _F(NOEUD='NO15858',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00292784180233,),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00367588217332,),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0125845501535,),
+                   _F(NOEUD='NO15860',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00121932658515,),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.0038304202952,),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.00312782551886,),
+                   _F(NOEUD='NO15862',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.000483199554458,),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00358353236308,),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.0189527976518,),
+                   _F(NOEUD='NO15863',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00215082918662,),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00295115700389,),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.034850956363,),
+                   _F(NOEUD='NO15868',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00376792441992,),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00173396377751,),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.0509950060382,),
+                   _F(NOEUD='NO15869',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00497486874717,),
+                   _F(NOEUD='NO15866',
+                      CRITERE='ABSOLU',
+                      NOM_CMP='DX',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.,),
+                   _F(NOEUD='NO15866',
+                      NOM_CMP='DY',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=-0.0672259946912,),
+                   _F(NOEUD='NO15866',
+                      NOM_CMP='DZ',
+                      CHAM_GD=DEP2,
+                      VALE_CALC=0.00582039494703,),
+                   ),
+          )
+
+FIN();

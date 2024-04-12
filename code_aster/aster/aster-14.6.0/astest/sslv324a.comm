@@ -1,0 +1,165 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+from Contrib.post_t_q import POST_T_Q
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'));
+MA1=LIRE_MAILLAGE(FORMAT='MED')
+
+MA=CREA_MAILLAGE(MAILLAGE=MA1,LINE_QUAD=_F(TOUT='OUI'))
+
+MA = DEFI_GROUP(reuse = MA,
+       MAILLAGE = MA,
+       CREA_GROUP_MA = (
+          _F(NOM = 'FACE_AV', UNION = ('CUBE2','facePeau0', 'faceCircPipe1',)),
+          _F(NOM = 'FACE_LAT', UNION = ('CUBE3','facePeau1', 'faceCircPipe0',)),
+       ),
+       )
+
+
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('COMPLET','FACE_AV','FACE_LAT','CUBE1','CUBE4','FACE1','FACE2', 'FONDFISS'),
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = '3D'), )
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=_F(GROUP_MA=('FACE_AV','FACE_LAT','CUBE1', 'CUBE4')))
+#                 ORIE_PEAU_3D=_F(GROUP_MA=('face1','face2','face3','face4', 'face5','face6','facePeau0', 'pipeBoundaries',)))
+#                 ORIE_PEAU_3D=_F(GROUP_MA=( 'FACE_AV', 'FACE_LAT','CUBE4', 'CUBE1')))
+#                 ORIE_PEAU_3D=_F(GROUP_MA=( 'CUBE2','facePeau0', 'faceCircPipe1', 'CUBE3','facePeau1', 'faceCircPipe0','CUBE4', 'CUBE1')))
+
+
+
+#BARSOUM ELEMENTS
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                                GROUP_MA_FOND='FONDFISS'))
+
+MAT=DEFI_MATERIAU(ELAS=_F(E = 2.E11,
+                          NU = 0.32, RHO=0.01))
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT = 'OUI',
+                            MATER = MAT) )
+
+SYMETR=AFFE_CHAR_MECA(MODELE=MO,
+                       DDL_IMPO=(_F(GROUP_NO='B', DZ=0.0),
+#                                _F(GROUP_MA='CUBE2', DY=0.0),
+#                                _F(GROUP_MA='facePeau0', DY=0.0),
+#                                _F(GROUP_MA='faceCircPipe1', DY=0.0),
+#                                _F(GROUP_MA='CUBE3', DX=0.0),
+#                                _F(GROUP_MA='facePeau1', DX=0.0),
+#                                _F(GROUP_MA='faceCircPipe0', DX=0.0),
+##                                _F(GROUP_NO='A', DX=0.0),
+                                ),
+                       FACE_IMPO=(
+                                _F(GROUP_MA='FACE_AV',DY=0.0),
+                                _F(GROUP_MA='FACE_LAT',DX=0.0),
+#                                _F(GROUP_MA='CUBE2', DY=0.0),
+#                                _F(GROUP_MA='facePeau0', DY=0.0),
+#                                _F(GROUP_MA='faceCircPipe1', DY=0.0),
+#                                _F(GROUP_MA='CUBE3', DX=0.0),
+#                                _F(GROUP_MA='facePeau1', DX=0.0),
+#                                _F(GROUP_MA='faceCircPipe0', DX=0.0),
+#                                _F(GROUP_MA='CUBE4', DZ=0.0),
+                                        )
+                                )
+
+
+
+RAMPE=DEFI_FONCTION(
+                    NOM_PARA='INST',
+                    VALE=(0.0,          0.0,
+                          1.0,          1.0,
+                          ),);
+
+
+PRESSION=AFFE_CHAR_MECA(MODELE=MO,
+                        FORCE_FACE=(_F(GROUP_MA='CUBE1',FZ=1.E6),
+                                    _F(GROUP_MA='CUBE4',FZ=-1.E6),
+                                )
+                                   )
+
+CHAMDEPL=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=(
+                             _F(CHARGE=PRESSION,),
+                              _F(CHARGE=SYMETR, )))
+
+CHAMDEPL=CALC_CHAMP(reuse=CHAMDEPL,RESULTAT=CHAMDEPL,CONTRAINTE=('SIGM_ELNO'))
+
+
+CHAMDEPL=CALC_CHAMP(reuse=CHAMDEPL,
+                 RESULTAT=CHAMDEPL,
+                 CONTRAINTE='SIGM_NOEU')
+
+
+#----------------------------------------------------------------------
+#                  END OF THE MECHANICAL CALCULATION
+#----------------------------------------------------------------------
+
+#IMPR_RESU(FORMAT='MED',
+#          RESU=_F(RESULTAT=CHAMDEPL,),);
+
+
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MA, SYME='NON',
+                    FOND_FISS=_F(GROUP_MA='FONDFISS',
+                                 GROUP_NO_ORIG='IN',
+                                 GROUP_NO_EXTR='OUT',
+                                 ),
+                    LEVRE_SUP=_F(GROUP_MA = 'FACE1'),
+                    LEVRE_INF=_F(GROUP_MA = 'FACE2'),
+                    )
+
+T= POST_T_Q(MODELISATION='3D',
+                RESULTAT=CHAMDEPL,
+                FOND_FISS=FISS,
+                MATER=MAT,
+                INFO=2,
+                TYPE_MAILLAGE='LIBRE',
+#                MAILLAGE=MA,
+                NB_NOEUD_COUPE=18, 
+#                ABSC_CURV_MAXI=0.01,
+                        )
+
+#TEST_TABLE(CRITERE='RELATIF',REFERENCE='SOURCE_EXTERNE',PRECISION=0.175,VALE_CALC=0.00307381288541,  VALE_REFE=-1.E6,NOM_PARA='Td',TABLE=T,FILTRE=_F(NOM_PARA='INST',VALE=0.,),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=-1033779.64624,
+           VALE_REFE=-1.E6,
+           NOM_PARA='Td',
+           TYPE_TEST='MAX',
+           TABLE=T)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=-1048024.99916,
+           VALE_REFE=-1.E6,
+           NOM_PARA='Td',
+           TYPE_TEST='MIN',
+           TABLE=T)
+
+
+IMPR_TABLE(TABLE=T )
+
+FIN();

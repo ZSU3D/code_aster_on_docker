@@ -1,0 +1,313 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION B : DKT
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MeshLin0=LIRE_MAILLAGE(FORMAT='MED',UNITE=20,)
+
+# Type de calcul
+
+MeshLin=CREA_MAILLAGE(MAILLAGE=MeshLin0,
+    CREA_POI1=(
+        _F(NOM_GROUP_MA='BASEN',   GROUP_NO='BASE', ),
+    ),
+)
+
+FEMLin=AFFE_MODELE(MAILLAGE=MeshLin,
+                   AFFE=(_F(GROUP_MA=('COTEX','COTEY','BASE','HAUT','SYMX','SYMY'),
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DKT',),
+                         _F(GROUP_MA='BASEN',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='DIS_T',),),);
+
+# Caracteristiques de Materiaux
+beton=DEFI_MATERIAU(ELAS=_F(E=3.0E10,
+                            NU=0.15,
+                            RHO=2500.0,),);
+
+# Association des materiaux au modele
+Mat=AFFE_MATERIAU(MAILLAGE=MeshLin,
+                  MODELE=FEMLin,
+                  AFFE=_F(TOUT='OUI',
+                          MATER=beton,),);
+
+# Proprietes autres (notamment raideur de sol)
+AFFECARA=AFFE_CARA_ELEM(MODELE=FEMLin,
+                        COQUE=(_F(GROUP_MA='BASE',
+                                  EPAIS=0.4,
+                                  ANGL_REP=(0.0,0.0,),),
+                               _F(GROUP_MA='COTEY',
+                                  EPAIS=0.4,
+                                  ANGL_REP=(0.0,0.0,),),
+                               _F(GROUP_MA='COTEX',
+                                  EPAIS=0.4,
+                                  ANGL_REP=(0.0,-90.0,),),),
+                        DISCRET=_F(CARA='M_T_D_N',
+                                   GROUP_MA='BASEN',
+                                   VALE=0.0,),
+                        RIGI_PARASOL=_F(GROUP_MA='BASE',GROUP_MA_POI1='BASEN',
+                                        COEF_GROUP=1.0,
+                                        CARA='K_T_D_N',
+                                        VALE=(1250E6,1250E6,1250E6,),
+                                        COOR_CENTRE=(0.0,0.0,0.0,),),);
+# Calcul de la raideur
+#   raideur unitaire = 50E6 N/m3
+#   surface = 10*10
+#   raideur globale KZ = 50E6 * (10*10)
+#   KX = KY = KZ
+
+# gradient de Pression
+eauPlus=DEFI_FONCTION(NOM_PARA='Z',VALE=(0.0,-49050.0,
+                            5.0,0.0,
+                            ),);
+
+# definition de la gravite
+Grav=AFFE_CHAR_MECA(MODELE=FEMLin,
+                    PESANTEUR=_F(GRAVITE=9.81, DIRECTION=(0., 0., -1.,)))
+
+# definition de pression verticale
+pressRep=AFFE_CHAR_MECA(MODELE=FEMLin,
+                        PRES_REP=_F(GROUP_MA='BASE',
+                                    PRES=49050.0,),);
+# definition de pression verticale
+pressXY=AFFE_CHAR_MECA_F(MODELE=FEMLin,
+                        FORCE_COQUE=_F(GROUP_MA=('COTEX','COTEY'),
+                                      PRES=eauPlus,),);
+# definition de forces nodales sur contour haut
+surchrep=AFFE_CHAR_MECA(MODELE=FEMLin,
+                        FORCE_ARETE=_F(GROUP_MA='HAUT',
+                                        FZ=-20E3,),);
+# definition des symétries
+sym=AFFE_CHAR_MECA(MODELE=FEMLin,
+                        DDL_IMPO=(_F(GROUP_NO='SYMX',
+                                        DY=0.0,),
+                                  _F(GROUP_NO='SYMY',
+                                        DX=0.0,),),);
+
+# Calcul des efforts :
+
+Solution=MECA_STATIQUE(MODELE=FEMLin,
+                       CHAM_MATER=Mat,
+                       CARA_ELEM=AFFECARA,
+                       EXCIT=(_F(CHARGE=pressXY,),
+                              _F(CHARGE=sym,),
+                              _F(CHARGE=pressRep,),
+                              _F(CHARGE=Grav,),
+                              _F(CHARGE=surchrep,),),);
+
+# calculs elementaires, en complement de resultats
+Solution=CALC_CHAMP(reuse=Solution,RESULTAT=Solution,CONTRAINTE=('EFGE_ELNO','SIGM_ELNO'))
+
+
+# calculs supplementaires pour le ferraillage
+Solution = CALC_FERRAILLAGE( reuse = Solution, RESULTAT = Solution,
+                             TYPE_COMB = 'ELS',
+                             INST = (0.),
+                             AFFE = (_F( GROUP_MA = ('COTEY','BASE'),
+                                         C_INF = 0.04,
+                                         C_SUP = 0.04,
+                                         FCK = 35e6,
+                                         ALPHA_E = 15.,
+                                         SIGS_ELS = 2.8E8,
+                                         SIGC_ELS = 3.5E7,
+                                         UNITE_CONTRAINTE = 'Pa'),),);
+
+IMPR_RESU(FORMAT='MED', UNITE = 80,
+                RESU=(_F(RESULTAT=Solution),),)
+#--------------------------------------------------------------------------------------------
+# Tests de validation (source externe) :
+#----------------------------------------
+
+TEST_RESU(RESU=(_F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=Solution,
+                   NOM_CHAM='FERRAILLAGE',
+                   NOM_CMP='DNSXI',
+                   TYPE_TEST ='MAX',
+                   VALE_CALC= 0.00141579837594,
+                   VALE_REFE=14.0E-4,
+                   CRITERE='ABSOLU',
+                   PRECISION=2E-4,
+                   ),
+                 _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=Solution,
+                   NOM_CHAM='FERRAILLAGE',
+                   NOM_CMP='DNSXS',
+                   TYPE_TEST ='MAX',
+                   VALE_CALC= 0.00104007191058,
+                   VALE_REFE=9.0E-4,
+                   CRITERE='ABSOLU',
+                   PRECISION=4E-4,
+                   ),
+                 _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=Solution,
+                   NOM_CHAM='FERRAILLAGE',
+                   NOM_CMP='DNSYI',
+                   TYPE_TEST ='MAX',
+                   VALE_CALC= 0.00165857792205,
+                   VALE_REFE=7.0E-4,
+                   CRITERE='ABSOLU',
+                   PRECISION=10E-4,
+                   ),
+                 _F(INST=0.0,
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=Solution,
+                   NOM_CHAM='FERRAILLAGE',
+                   NOM_CMP='DNSYS',
+                   TYPE_TEST ='MAX',
+                   VALE_CALC= 0.00104007191058,
+                   VALE_REFE=6.0E-4,
+                   CRITERE='ABSOLU',
+                   PRECISION=5E-4,
+                   ),
+                ),)
+
+## Pour tester que l'on sait recuperer le champ des "max" temporels:
+FERMAX=CREA_CHAMP(  OPERATION='EXTR', TYPE_CHAM='ELEM_FER2_R', INFO=1,
+                     NOM_CHAM='FERRAILLAGE', RESULTAT=Solution,
+                     TYPE_MAXI='MAXI_ABS', TYPE_RESU='VALE',
+                        )
+TEST_RESU(CHAM_ELEM=(_F(CRITERE='RELATIF',
+                        POINT=1,
+                        NOM_CMP='DNSXI',
+                        MAILLE='M748',
+                        CHAM_GD=FERMAX,
+                        VALE_CALC=0.00130323479922,),
+                     _F(CRITERE='RELATIF',
+                        POINT=1,
+                        NOM_CMP='DNSXS',
+                        MAILLE='M748',
+                        CHAM_GD=FERMAX,
+                        VALE_CALC=0.0,
+                        ORDRE_GRANDEUR=1.0E-4),
+                     _F(CRITERE='RELATIF',
+                        POINT=1,
+                        NOM_CMP='DNSYI',
+                        MAILLE='M748',
+                        CHAM_GD=FERMAX,
+                        VALE_CALC=4.23403596532E-05,),
+                     _F(CRITERE='RELATIF',
+                        POINT=1,
+                        NOM_CMP='DNSYS',
+                        MAILLE='M748',
+                        CHAM_GD=FERMAX,
+                        VALE_CALC=0.0,
+                        ORDRE_GRANDEUR=1.0E-4),
+                     ),
+          )
+
+# ------------------------------------------------- #
+# Test CHAM_UTIL and neutral fields on DKT elements #
+# ------------------------------------------------- #
+
+# Formula to compute a maximal criterion in CALC_FERRAILLAGE
+
+MAX_FERR = FORMULE(VALE='max(DNSXI,DNSXS,DNSYI,DNSYS)',
+                   NOM_PARA=['DNSXI', 'DNSXS', 'DNSYI', 'DNSYS'],)
+
+# Max field using CALC_CHAMP/CHAM_UTIL
+
+ferUtil = CALC_CHAMP(
+    GROUP_MA=('COTEY','BASE'),
+    CHAM_UTIL=_F(
+        FORMULE=(MAX_FERR, ), NOM_CHAM='FERRAILLAGE', NUME_CHAM_RESU=1
+    ),
+    RESULTAT=Solution
+)
+
+
+# Same field using CREA_CHAMP/EXTR + AFFE + EVAL
+
+fer = CREA_CHAMP(
+    NOM_CHAM='FERRAILLAGE',
+    OPERATION='EXTR',
+    RESULTAT=Solution,
+    TYPE_CHAM='ELEM_FER2_R'
+)
+
+# Dummy function to make sure that the field is defined everywhere and does not disturb the
+# max/min computations
+Fdummy=DEFI_CONSTANTE(VALE=0.0005)
+
+ferFonc = CREA_CHAMP(
+    AFFE=(
+    _F(TOUT='OUI', NOM_CMP='X1',VALE_F=Fdummy),
+    _F(GROUP_MA=('COTEY','BASE'),
+    NOM_CMP=('X1', ),
+    VALE_F=(MAX_FERR, )
+    ),),
+    MODELE=FEMLin,
+    OPERATION='AFFE',
+    PROL_ZERO='OUI',
+    TYPE_CHAM='ELEM_NEUT_F'
+)
+
+ferMax = CREA_CHAMP(
+    CHAM_F=ferFonc,
+    CHAM_PARA=(fer, ),
+    OPERATION='EVAL',
+    TYPE_CHAM='ELEM_NEUT_R'
+)
+
+# Verification tests
+
+# CHAM_UTIL for reference and regarding non-regression
+TEST_RESU(RESU=(
+                _F(RESULTAT=ferUtil,
+                   INST=0.0,
+                   NOM_CHAM='UT01_ELEM',
+                   NOM_CMP='X1',
+                   TYPE_TEST='MAX',
+                   VALE_CALC=0.00165857792205,
+                   ),
+                _F(RESULTAT=ferUtil,
+                   INST=0.0,
+                   NOM_CHAM='UT01_ELEM',
+                   NOM_CMP='X1',
+                   TYPE_TEST='MIN',
+                   VALE_CALC=0.000101286161289,
+                   ),
+                ),)
+
+# CREA_CHAMP with respect to CHAM_UTIL
+
+TEST_RESU(CHAM_ELEM=(
+                _F(CHAM_GD=ferMax,
+                   NOM_CMP='X1',
+                   TYPE_TEST='MAX',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=0.00165857792205,
+                   VALE_CALC=0.00165857792205,
+                   ),
+                _F(CHAM_GD=ferMax,
+                   NOM_CMP='X1',
+                   TYPE_TEST='MIN',
+                   GROUP_MA='CALC_FER',
+                   REFERENCE='AUTRE_ASTER',
+                   VALE_REFE=0.000101286161289,
+                   VALE_CALC=0.000101286161289,
+                   ),
+                ),)
+
+FIN()

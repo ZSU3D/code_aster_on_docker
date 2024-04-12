@@ -1,0 +1,177 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: josselin.delmas at edf.fr
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI',),);
+
+MESH=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MESH,
+               
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS',),);
+
+MESH=MODI_MAILLAGE(reuse =MESH,
+                   MAILLAGE=MESH,
+                   ORIE_PEAU_2D=_F(GROUP_MA=('GRMA1','GRMA2','GRMA3','GRMA4',),),);
+
+##IMPR_RESU(FORMAT="RESULTAT",
+##FORMAT='MED',
+##
+##RESU=_F(MAILLAGE=MESH,),
+##);
+
+MA1=DEFI_MATERIAU(ELAS=_F(E=2.0,
+                          NU=0.3,
+                          ALPHA=0.0,),);
+
+MA2=DEFI_MATERIAU(ELAS=_F(E=1.0,
+                          NU=0.3,
+                          ALPHA=0.0,),);
+
+CM=AFFE_MATERIAU(MAILLAGE=MESH,
+                 AFFE=(_F(GROUP_MA='DOM1',
+                          MATER=MA1,),
+                       _F(GROUP_MA='DOM2',
+                          MATER=MA2,),),);
+
+#-----------------------------------------------------------------------
+#
+#  RESOLUTION DU PROBLEME PRIMAL
+#    =>ASSEMBLAGE DE L(.)
+#    =>ASSEMBLAGE DE A(.,.)
+#    =>RESOLUTION
+#    =>CALCUL DE L'ESTIMATEUR EN RESIDU POUR LE PRIMAL
+#
+#-----------------------------------------------------------------------
+
+CHARPRIM=AFFE_CHAR_MECA(MODELE=MO,
+                        FACE_IMPO=(_F(GROUP_MA='GRMA1',
+                                      DY=0.0,),
+                                   _F(GROUP_MA='GRMA2',
+                                      DY=0.91333,),),
+                        FORCE_CONTOUR=(_F(GROUP_MA='GRMA3',
+                                          FX=1.0,),
+                                       _F(GROUP_MA='GRMA4',
+                                          FX=-2.0,),),);
+
+RESUPRIM=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CM,
+                       EXCIT=_F(CHARGE=CHARPRIM,),);
+
+RESUPRIM=CALC_ERREUR(reuse =RESUPRIM,
+                   RESULTAT=RESUPRIM,
+                   TOUT_ORDRE='OUI',
+                   OPTION='ERME_ELEM',);
+
+#-----------------------------------------------------------------------
+#
+#  RESOLUTION DU PROBLEME DUAL
+#    =>ASSEMBLAGE DE Q(.)
+#    =>ASSEMBLAGE DE A(.,.)
+#    =>RESOLUTION
+#    =>CALCUL DE L'ESTIMATEUR EN RESIDU POUR LE DUAL
+#
+#-----------------------------------------------------------------------
+
+CHARDUAL=AFFE_CHAR_MECA(MODELE=MO,
+                        FACE_IMPO=(_F(GROUP_MA='GRMA1',
+                                      DY=0.0,),
+                                   _F(GROUP_MA='GRMA2',
+                                      DY=0.91333,),),
+                        FORCE_CONTOUR=(_F(GROUP_MA='GRMA3',
+                                          FX=0.0,),
+                                       _F(GROUP_MA='GRMA4',
+                                          FX=0.0,),),
+                        PRE_EPSI =_F(TOUT='OUI',
+                                     EPXX=1.0,),);
+
+RESUDUAL=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CM,
+                       EXCIT=_F(CHARGE=CHARDUAL,),);
+
+RESUDUAL=CALC_ERREUR(reuse =RESUDUAL,
+                   RESULTAT=RESUDUAL,
+                   TOUT_ORDRE='OUI',
+                   OPTION='ERME_ELEM',);
+
+#-----------------------------------------------------------------------
+#
+#  CALCUL DE L'ESTIMATEUR D'ERREUR EN QUANTITE D'INTERET
+#
+#-----------------------------------------------------------------------
+
+RESUPRIM=CALC_ERREUR(reuse =RESUPRIM,
+                   RESULTAT=RESUPRIM,
+                   OPTION=('QIRE_ELEM','QIRE_ELNO',),
+                   RESU_DUAL=RESUDUAL,);
+
+#-----------------------------------------------------------------------
+#
+#  TESTS DE NON REGRESSION
+#
+#-----------------------------------------------------------------------
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  POINT=1,
+                  RESULTAT=RESUPRIM,
+                  NOM_CHAM='ERME_ELEM',
+                  NOM_CMP='ERREST',
+                  VALE_CALC=0.015854340000000001,
+                  
+                  CRITERE='RELATIF',
+                  MAILLE='M1',),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  POINT=1,
+                  RESULTAT=RESUPRIM,
+                  NOM_CHAM='QIRE_ELEM',
+                  NOM_CMP='ERREST',
+                  VALE_CALC=3.18399928E-3,
+                  
+                  CRITERE='RELATIF',
+                  MAILLE='M1',),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=RESUPRIM,
+                  NOM_CHAM='QIRE_ELNO',
+                  NOEUD='N1',
+                  NOM_CMP='ERREST',
+                  VALE_CALC=6.3703922700000007E-05,
+                  
+                  CRITERE='RELATIF',
+                  MAILLE='M4',),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='ERREUR_QIRE',
+                  RESULTAT=RESUPRIM,
+                  VALE_CALC=3.5285210799999999E-3,
+                  
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+FIN();

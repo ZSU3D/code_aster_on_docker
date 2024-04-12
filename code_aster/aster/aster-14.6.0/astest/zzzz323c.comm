@@ -1,0 +1,247 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),);
+
+# MODELISATIONS COQUES ET GRILLES QUADRATIQUES
+MA1=LIRE_MAILLAGE(FORMAT="ASTER",    UNITE=20 )
+
+MA2=CREA_MAILLAGE(MAILLAGE=MA1,LINE_QUAD=_F(TOUT='OUI'))
+
+MAILLAGE=CREA_MAILLAGE(MAILLAGE=MA2,
+                       MODI_MAILLE=(_F(OPTION='TRIA6_7',MAILLE='CQ3D3',PREF_NOEUD='NT'),
+                                    _F(OPTION='QUAD8_9',MAILLE='CQ3D4',PREF_NOEUD='NQ'),
+                                   )
+                      )
+
+
+MODELE=AFFE_MODELE( MAILLAGE=MAILLAGE,
+                    AFFE=(_F( MAILLE = ('CQ3D4','CQ3D3'),
+                              PHENOMENE = 'MECANIQUE',
+                              MODELISATION = 'COQUE_3D'
+                            ),
+                          _F( MAILLE = ('GRME4','GRME3'),
+                              PHENOMENE = 'MECANIQUE',
+                              MODELISATION = 'GRILLE_MEMBRANE'
+                            ),
+                          _F( MAILLE = ('MEMB4',),
+                              PHENOMENE = 'MECANIQUE',
+                              MODELISATION = 'MEMBRANE'
+                            ),
+                         ),
+                  )
+
+
+
+#
+EP=6.0E-2
+CARAELEM=AFFE_CARA_ELEM(
+                      MODELE=MODELE,
+                       COQUE=(_F(  GROUP_MA='GROUP_MA_COQUE',
+                                   EPAIS = 0.1,
+                                   #VECTEUR=(0.0,1.0,1.0),
+                                   ANGL_REP=(45.0,-45.0),
+                                ),
+                               ),
+                       GRILLE=_F(  GROUP_MA='GROUP_MA_GRILLE',
+                                   SECTION = 0.1,
+                                   ANGL_REP_1=(45.0,-45.0),
+                                ),
+                       MEMBRANE=_F(  MAILLE='MEMB4',
+                                   EPAIS = 0.1,
+                                   ANGL_REP_1=(45.0,-45.0),
+                                ),  
+                         )
+
+
+IMPR_CONCEPT(FORMAT="RESULTAT",
+          CONCEPT=_F(CARA_ELEM=CARAELEM,REPERE_LOCAL='ELEM',MODELE=MODELE
+                      ))
+
+
+DEFI_FICHIER(UNITE=82, FICHIER='./fort.82', TYPE = 'BINARY')
+
+IMPR_CONCEPT(FORMAT='MED',UNITE=82,
+             CONCEPT=_F(CARA_ELEM=CARAELEM,REPERE_LOCAL='ELEM',MODELE=MODELE
+                      ))
+
+
+DEFI_FICHIER(UNITE=82, ACTION='LIBERER')
+
+REPLO_1 = LIRE_CHAMP(
+                      TYPE_CHAM   = 'ELEM_GEOM_R',
+                      UNITE       = 82,
+                      NUME_PT     = 0,
+                      NUME_ORDRE  = 0,
+                      MAILLAGE    = MAILLAGE,
+                      MODELE      = MODELE,
+                      NOM_MED     = 'CARAELEM.REPLO_1',
+                      NOM_CMP_IDEM='OUI',
+                     )
+REPLO_2 = LIRE_CHAMP(
+                      TYPE_CHAM   = 'ELEM_GEOM_R',
+                      UNITE       = 82,
+                      NUME_PT     = 0,
+                      NUME_ORDRE  = 0,
+                      MAILLAGE    = MAILLAGE,
+                      MODELE      = MODELE,
+                      NOM_MED     = 'CARAELEM.REPLO_2',
+                      NOM_CMP_IDEM='OUI',
+                     )
+REPLO_3 = LIRE_CHAMP(
+                      TYPE_CHAM   = 'ELEM_GEOM_R',
+                      UNITE       = 82,
+                      NUME_PT     = 0,
+                      NUME_ORDRE  = 0,
+                      MAILLAGE    = MAILLAGE,
+                      MODELE      = MODELE,
+                      NOM_MED     = 'CARAELEM.REPLO_3',
+                      NOM_CMP_IDEM='OUI',
+                     )
+
+TEST_RESU(CHAM_ELEM=(_F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='CQ3D4',
+                        POINT= 1,
+                        NOM_CMP = 'X',
+                        VALE_CALC=0.5E0,
+                        VALE_REFE=0.5E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='CQ3D3',
+                        POINT= 1,
+                        NOM_CMP = 'Y',
+                        VALE_CALC=0.5E0,
+                        VALE_REFE=0.5E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='CQ3D4',
+                        POINT= 1,
+                        NOM_CMP = 'Z',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                     _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='GRME4',
+                        POINT= 1,
+                        NOM_CMP = 'X',
+                        VALE_CALC=0.5E0,
+                        VALE_REFE=0.5E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='GRME3',
+                        POINT= 1,
+                        NOM_CMP = 'Y',
+                        VALE_CALC=0.5E0,
+                        VALE_REFE=0.5E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='GRME4',
+                        POINT= 1,
+                        NOM_CMP = 'Z',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                     _F(
+                        CHAM_GD = REPLO_1,
+                        MAILLE='MEMB4',
+                        POINT= 1,
+                        NOM_CMP = 'Z',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                    ),
+         )
+
+# VECTEUR z local
+TEST_RESU(CHAM_ELEM=(_F(
+                        CHAM_GD = REPLO_3,
+                        MAILLE='CQ3D4',
+                        POINT= 1,
+                        NOM_CMP = 'X',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_3,
+                        MAILLE='CQ3D3',
+                        POINT= 1,
+                        NOM_CMP = 'Y',
+                        VALE_CALC=-0.707106781186E0,
+                        VALE_REFE=-0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                     _F(
+                        CHAM_GD = REPLO_3,
+                        MAILLE='GRME4',
+                        POINT= 1,
+                        NOM_CMP = 'X',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                      _F(
+                        CHAM_GD = REPLO_3,
+                        MAILLE='GRME3',
+                        POINT= 1,
+                        NOM_CMP = 'Y',
+                        VALE_CALC=-0.707106781186E0,
+                        VALE_REFE=-0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                     _F(
+                        CHAM_GD = REPLO_3,
+                        MAILLE='MEMB4',
+                        POINT= 1,
+                        NOM_CMP = 'X',
+                        VALE_CALC=0.707106781186E0,
+                        VALE_REFE=0.707106781186E0,
+                        REFERENCE = 'ANALYTIQUE',
+                        PRECISION = 1.E-8
+                       ),
+                    ),
+         )
+
+
+
+FIN()

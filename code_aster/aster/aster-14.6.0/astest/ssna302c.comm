@@ -1,0 +1,158 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# ELEMENTS QUAD8 ET SEG3  POUR APPLICATION DE LA CHARGE
+#.....................................................................
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MODEL=AFFE_MODELE(    MAILLAGE=MAYA,
+                                
+                                 AFFE=_F(  TOUT = 'OUI',
+                                        PHENOMENE = 'MECANIQUE',
+                                        MODELISATION = 'AXIS')
+                         )
+
+ACIER=DEFI_MATERIAU(         ELAS=_F(  E = 200.E9,
+                                      NU = 0.3)
+                      )
+
+MATER=AFFE_MATERIAU(   MAILLAGE=MAYA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       MATER = ACIER)
+                         )
+
+PRES_FO=DEFI_FONCTION(       NOM_PARA='INST',
+                             PROL_DROITE='EXCLU',
+                            PROL_GAUCHE='EXCLU',
+                                   VALE=( 0.,      0.,
+                                          1.,    222.72E6,   )
+                        )
+
+PRES=AFFE_CHAR_MECA_F(      MODELE=MODEL,
+                             PRES_REP=_F(  GROUP_MA = 'FACE',
+                                        PRES = PRES_FO)
+                         )
+
+CAT=DEFI_LIST_REEL(    DEBUT=0.0,INTERVALLE=(
+                          _F(  JUSQU_A = 0.1,    NOMBRE = 1),
+                                     _F(  JUSQU_A = 1.,     NOMBRE = 5))
+                      )
+
+CONDLIM=AFFE_CHAR_MECA(     MODELE=MODEL,
+
+                              DDL_IMPO=_F(
+                              GROUP_NO = 'B',
+                              DX = 0.,
+                              DY = 0.),LIAISON_DDL=(
+
+                             _F(
+                             NOEUD = ('N4', 'N6',),
+                             DDL = ('DX','DX',),
+                             COEF_MULT = (1.,1.,),
+                             COEF_IMPO = 0.),
+                             _F(
+                             NOEUD = ('N18', 'N13',),
+                             DDL = ('DX','DX',),
+                             COEF_MULT = (1.,1.,),
+                             COEF_IMPO = 0.),
+                             _F(
+                             NOEUD = ('N17', 'N14',),
+                             DDL = ('DX','DX',),
+                             COEF_MULT = (1.,1.,),
+                             COEF_IMPO = 0.),
+                             _F(
+                             NOEUD = ('N16', 'N15',),
+                             DDL = ('DX','DX',),
+                             COEF_MULT = (1.,1.,),
+                             COEF_IMPO = 0.))
+                          )
+
+CALCNL=STAT_NON_LINE(
+                            MODELE=MODEL,
+                        CHAM_MATER=MATER,
+                         COMPORTEMENT=_F(
+                RELATION = 'ELAS',
+                DEFORMATION = 'GROT_GDEP'),
+                         INCREMENT=_F(
+                LIST_INST = CAT),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 1),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-6,
+                ITER_GLOB_MAXI = 50),EXCIT=(
+                             _F(
+                CHARGE = PRES,
+                TYPE_CHARGE = 'SUIV'), _F(
+                CHARGE = CONDLIM)),
+           #          RECH_LINEAIRE=_F(ITER_LINE_MAXI = 3)
+              )
+
+CALCNL=CALC_CHAMP(
+              reuse=CALCNL,
+               TOUT_ORDRE='OUI',
+                 RESULTAT=CALCNL,
+                    CONTRAINTE=('SIGM_ELNO')
+              )
+
+CALCNL=CALC_CHAMP(
+              reuse=CALCNL,
+               TOUT_ORDRE='OUI',
+                 RESULTAT=CALCNL,
+                   CONTRAINTE='SIGM_NOEU'
+              )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=6,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='DEPL',
+                   NOEUD='N1',
+                   NOM_CMP='DY',
+                   VALE_CALC=-1.43814518E-03,
+                   VALE_REFE=-1.43041E-3,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.050000000000000003,),
+                _F(NUME_ORDRE=6,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N1',
+                   NOM_CMP='SIXX',
+                   VALE_CALC= 3.90893659E+09,
+                   VALE_REFE=3.899880000E9,
+                   REFERENCE='NON_DEFINI',
+                   CRITERE='RELATIF',
+                   PRECISION=0.050000000000000003,),
+                _F(NUME_ORDRE=6,
+                   RESULTAT=CALCNL,
+                   NOM_CHAM='SIGM_NOEU',
+                   NOEUD='N1',
+                   NOM_CMP='SIZZ',
+                   VALE_CALC= 3.89589173E+09,
+                   VALE_REFE=3.899530000E9,
+                   REFERENCE='NON_DEFINI',
+                   CRITERE='RELATIF',
+                   PRECISION=0.050000000000000003,),
+                ),
+          )
+
+FIN()
+#

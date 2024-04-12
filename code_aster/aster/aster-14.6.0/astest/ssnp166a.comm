@@ -1,0 +1,354 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+
+### Poutre Flexion trois points ###
+#
+#                    |
+#                    v
+#           _____________________
+#          |                     |
+#          |         _           |
+#          |________| |__________|
+#          o                     o
+ 
+
+
+
+###################### Grandeurs Physiques ####
+# Sy     contrainte critique au pic
+# EE     module Young
+# NU     coef de Poisson
+# Gf     coef de Griffith (energie disspee par surface)
+# DD     demi-largeur de la bande d'endommagement (definit la process zone)
+
+# echel =1 (m); 10 (dm); 100 (cm); 1000 (mm)
+
+echel=1000.
+
+# Parametre l'essai Mefisto:
+
+EE=30000.e6/echel**2 ; NU=0.18 ; Gf=137./echel ; 
+
+fc=33.e6/echel**2; ft=3.33e6/echel**2;
+
+
+
+################ Creation Modele ########
+
+#LE MAILLAGE EST LU AU FORMAT MED 
+
+MA=LIRE_MAILLAGE(FORMAT='MED');
+
+MA=MODI_MAILLAGE(reuse =MA,MAILLAGE=MA, ORIE_FISSURE=_F(GROUP_MA='CZM'),)
+
+MAIL=CREA_MAILLAGE(MAILLAGE=MA,LINE_QUAD=_F(TOUT='OUI'))
+
+# AFFECTATION MODELE
+
+MO1=AFFE_MODELE(MAILLAGE=MAIL,
+               AFFE=(_F(GROUP_MA=('BETON1','BETON2'),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='D_PLAN'),
+              _F(GROUP_MA   = 'CZM',
+                       PHENOMENE    = 'MECANIQUE',
+                       MODELISATION = 'PLAN_INTERFACE'
+                       )
+))
+
+
+
+                    
+              
+############## DEFINITION DU BETON   ############
+ 
+#  Béton et fissure
+BET = DEFI_MATERIAU(
+  ELAS          = _F(E=EE, NU=NU),
+  );
+
+
+FISS=DEFI_MATERIAU( ELAS          = _F(E=EE, NU=NU),
+               RUPT_FRAG =_F(GC     = 0.137,
+                                 SIGM_C = ft,
+                                 RIGI_GLIS =100.0,
+                                 PENA_LAGR = 500,));
+
+
+
+
+
+# -------------------------------------------------
+# AFFECTATION DES CARACTERISTIQUES 
+# -------------------------------------------------
+#
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=(_F(GROUP_MA=('BETON1','BETON2'),
+                            MATER=BET),
+                          _F(GROUP_MA=('CZM'),
+                            MATER=FISS),
+                            ));
+             
+
+
+LACAR=AFFE_CARA_ELEM(  MODELE=MO1,
+                     MASSIF   =(_F(GROUP_MA   = ('CZM'),
+                                   ANGL_REP = (0.,0.,0.)),
+                  ));
+
+                            
+############## Chargements, Conditions Limites  ######
+
+
+
+ChgY=-0.04
+
+
+EFFORT1=AFFE_CHAR_MECA(MODELE=MO1,
+                      DDL_IMPO=(
+                                _F(GROUP_NO='Dpl',
+                                    DY=ChgY,DX=0.),
+                            ));
+
+
+FCT_i = DEFI_FONCTION(
+                       NOM_PARA  = 'INST',
+                           VALE  = (0,0.,60,60),);
+      
+
+BLO1=AFFE_CHAR_MECA(MODELE=MO1,
+                   DDL_IMPO=(
+                       _F(GROUP_NO='CL1',
+                            DY=0.),
+                            _F(GROUP_NO='CL2',
+                            DY=0.),
+                       ),
+              );
+                        
+
+
+                
+
+############# Liste pas de temps #####
+
+## Liste pas de temps pour la partie intialisation
+
+INSTANT=DEFI_LIST_REEL(DEBUT=0.,
+                        INTERVALLE=_F(JUSQU_A=19.,
+                                      PAS=1.));
+
+TEMP   = DEFI_LIST_INST(DEFI_LIST = _F(LIST_INST = INSTANT),
+                           ECHEC     = _F(ACTION='DECOUPE',
+                                          SUBD_METHODE='MANUEL',
+                                          SUBD_NIVEAU=3,
+                                          SUBD_PAS=6,
+                                          )                          
+                           ); 
+                           
+
+## Resolution du probleme non lineaire
+
+EVOL = STAT_NON_LINE(
+                   INCREMENT=_F(LIST_INST=TEMP),
+                   MODELE=MO1,
+                   CARA_ELEM     = LACAR,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=EFFORT1,FONC_MULT=FCT_i),
+                              _F(CHARGE=BLO1), ),                           
+                   COMPORTEMENT=(_F(GROUP_MA = 'CZM', RELATION ='CZM_EXP_MIX'),
+               _F(GROUP_MA=('BETON1','BETON2'),RELATION='ELAS',),
+                             ),
+                   NEWTON=_F(MATRICE='TANGENTE',
+                             REAC_ITER=1,  ),
+                   CONVERGENCE = _F(
+                   RESI_GLOB_RELA = 1.E-4,
+                                     ITER_GLOB_MAXI = 16,
+                                         ),
+                   SOLVEUR = _F(METHODE='MUMPS'),
+                   ARCHIVAGE=_F(PAS_ARCH=1), 
+                   
+                   );                          
+
+####################################POST -TRAITEMENT ##########################################
+
+######### Calcul des champs, Impression Resu ###661
+EVOL = CALC_CHAMP(reuse = EVOL,
+                  MODELE = MO1,
+                  CHAM_MATER= CHMAT,
+                  RESULTAT= EVOL,
+                  CONTRAINTE='SIEF_NOEU',
+                  );
+
+
+
+EVOL = CALC_CHAMP(reuse = EVOL,
+                 MODELE = MO1,
+                 CHAM_MATER = CHMAT,
+                 RESULTAT = EVOL,
+                 FORCE = 'FORC_NODA',
+  )
+
+        
+
+#IMPR_RESU(FORMAT='MED',UNITE= 41,
+         #RESU=(_F(RESULTAT=EVOL,
+                  #TOUT='OUI'),),
+   #);
+
+
+
+#########   Analyse du Comportement Global :Calcul du graphe Force Déplacement ###############
+
+# FORCE RESULTANTE DANS LA DIRECTION Y:
+FPILO = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'F_PILOTE',
+   OPERATION    = 'EXTRACTION',   
+   GROUP_NO     = 'Dpl',
+   NOM_CHAM     = 'FORC_NODA',
+   RESULTANTE   =  'DY',
+   RESULTAT     =  EVOL,
+   TOUT_ORDRE   = 'OUI',
+    )) 
+    
+    
+# DEPLACEMENT DU NOEUD P_HAUT
+U_E = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'DEPL',
+   OPERATION    = 'EXTRACTION',   
+   GROUP_NO     = 'M1',
+   NOM_CHAM     = 'DEPL',
+   NOM_CMP      =  'DY',
+   RESULTAT     =  EVOL,
+   TOUT_ORDRE   = 'OUI',
+    )) 
+
+
+
+# CREATION DE LA COLONNE AVEC LES DEPLACEMENTS
+T_UE=CALC_TABLE(TABLE=U_E,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('NUME_ORDRE','DY'),
+                            ),
+                        ),
+                    );
+                    
+                    
+Depl = FORMULE(VALE='-DY',
+               NOM_PARA='DY',)
+                    
+T_UE=CALC_TABLE(TABLE = T_UE,
+               reuse = T_UE,
+               ACTION =_F(OPERATION='OPER',
+                          FORMULE=Depl , NOM_PARA='DEPL'))
+                          
+
+# CREATION DE LA COLONNE AVEC LES FORCES                           
+T_F=CALC_TABLE(TABLE=FPILO,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('NUME_ORDRE','DY'),
+                            ),
+                        ),
+                    );  
+                    
+                    
+Force = FORMULE(VALE='-DY*50',
+                NOM_PARA='DY',)
+                    
+T_F=CALC_TABLE(TABLE = T_F,
+               reuse = T_F,
+               ACTION =_F(OPERATION='OPER',
+                          FORMULE=Force , NOM_PARA='FORCE'))
+                          
+
+
+# CREATION DE INST_FORCE_DEPL
+T_UE=CALC_TABLE(reuse =T_UE,
+          TABLE=T_UE,
+          ACTION=_F(OPERATION='COMB',
+                    TABLE=T_F,
+                    NOM_PARA='NUME_ORDRE')); 
+
+# CREATION DU TABLEAU FORCES-DEPL AVEC LES DEPLACEMENTS
+T_FU=CALC_TABLE(TABLE=T_UE,
+                 ACTION=(
+                         _F(OPERATION='EXTR',
+                            NOM_PARA=('DEPL','FORCE'),
+                            ),
+                        ),
+                    );
+
+
+
+
+
+#IMPR_TABLE(TABLE=T_UE)
+
+
+
+
+
+##### Test Resultat
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=5e-2,
+           VALE_REFE=3.65e-1,VALE_CALC=0.365024982915,
+           NOM_PARA='DEPL',
+           TABLE=T_UE,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=9,),
+           )
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=5e-2,
+           VALE_REFE=7.74e2,VALE_CALC=774.392670136,
+           NOM_PARA='FORCE',
+           TABLE=T_UE,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=9,),
+           )
+
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=5e-2,
+           VALE_REFE=6.07e-1,VALE_CALC=0.607484607872,
+           NOM_PARA='DEPL',
+           TABLE=T_UE,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=15,),
+           )
+
+TEST_TABLE(REFERENCE='SOURCE_EXTERNE',
+           PRECISION=5e-2,
+           VALE_REFE=5.98e2,VALE_CALC=598.472166054,
+           NOM_PARA='FORCE',
+           TABLE=T_UE,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=15,),
+           )
+
+
+
+FIN();

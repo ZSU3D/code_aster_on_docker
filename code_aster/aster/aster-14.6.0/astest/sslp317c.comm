@@ -1,0 +1,134 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI'),)
+
+# MODELISATION C : RAFFINEMENT AVEC UN CRITERE BINAIRE
+
+# dans cette modelisation, on valide un critere binaire produit par RAFF_XFEM
+# la methodologie presentee est la plus recente et la plus robuste, c'est celle conseillee
+
+
+# taille des mailles initiales (diagonales des triangles)
+h0 = 1./20*sqrt(2)
+
+# taille cible des mailles apres raffinement 
+hc = h0/10
+
+# nombre de raffinements
+# attention, en python log = ln (logarithme neperien)
+n = (log(h0)-log(hc))/log(2)
+nb_raff = int(n)+1
+h = h0/(2.**nb_raff)
+
+# rayon du disque de raffinement
+r_raff = 5*h
+
+print('hello h0 ',h0)
+print('hello hc ',hc)
+print('hello nb_raff ',nb_raff)
+print('hello h ',h)
+print('hello r_raff ',r_raff)
+
+# initialisation
+nb_iter = nb_raff+1
+MA    = [None]*(nb_iter+1)
+DIAM= [None]*(nb_iter+1)
+i_raff=0   
+
+
+MA[i_raff] = LIRE_MAILLAGE(FORMAT='GIBI', UNITE=19)
+
+for i_raff in range(nb_iter) :
+
+   MO=AFFE_MODELE(MAILLAGE=MA[i_raff],
+                  AFFE=(_F(GROUP_MA=('SURF','LIG2','LIG3','LIG4'),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='D_PLAN',),),);
+
+   # entaille
+   FISS1=DEFI_FISS_XFEM(MAILLAGE=MA[i_raff],  
+                        TYPE_DISCONTINUITE='INTERFACE', 
+                        DEFI_FISS=_F(FORM_FISS     = 'ENTAILLE',
+                                     DEMI_LONGUEUR = 0.3,
+                                     RAYON_CONGE   = 0.05,
+                                     CENTRE        = (0., -0.3, 0.),
+                                     VECT_X        = (1., 0., 0.),
+                                     VECT_Y        = (0., 1., 0.),
+                                     ))
+
+   # inclusion circulaire
+   FISS2=DEFI_FISS_XFEM(MAILLAGE=MA[i_raff],  
+                        TYPE_DISCONTINUITE='INTERFACE',
+                        DEFI_FISS=_F(FORM_FISS      = 'ELLIPSE',
+                                     DEMI_GRAND_AXE = 0.05,
+                                     DEMI_PETIT_AXE = 0.05,
+                                     CENTRE         = (0., 0., 0.),
+                                     VECT_X         = (1., 0., 0. ),
+                                     VECT_Y         = (0., 1., 0. ),
+                                     ),)
+
+   FISS3=DEFI_FISS_XFEM(MAILLAGE=MA[i_raff],  
+                        DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                     PFON_ORIG  = (0.2, 0.25, 0.),
+                                     PFON_EXTR  = (0.4, 0.25, 0.),))
+
+
+   FISS4=DEFI_FISS_XFEM(MAILLAGE=MA[i_raff],  
+                        DEFI_FISS=_F(FORM_FISS  = 'SEGMENT',
+                                     PFON_ORIG  = (-0.3, 0.25, 0.),
+                                     PFON_EXTR  = (-0.1, 0.25, 0.),))
+
+   CHERR = RAFF_XFEM(FISSURE=(FISS1,FISS2,FISS3,FISS4),TYPE='ZONE',RAYON=r_raff)
+   # definition du type du maillage n+1
+   MA[i_raff+1]=CO('MA_%d' % (i_raff+1))
+   DIAM[i_raff+1]=CO('DIAM_%d' % (i_raff+1))
+
+   MACR_ADAP_MAIL(ADAPTATION         = 'RAFFINEMENT',
+                  CHAM_GD            = CHERR,
+                  CRIT_RAFF_ABS      = 0.5,
+                  DIAM_MIN           = hc,
+                  MAILLAGE_N         = MA[i_raff],
+                  MAILLAGE_NP1       = MA[i_raff+1],
+                  ADD_CHAM = _F(CHAM_GD = DIAM[i_raff+1],
+                                CHAM_CAT='DIAMETRE'),
+                  )
+                  
+   DETRUIRE(CONCEPT=_F(NOM=(MO,FISS1,FISS2,FISS3,FISS4,CHERR)),INFO=1)
+
+# impression du dernier maillage
+IMPR_RESU(FORMAT='MED',UNITE=80,RESU=_F(MAILLAGE=MA[nb_iter]))
+
+# test sur le plus petit diametre non nul
+
+TABDIAM = CREA_TABLE(RESU=_F(CHAM_GD=DIAM[4],
+                             TOUT='OUI',
+                             TOUT_CMP='OUI',),)
+
+IMPR_TABLE(TABLE=TABDIAM)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.00441941738242,
+           VALE_REFE=4.4194173824159229E-3,
+           NOM_PARA='X1',
+           TYPE_TEST='MIN',
+           TABLE=TABDIAM,)
+
+FIN();

@@ -1,0 +1,87 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# C/A = 0.93
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',)
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA, 
+                     CREA_GROUP_NO=_F( 
+                         GROUP_MA = ( 'LPOP8',  'LPOP11',  'LP8P9', ))
+                 )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                      AFFE=_F(  TOUT = 'OUI',
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = 'AXIS') )
+
+MAT=DEFI_MATERIAU(ELAS=_F(  E = 2.E11,
+                             NU = 0.3,
+                             ALPHA = 0.) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',
+                              MATER = MAT) )
+
+CH=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+                            _F(  GROUP_NO = 'LP8P9', DX = 0.),
+                                     _F(  GROUP_NO = 'LPOP11', DY = 0.)),
+                             FORCE_NODALE=_F(  GROUP_NO = 'PB',
+                                            FY = 159.15)   )
+
+CHAMDEPL=MECA_STATIQUE(        MODELE=MO,
+                              CHAM_MATER=CHMAT,
+                              EXCIT=_F( CHARGE = CH)
+                           )
+
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(MAILLAGE=MA))
+FOND=DEFI_FOND_FISS(    MAILLAGE=MA,
+                        FOND_FISS=_F( GROUP_NO = ('P0',)),
+                        SYME='OUI',
+                        LEVRE_SUP=_F(MAILLE='M5309'),
+                      )
+
+
+G0=CALC_G(              RESULTAT=CHAMDEPL,
+                        THETA=_F(
+                                 R_INF=0.00175,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.00525,),
+                    )
+
+#
+# LA VALEUR DE REFERENCE VAUT 1.086191E-3, LE RAYON LA FISSURE VAUT 0.1
+# ET DONC LA VALEUR A TESTER VAUT 1.086191E-3*0.1=1.086191E-4
+#
+# la solution analytique est donnée par MURAKAMI (cf case 9.12)
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.000109401126917,
+           VALE_REFE=1.086191E-4,
+           REFERENCE='ANALYTIQUE',
+           NOM_PARA='G',
+           TABLE=G0,)
+
+#
+FIN()
+#

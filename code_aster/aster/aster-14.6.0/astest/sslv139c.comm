@@ -1,0 +1,145 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#         FORCE DE COMPRESSION SUR SON CONTOUR
+# AUTEUR : F. LEBOUVIER (DeltaCAD)
+# DATE   : 2/03/04
+# MODELISATION : AXIS_FOURIER
+# MAILLAGE     : 8280 TRIA6, 17964 NOEUDS
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAIL=DEFI_GROUP(reuse =MAIL,
+                MAILLAGE=MAIL,
+                CREA_GROUP_MA=_F(NOM='TOUT',
+                                 TOUT='OUI',),);
+
+MODMECA=AFFE_MODELE(MAILLAGE=MAIL,
+                    AFFE=_F(GROUP_MA='TOUT',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='AXIS_FOURIER',),);
+
+MAIL = MODI_MAILLAGE(MAILLAGE=MAIL, reuse=MAIL,
+                     ORIE_PEAU_2D=_F(GROUP_MA=('BC',),),);
+
+MAT1=DEFI_MATERIAU(ELAS=_F(E=2.1E11,
+                           NU=0.3,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    MODELE=MODMECA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT1,),);
+
+PCRIT=1./(2.*pi);
+
+CLS=AFFE_CHAR_MECA(MODELE=MODMECA,
+                   DDL_IMPO=(_F(GROUP_MA='DA',
+                                DX=0.0,DZ=0.),
+                             _F(GROUP_MA='BC',
+                                DY=0.,DZ=0.),),);
+
+CHAR=AFFE_CHAR_MECA(MODELE=MODMECA,
+                    FORCE_CONTOUR=_F(GROUP_MA='BC',
+                                     FX=PCRIT,),);
+
+ELAS=MACRO_ELAS_MULT(MODELE=MODMECA,
+                     CHAM_MATER=CHMAT,
+                     CHAR_MECA_GLOBAL=CLS,
+                     CAS_CHARGE=_F(MODE_FOURIER=0,
+                                   TYPE_MODE='SYME',
+                                   CHAR_MECA=CHAR,
+                                   OPTION='SIEF_ELGA',),);
+
+SIG=CREA_CHAMP(TYPE_CHAM='ELGA_SIEF_R',
+               OPERATION='EXTR',
+               RESULTAT=ELAS,
+               NOM_CHAM='SIEF_ELGA',
+               TYPE_MAXI='MINI',
+               TYPE_RESU='VALE',);
+
+MAT_RI_M=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                        MODELE=MODMECA,
+                        CHAM_MATER=CHMAT,
+                        MODE_FOURIER=0,
+                        CHARGE=(CLS,CHAR,),);
+
+MAT_RI_G=CALC_MATR_ELEM(OPTION='RIGI_GEOM',
+                        MODELE=MODMECA,
+                        SIEF_ELGA=SIG,
+                        MODE_FOURIER=0,);
+
+
+NUM=NUME_DDL(MATR_RIGI=MAT_RI_M,);
+
+MAS_RI_M=ASSE_MATRICE(MATR_ELEM=MAT_RI_M,
+                      NUME_DDL=NUM,);
+
+MAS_RI_G=ASSE_MATRICE(MATR_ELEM=MAT_RI_G,
+                      NUME_DDL=NUM,);
+
+RESULT=CALC_MODES(MATR_RIGI=MAS_RI_M,
+                  VERI_MODE=_F(SEUIL=1e-04,
+                               ),
+                  TYPE_RESU='MODE_FLAMB',
+                  MATR_RIGI_GEOM=MAS_RI_G,
+                  CALC_CHAR_CRIT=_F(NMAX_CHAR_CRIT=10,
+                                    ),
+                  SOLVEUR_MODAL=_F(NMAX_ITER_SOREN=20,
+                                   METHODE='SORENSEN',
+                                   ),
+                  OPTION='PLUS_PETITE',
+                  )
+
+
+
+RES_NORM=NORM_MODE(MODE=RESULT,
+                   NORME='TRAN',);
+
+CHA_DEPL=CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                    OPERATION='EXTR',
+                    RESULTAT=RESULT,
+                    NOM_CHAM='DEPL',
+                    NUME_MODE=1,);
+
+MODE_1 =CREA_CHAMP(TYPE_CHAM='NOEU_DEPL_R',
+                   OPERATION='EXTR',
+                   RESULTAT=RES_NORM,
+                   NOM_CHAM='DEPL',
+                   NUME_ORDRE=10,);
+
+TEST_RESU(RESU=_F(PARA='CHAR_CRIT',
+                  NUME_MODE=10,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RES_NORM,
+                  VALE_CALC=-8.69426931044E+05,
+                  VALE_REFE=-8.493509396E5,
+                  TOLE_MACHINE=1.E-5,           # TODO TOLE_MACHINE
+                  PRECISION=0.025,),)
+
+TEST_RESU(CHAM_NO=_F(NOEUD='N4',
+                     REFERENCE='ANALYTIQUE',
+                     NOM_CMP='DY',
+                     CHAM_GD=MODE_1,
+                     VALE_CALC=0.999986163,
+                     VALE_REFE=1.0,),
+          )
+
+FIN();

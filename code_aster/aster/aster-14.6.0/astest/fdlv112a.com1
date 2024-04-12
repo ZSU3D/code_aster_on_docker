@@ -1,0 +1,337 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# FLUIDES INCOMPRESSIBLES - MASSES AJOUTEES - CALCUL FREQUENTIEL - HARM GENE
+
+
+POURSUITE(CODE='OUI',DEBUG=_F(SDVERI='OUI'),PAR_LOT='NON',
+      IGNORE_ALARM='SUPERVIS_1')
+
+
+#On passe les signaux en frequentiel pour tester la macro en frequentiel
+F_ACC_X0=CALC_FONCTION(FFT=_F(FONCTION=ACC_X, METHODE='COMPLET',),);
+F_ACC_Y0=CALC_FONCTION(FFT=_F(FONCTION=ACC_Y, METHODE='COMPLET',),);
+F_ACC_Z0=CALC_FONCTION(FFT=_F(FONCTION=ACC_Z, METHODE='COMPLET',),);
+
+FREQ,AA,BB=F_ACC_X0.Valeurs()
+FREQ=FREQ[0:int((len(FREQ)+1)/2)]
+LFREQ=DEFI_LIST_REEL(VALE=FREQ,);
+
+F_ACC_X=CALC_FONC_INTERP(LIST_PARA=LFREQ,
+                       FONCTION=F_ACC_X0,);
+
+F_ACC_Y=CALC_FONC_INTERP(LIST_PARA=LFREQ,
+                       FONCTION=F_ACC_Y0,);
+
+F_ACC_Z=CALC_FONC_INTERP(LIST_PARA=LFREQ,
+                       FONCTION=F_ACC_Z0,);
+
+#------------------------------------------
+#          calcul standard
+#------------------------------------------
+
+DYNPHYF = DYNA_LINE(TYPE_CALCUL='HARM',
+                    BASE_CALCUL='GENE',
+                    MODELE=MODELE,
+                    CHAM_MATER=CHMAT,
+                    CHARGE=CONDLIM,
+                    AMORTISSEMENT=_F(TYPE_AMOR="MODAL",
+                                     AMOR_REDUIT=0.05,),
+                    LIST_FREQ=LFREQ,
+                    BANDE_ANALYSE=23,
+                    EXCIT=(_F(TYPE_APPUI = "MONO",
+                              DIRECTION =(1., 0., 0., ),
+                              NOEUD='NO130',
+                              FONC_MULT_C=F_ACC_X,),
+                           _F(TYPE_APPUI = "MONO",
+                              DIRECTION =(0., 1., 0., ),
+                              NOEUD='NO130',
+                              FONC_MULT_C=F_ACC_Y),
+                           _F(TYPE_APPUI = "MONO",
+                              DIRECTION =(0., 0., 1., ),
+                              NOEUD='NO130',
+                              FONC_MULT_C=F_ACC_Z,),),
+                    IFS='OUI',
+                    GROUP_MA_FLUIDE='RETENUE',
+                    GROUP_MA_INTERF='BARRET',
+                    MODELISATION_FLU = '3D',
+                    RHO_FLUIDE = _F(TOUT='OUI',
+                                    RHO = 1000.0),
+                    PRESSION_FLU_IMPO = _F(PRES_FLUIDE = 0.0,
+                                           GROUP_NO    ='SURFLIBR'),
+                    )
+
+
+#On récupère les accelerations du calcul du calcul dynamique DYNGENF 'HARM_GENE'
+
+f_a_x2=RECU_FONCTION(RESULTAT=DYNPHYF,
+                     NOM_CHAM='ACCE',
+                     NOM_CMP='DX',
+                     NOEUD='NO2815',);
+
+f_a_y2=RECU_FONCTION(RESULTAT=DYNPHYF,
+                     NOM_CHAM='ACCE',
+                     NOM_CMP='DY',
+                     NOEUD='NO2815',);
+
+f_a_z2=RECU_FONCTION(RESULTAT=DYNPHYF,
+                     NOM_CHAM='ACCE',
+                     NOM_CMP='DZ',
+                     NOEUD='NO2815',);
+
+
+f_Abs_x2=CALC_FONCTION(INTERPOL='LIN',
+                       COMB_C=(_F(FONCTION=f_a_x2,
+                                  COEF_C=1,),
+                               _F(FONCTION=F_ACC_X,
+                                  COEF_C=1,),),);
+
+f_Abs_y2=CALC_FONCTION(INTERPOL='LIN',
+                       COMB_C=(_F(FONCTION=f_a_y2,
+                                  COEF_C=1,),
+                               _F(FONCTION=F_ACC_Y,
+                                  COEF_C=1,),),);
+
+f_Abs_z2=CALC_FONCTION(INTERPOL='LIN',
+                       COMB_C=(_F(FONCTION=f_a_z2,
+                                  COEF_C=1,),
+                               _F(FONCTION=F_ACC_Z,
+                                  COEF_C=1,),),);
+
+#------------------------------------------------------------------------------------
+#          Calculs préalable à l'utilisation de la macro commande
+#------------------------------------------------------------------------------------
+
+RIGI_ELE=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                        MODELE=MODELE,
+                        CHAM_MATER=CHMAT,
+                        CHARGE=CONDLIM,);
+
+MASS_ELE=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                        MODELE=MODELE,
+                        CHAM_MATER=CHMAT,
+                        CHARGE=CONDLIM,);
+
+NUMEDDL=NUME_DDL(MATR_RIGI=RIGI_ELE,);
+
+RIGIDITE=ASSE_MATRICE(MATR_ELEM=RIGI_ELE,
+                      NUME_DDL=NUMEDDL,);
+
+MASSE=ASSE_MATRICE(MATR_ELEM=MASS_ELE,
+                   NUME_DDL=NUMEDDL,);
+
+
+MODE=CALC_MODES(MATR_RIGI=RIGIDITE,
+                OPTION='PLUS_PETITE',
+                CALC_FREQ=_F(NMAX_FREQ=20,
+                             ),
+                MATR_MASS=MASSE,
+                )
+
+
+NUMGEN=NUME_DDL_GENE(BASE=MODE,
+                     STOCKAGE='PLEIN',);
+
+MGENE=PROJ_MATR_BASE(BASE=MODE,
+                     NUME_DDL_GENE=NUMGEN,
+                     MATR_ASSE=MASSE,);
+
+RIGGEN=PROJ_MATR_BASE(BASE=MODE,
+                      NUME_DDL_GENE=NUMGEN,
+                      MATR_ASSE=RIGIDITE,);
+
+
+MACRO_MATR_AJOU(MAILLAGE=MAILLAGE,
+                GROUP_MA_FLUIDE='RETENUE',
+                GROUP_MA_INTERF='BARRET',
+                MODELISATION='3D',
+                FLUIDE=_F(RHO=1000.0,
+                          TOUT='OUI',),
+                DDL_IMPO=_F(GROUP_NO='SURFLIBR',
+                            PRES_FLUIDE=0.0,),
+                MODE_MECA=MODE,
+                NUME_DDL_GENE=NUMGEN,
+                MATR_MASS_AJOU=CO('MASSAJ'),
+                MONO_APPUI = 'OUI',);
+
+MASTOT=COMB_MATR_ASSE(COMB_R=(_F(MATR_ASSE=MGENE,
+                                 COEF_R=1.0,),
+                              _F(MATR_ASSE=MASSAJ,
+                                 COEF_R=1.0,),),);
+
+MODHUMI=CALC_MODES(MATR_RIGI=RIGGEN,
+                   OPTION='PLUS_PETITE',
+                   CALC_FREQ=_F(NMAX_FREQ=20,
+                                ),
+                   MATR_MASS=MASTOT,
+                   )
+
+MODMECA=REST_GENE_PHYS(RESU_GENE=MODHUMI,);
+
+NUMGEN2=NUME_DDL_GENE(BASE=MODMECA,
+                      STOCKAGE='PLEIN',);
+
+MGENE2=PROJ_MATR_BASE(BASE=MODMECA,
+                      NUME_DDL_GENE=NUMGEN2,
+                      MATR_ASSE=MASSE,);
+
+RIGGEN2=PROJ_MATR_BASE(BASE=MODMECA,
+                       NUME_DDL_GENE=NUMGEN2,
+                       MATR_ASSE=RIGIDITE,);
+
+
+MACRO_MATR_AJOU(MAILLAGE=MAILLAGE,
+                GROUP_MA_FLUIDE='RETENUE',
+                GROUP_MA_INTERF='BARRET',
+                MODELISATION='3D',
+                FLUIDE=_F(RHO=1000.0,
+                          TOUT='OUI',),
+                DDL_IMPO=_F(GROUP_NO='SURFLIBR',
+                            PRES_FLUIDE=0.0,),
+                MODE_MECA=MODMECA,
+                NUME_DDL_GENE=NUMGEN2,
+                MATR_MASS_AJOU=CO('MASSAJ2'),
+                MONO_APPUI ='OUI',
+                FORC_AJOU = (_F(VECTEUR =CO('VGENX'),
+                                DIRECTION =(1., 0., 0., ),
+                                 ),
+                              _F(VECTEUR =CO('VGENY'),
+                                DIRECTION =(0., 1., 0., ),
+                                 ),
+                              _F(VECTEUR =CO('VGENZ'),
+                                DIRECTION =(0., 0., 1., ),
+                                 ),),
+                );
+
+MODESSTA=MODE_STATIQUE(MATR_RIGI=RIGIDITE,
+                       MATR_MASS=MASSE,
+                       MODE_STAT=_F(NOEUD='NO130',
+                                   AVEC_CMP=('DX','DY','DZ'),),);
+
+CHARSISX=CALC_CHAR_SEISME(MATR_MASS=MASSE,
+                          DIRECTION=(1.0,0.0,0.0),
+                          MODE_STAT=MODESSTA,
+                          NOEUD='NO130',);
+
+CHARSISY=CALC_CHAR_SEISME(MATR_MASS=MASSE,
+                          DIRECTION=(0.0,1.0,0.0),
+                          MODE_STAT=MODESSTA,
+                          NOEUD='NO130',);
+
+CHARSISZ=CALC_CHAR_SEISME(MATR_MASS=MASSE,
+                          DIRECTION=(0.0,0.0,1.0),
+                          MODE_STAT=MODESSTA,
+                          NOEUD='NO130',);
+CHARGENX=PROJ_VECT_BASE(BASE=MODMECA,
+                        NUME_DDL_GENE=NUMGEN2,
+                        VECT_ASSE=CHARSISX,
+                        TYPE_VECT='FORC',);
+
+CHARGENY=PROJ_VECT_BASE(BASE=MODMECA,
+                        NUME_DDL_GENE=NUMGEN2,
+                        VECT_ASSE=CHARSISY,
+                        TYPE_VECT='FORC',);
+
+CHARGENZ=PROJ_VECT_BASE(BASE=MODMECA,
+                        NUME_DDL_GENE=NUMGEN2,
+                        VECT_ASSE=CHARSISZ,
+                        TYPE_VECT='FORC',);
+
+
+MASTOT2=COMB_MATR_ASSE(COMB_R=(_F(MATR_ASSE=MGENE2,
+                                  COEF_R=1.0,),
+                               _F(MATR_ASSE=MASSAJ2,
+                                  COEF_R=1.0,),),);
+
+FDYNGENX=DYNA_VIBRA(TYPE_CALCUL='HARM',BASE_CALCUL='GENE',
+                       MATR_MASS=MASTOT2,
+                       MATR_RIGI=RIGGEN2,
+                AMOR_MODAL=_F(AMOR_REDUIT=0.050000000000000003,),
+                LIST_FREQ=LFREQ,
+                       EXCIT=(
+                             _F(VECT_ASSE_GENE=CHARGENX,
+                                 FONC_MULT_C=F_ACC_X,),
+                          ),);
+
+FDYNGENY=DYNA_VIBRA(TYPE_CALCUL='HARM',BASE_CALCUL='GENE',
+                       MATR_MASS=MASTOT2,
+                       MATR_RIGI=RIGGEN2,
+                AMOR_MODAL=_F(AMOR_REDUIT=0.050000000000000003,),
+                LIST_FREQ=LFREQ,
+                       EXCIT=(
+                              _F(VECT_ASSE_GENE=CHARGENY,
+                                 FONC_MULT_C=F_ACC_Y,),
+                          ),);
+
+FDYNGENZ=DYNA_VIBRA(TYPE_CALCUL='HARM',BASE_CALCUL='GENE',
+                       MATR_MASS=MASTOT2,
+                       MATR_RIGI=RIGGEN2,
+                AMOR_MODAL=_F(AMOR_REDUIT=0.050000000000000003,),
+                LIST_FREQ=LFREQ,
+                       EXCIT=(
+                              _F(VECT_ASSE_GENE=CHARGENZ,
+                                 FONC_MULT_C=F_ACC_Z,),
+                          ),);
+
+
+
+C_FREQ2=CALC_TRANSFERT(NOM_CHAM='ACCE',
+                       RESULTAT_X=FDYNGENX,
+                       RESULTAT_Y=FDYNGENY,
+                       RESULTAT_Z=FDYNGENZ,
+                       REPERE='RELATIF',
+                       ENTREE=_F(NOEUD='NO1996',),
+                       SORTIE=_F(NOEUD='NO2815',),
+                       ENTRAINEMENT=_F(DX=F_ACC_X,
+                                        DY=F_ACC_Y,
+                                        DZ=F_ACC_Z,
+                                       ),
+                       SIGNAL=_F(MESURE_X=f_Abs_x2,
+                                 MESURE_Y=f_Abs_y2,
+                                 MESURE_Z=f_Abs_z2,
+                                 TYPE_RESU='HARMONIQUE',
+                                 TABLE_RESU=CO("TABLE002"),),
+                                 );
+
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+          VALE_CALC=6.26351677499,
+          VALE_REFE=6.26352E+00,
+          NOM_PARA='Re_FX',
+          TABLE=TABLE002,
+          FILTRE=_F(NOM_PARA='FREQ',
+                    VALE=1.09726E+01,),
+          )
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+          VALE_CALC=8.87646265273,
+          VALE_REFE=8.87646E+00,
+          NOM_PARA='Im_FX',
+          TABLE=TABLE002,
+          FILTRE=_F(NOM_PARA='FREQ',
+                    VALE=1.09726E+01,),
+          )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC_C=(6.263458+8.874698j),
+                        VALE_REFE_C=(6.26352+8.87646j),
+                        VALE_PARA=1.09726E+01,NOM_PARA='FREQ',
+                        REFERENCE='AUTRE_ASTER',
+                        FONCTION=F_ACC_X,),
+              )
+
+FIN()

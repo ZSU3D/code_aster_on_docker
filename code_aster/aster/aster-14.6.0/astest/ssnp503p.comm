@@ -1,0 +1,280 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# CONTACT-FROTTANT EN GRANDS GLISSEMENTS 3D
+# AVEC XFEM POUR DES FISSURES HORIZONTALES
+# INTRODUCTION DE FONDS DE FISSURES
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'));
+
+typma=1
+
+if (typma==1):
+  MAILLAG2=LIRE_MAILLAGE(INFO=1,FORMAT='MED');
+  Y=3
+
+if (typma==2):
+  MAILLAG1=LIRE_MAILLAGE(INFO=1,FORMAT='MED');
+  MAILLAG2=CREA_MAILLAGE(MAILLAGE=MAILLAG1,
+                       LINE_QUAD=_F(GROUP_MA='VOLU'));
+  Y=2.5
+
+MAILLAG2=DEFI_GROUP(reuse =MAILLAG2,
+                    MAILLAGE=MAILLAG2,
+                    CREA_GROUP_NO =(_F(NOM = 'NFISSU',
+                                       OPTION = 'PLAN',
+                                       POINT  = (0.0,Y,0.0),
+                                       VECT_NORMALE = (0.0,1.0,0.0),
+                                       PRECISION = 1E-1)))
+MAILLAG2=DEFI_GROUP(reuse =MAILLAG2,
+                    MAILLAGE=MAILLAG2,
+                    CREA_GROUP_NO =(_F(NOM = 'NFISSU2',
+                                       OPTION = 'PLAN',
+                                       POINT  = (0.0,6,0.0),
+                                       VECT_NORMALE = (0.0,1.0,0.0),
+                                       PRECISION = 1E-1)))
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MAILLAG2,
+                     AFFE=(_F(GROUP_MA=('VOLU'),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D')));
+
+LN1 = FORMULE(VALE='Y-2.5',
+              NOM_PARA=['X', 'Y', 'Z'],)
+LT1 = FORMULE(VALE='X-2.5',
+              NOM_PARA=['X', 'Y', 'Z'],)
+
+
+LN2 = FORMULE(VALE='Y-6.5',
+              NOM_PARA=['X', 'Y', 'Z'],)
+LT2 = FORMULE(VALE='X-3',
+              NOM_PARA=['X', 'Y', 'Z'],)
+
+FISS1=DEFI_FISS_XFEM(MAILLAGE=MAILLAG2,
+                     DEFI_FISS=_F(FONC_LT=LT1,FONC_LN=LN1),TYPE_ENRI_FOND='TOPOLOGIQUE',
+                     INFO=1);
+
+FISS2=DEFI_FISS_XFEM(MAILLAGE=MAILLAG2,
+                     DEFI_FISS=_F(FONC_LT=LT2,FONC_LN=LN2),TYPE_ENRI_FOND='TOPOLOGIQUE',
+                     INFO=1);
+
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=(FISS1,FISS2),
+                         CONTACT='STANDARD',
+                         INFO=1);
+
+CTXFEM = DEFI_CONTACT(MODELE         = MODELEK,
+                      FORMULATION    = 'XFEM',
+                      REAC_GEOM      = 'AUTOMATIQUE',
+                      ITER_FROT_MAXI = 10,
+                      ITER_CONT_MAXI = 10,
+                      ITER_GEOM_MAXI = 10,
+                      FROTTEMENT     = 'COULOMB',#ELIM_ARETE     = 'ELIM',
+                      ZONE = (_F(
+                                 INTEGRATION   = 'NOEUD',
+                                 COULOMB       = 0.5,
+                                 CONTACT_INIT  = 'OUI',
+                                 GLISSIERE     = 'NON',
+                                 FISS_MAIT     = FISS1,
+                              ),
+                             _F(
+                                 INTEGRATION   = 'NOEUD',
+                                 COULOMB       = 0.5,
+                                 CONTACT_INIT  = 'OUI',
+                                 GLISSIERE     = 'NON',
+                                 FISS_MAIT     = FISS2,
+                              ),
+                            )
+                    );
+
+E=100.0E6
+nu=0.3
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,
+                            NU=nu,
+                            RHO=7800.0));
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MAILLAG2,
+                       MODELE=MODELEK,
+                       AFFE=_F(TOUT='OUI',
+                                MATER=ACIER));
+
+DEPX=2.E-1
+DEPY=1.E-3
+DEPZ=0.0
+
+CH1=AFFE_CHAR_MECA(MODELE=MODELEK,
+                   DDL_IMPO=(_F(GROUP_MA='SINF',DY=DEPY,DZ=0.0),
+                             _F(GROUP_MA='SSUP',DY=-DEPY,DZ=0.0),
+                             _F(GROUP_MA=('L1','L2','L3','L4'),
+                                DX=0.0),
+                             ),
+                   INFO=1);
+
+CH2=AFFE_CHAR_MECA(MODELE=MODELEK,
+                   DDL_IMPO=(_F(GROUP_MA='SCOTE',
+                               DX=DEPX,DZ=DEPZ)),
+                   # CONDITIONS IMPOSEES A LA MAIN
+                   # POUR LES MAILLES XFEM INFERIEURE
+                   # ET SUPERIEURE
+                   LIAISON_DDL=(_F(NOEUD=('N9','N9'),
+                                  DDL=('DX','H1X'),
+                                  COEF_MULT=(1,2),
+                                  COEF_IMPO=DEPX),
+                               _F(NOEUD=('N29','N29'),
+                                  DDL=('DX','H1X'),
+                                  COEF_MULT=(1,-2),
+                                  COEF_IMPO=DEPX),
+                               _F(NOEUD=('N45','N45'),
+                                  DDL=('DX','H1X'),
+                                  COEF_MULT=(1,2),
+                                  COEF_IMPO=DEPX),
+                               _F(NOEUD=('N65','N65'),
+                                  DDL=('DX','H1X'),
+                                  COEF_MULT=(1,-2),
+                                  COEF_IMPO=DEPX),
+                               _F(NOEUD=('N9','N9'),
+                                  DDL=('DZ','H1Z'),
+                                  COEF_MULT=(1,2),
+                                  COEF_IMPO=DEPZ),
+                               _F(NOEUD=('N29','N29'),
+                                  DDL=('DZ','H1Z'),
+                                  COEF_MULT=(1,-2),
+                                  COEF_IMPO=DEPZ),
+                               _F(NOEUD=('N45','N45'),
+                                  DDL=('DZ','H1Z'),
+                                  COEF_MULT=(1,2),
+                                  COEF_IMPO=DEPZ),
+                               _F(NOEUD=('N65','N65'),
+                                  DDL=('DZ','H1Z'),
+                                  COEF_MULT=(1,-2),
+                                  COEF_IMPO=DEPZ)),
+                    INFO=1);
+
+VAR1=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.,0.,1.,1.),
+                    );
+
+VAR2=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.,0.,1.,1.),
+                    );
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                    NOMBRE=4));
+
+UTOT1=STAT_NON_LINE(MODELE=MODELEK,
+                    CHAM_MATER=CHAMPMAT,
+                    CONTACT=CTXFEM,
+                    EXCIT=(
+                           _F(CHARGE=CH1,FONC_MULT=VAR1),
+                           _F(CHARGE=CH2,FONC_MULT=VAR2)),
+                    COMPORTEMENT=_F(RELATION='ELAS',
+                                 GROUP_MA='VOLU'),
+                    INCREMENT=_F(LIST_INST=L_INST),
+                    CONVERGENCE=(_F(ITER_GLOB_MAXI=30,
+                                    RESI_GLOB_MAXI=1E-06
+                                    )),
+                    NEWTON=_F(REAC_ITER=1),
+                    SOLVEUR=_F(METHODE='MUMPS',
+
+                               NPREC=-1),
+                    ARCHIVAGE=_F(CHAM_EXCLU='VARI_ELGA'),
+                    INFO=1);
+
+LAG=[None]*5
+inst=[0.0,0.25,0.5,0.75,1.0]
+
+vale=[
+[ -1.6373123667042E+05,
+ -44357.544505499,
+ -35056.97086267,],
+[ -3.2746337860021E+05,
+ -88714.735602067,
+ -70113.84839032,],
+[ -4.9119551982913E+05,
+ -1.3307192699716E+05,
+ -105170.72552738,],
+[ -6.5492051932078E+05,
+ -1.7743185103176E+05,
+ -140228.33441009,],
+]
+
+VALE_CALC=[
+ [-1.6238227696502E+05,
+ -44471.272360813,
+ -47290.249552795,],
+ [-3.2167144997233E+05,
+ -88579.687943577,
+ -94685.282753714,],
+ [-4.7773723286992E+05,
+ -1.3221454002148E+05,
+ -142192.34718408,],
+ [-6.3045892009397E+05,
+ -1.7526305992804E+05,
+ -189824.71053565,],
+]
+
+for i in [1,2,3,4]: #Boucle sur les increments
+   LAG[i]=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                                  GROUP_NO='NFISSU',
+                                  RESULTAT=UTOT1,
+                                  NOM_CHAM='DEPL',
+                                  INST=inst[i],
+                                  NOM_CMP=('LAGS_C','LAGS_F1','LAGS_F2'),
+                                  OPERATION='EXTRACTION'));
+
+   IMPR_TABLE(TABLE=LAG[i],
+              FORMAT='AGRAF',
+              FORMAT_R='1PE12.7',
+              NOM_PARA=('NOEUD','INST','COOR_X','COOR_Z','LAGS_C','LAGS_F1','LAGS_F2'),
+              IMPR_FONCTION='NON',
+              TRI=_F(NOM_PARA=('COOR_X'),
+                     ORDRE='CROISSANT'));
+
+   for j in [0,1,2]: #Boucle sur les positions testees
+      if (vale[i-1] [j] == 0.0):
+        precision = 1.0E-10
+        critere = 'ABSOLU'
+      else:
+        precision = 3E-1*inst[i]
+        critere = 'RELATIF'
+# Les valeurs testées doivent être du même ordre de grandeur que la modélisation O
+# La précision du calcul n'a pas de sens car il n'y a pas de solution analytique
+# Est-ce que les valeurs obtenues par ce calcul peuvent être interprétées?
+# On fixe le seuil de variation relative arbitrairement à 50%
+      precision = 0.50
+      TEST_TABLE(TABLE=LAG[i],
+                 NOM_PARA='LAGS_C',
+                 VALE_CALC=VALE_CALC[i-1][j], VALE_REFE=vale[i-1][j],
+                 CRITERE=critere,
+                 PRECISION=precision,
+                 REFERENCE='AUTRE_ASTER',
+                 FILTRE=(_F(NOM_PARA='COOR_X',
+                           CRIT_COMP='EQ',
+                           VALE=j,
+                           PRECISION=0.03,
+                           CRITERE='ABSOLU'),
+                         _F(NOM_PARA='COOR_Z',
+                           CRIT_COMP='EQ',
+                           VALE=0.0,
+                           PRECISION=0.01,
+                           CRITERE='ABSOLU')));
+
+FIN();

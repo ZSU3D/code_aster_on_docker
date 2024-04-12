@@ -1,0 +1,217 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: jean-luc.flejou at edf.fr
+# GEOMETRIE PROCHE DU CPP N4
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MOMENTMZ=1.
+
+PRESSION=0.
+
+EP=0.077
+
+RMOY=0.3955
+
+RMOYN=- RMOY
+
+REXT=RMOY + (EP/2.)
+
+RC=1.25
+
+YOUNG=2.E11
+
+POISSON=0.3
+
+SIGY=200.E6
+
+H=2.E10
+
+MLSURMLS=0.8
+
+RINT=RMOY - (EP/2.)
+
+LAMBDA=EP*RC/RMOY/RMOY
+
+SURF=pi* (REXT*REXT-RINT*RINT)
+
+IY=pi*(REXT**4-RINT**4)/4.
+
+IZ=IY
+
+IX=IY + IZ
+
+MEDR=SIGY*IY/REXT
+
+MPDR=4.0*MEDR/pi
+
+MPX=SIGY*IX/REXT
+
+GAMMA=RC/RMOY
+
+STHETA1=1.89/(LAMBDA**(0.666667))
+
+STHETA2=0.96/(LAMBDA**(0.333333))/GAMMA
+
+STHETA=STHETA1 - STHETA2
+
+MEFL=MEDR / STHETA
+
+MPFL=MPDR * MLSURMLS
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",VERI_MAIL=_F(VERIF='OUI'),)
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+MA=DEFI_GROUP(reuse=MA,  MAILLAGE=MA,
+                 CREA_GROUP_NO=_F( GROUP_MA = 'AD'))
+
+MO=AFFE_MODELE(        MAILLAGE=MA,
+     AFFE=_F(  TOUT = 'OUI',   PHENOMENE = 'MECANIQUE',
+     MODELISATION = 'TUYAU_3M')
+               )
+
+CAREL=AFFE_CARA_ELEM(   MODELE=MO,
+          POUTRE=( _F( GROUP_MA = 'TOUT', SECTION = 'CERCLE', TUYAU_NCOU=1,
+                       CARA = (   'R',  'EP', ), VALE = (  REXT,  EP, ),MODI_METRIQUE = 'OUI'),
+                   _F( GROUP_MA = 'BC', SECTION = 'CERCLE', TUYAU_NCOU=3,
+                       CARA = (   'R',  'EP', ), VALE = (  REXT,  EP, ),MODI_METRIQUE = 'OUI'),),
+
+          ORIENTATION=_F( GROUP_NO = 'D', CARA = 'GENE_TUYAU', VALE = (0., 0., 1.,))
+                              )
+
+MAT=DEFI_MATERIAU(    ELAS=_F( E = YOUNG, NU = POISSON),
+                         ECRO_LINE=_F( D_SIGM_EPSI = H, SY = SIGY)
+                        )
+
+CHMAT=AFFE_MATERIAU(   MAILLAGE=MA,
+                       AFFE=_F( TOUT = 'OUI', MATER = MAT))
+
+EFOND=pi*PRESSION*RINT*RINT
+
+CHART=AFFE_CHAR_MECA(  MODELE=MO,
+     DDL_IMPO=_F( GROUP_NO = 'A', DX = 0., DY = 0., DZ = 0., DRX = 0., DRY = 0., DRZ = 0.),
+     FORCE_NODALE=_F( GROUP_NO = 'D', MZ = MOMENTMZ)
+    )
+
+CHARP=AFFE_CHAR_MECA(   MODELE=MO,
+     FORCE_NODALE=_F( GROUP_NO = 'D', FX = EFOND),
+        FORCE_TUYAU=_F(  TOUT = 'OUI',
+                   PRES = PRESSION)
+                  )
+
+FONCT=DEFI_FONCTION(   NOM_PARA='INST',
+                      VALE=( 0., 0., MPFL, MPFL, ) )
+
+LINST=DEFI_LIST_REEL(DEBUT=0.,INTERVALLE=(
+               _F( JUSQU_A = MEFL, NOMBRE = 1),
+               _F( JUSQU_A = MPFL, NOMBRE = 10))
+                        )
+
+U1=STAT_NON_LINE(
+                            MODELE=MO,
+                        CHAM_MATER=CHMAT,
+                         CARA_ELEM=CAREL,EXCIT=(
+                             _F(
+                CHARGE = CHART,
+                FONC_MULT = FONCT), _F(
+                CHARGE = CHARP)),
+                         INCREMENT=_F(
+                LIST_INST = LINST,
+                NUME_INST_FIN = 8),COMPORTEMENT=(
+                         _F( GROUP_MA = 'BC',  RELATION = 'VMIS_ISOT_LINE',
+                             RESI_INTE_RELA = 1.E-6 ),
+                         _F( GROUP_MA = ( 'AB',  'CD',), RELATION = 'ELAS', )),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',
+                REAC_ITER = 3),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-4,
+                ITER_GLOB_MAXI = 100),
+                     RECH_LINEAIRE=_F(
+                ITER_LINE_MAXI = 3)
+              )
+
+U1=CALC_CHAMP(reuse=U1,CONTRAINTE=('EFGE_ELNO'),VARI_INTERNE=('VARI_ELNO'),RESULTAT=U1)
+
+
+U1=CALC_CHAMP(reuse=U1,FORCE='FORC_NODA', RESULTAT=U1, )
+
+# REFERENCE : CALCUL 3D-POUTRES
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='D',
+                   REFERENCE='ANALYTIQUE',# force appliquée
+                   RESULTAT=U1,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DRZ',
+                   VALE_CALC= 3.08670215E+06,
+                   VALE_REFE=3.086702E6,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='D',
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.011198591,
+                   VALE_REFE=0.0109256725345,
+                   PRECISION=0.03,),
+                _F(NUME_ORDRE=8,
+                   GROUP_NO='D',
+                   REFERENCE='ANALYTIQUE',# force appliquée
+                   RESULTAT=U1,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DRZ',
+                   VALE_CALC= 5.88981326E+06,
+                   VALE_REFE=5.889813E6,),
+                _F(NUME_ORDRE=8,
+                   GROUP_NO='D',
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U1,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.022715198,
+                   VALE_REFE=0.0220208935036,
+                   PRECISION=0.032,),
+                ),
+          )
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='A',
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U1,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DRZ',
+                   VALE_CALC=-3.08661769E+06,
+                   VALE_REFE=-3086702.15209,),
+                _F(NUME_ORDRE=8,
+                   GROUP_NO='A',
+                   REFERENCE='AUTRE_ASTER',
+                   RESULTAT=U1,
+                   NOM_CHAM='FORC_NODA',
+                   NOM_CMP='DRZ',
+                   VALE_CALC=-5.88964685E+06,
+                   VALE_REFE=-5889813.26111,),
+                ),
+          )
+
+FIN( )

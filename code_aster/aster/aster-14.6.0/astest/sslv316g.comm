@@ -1,0 +1,285 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: samuel.geniaut at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'),IGNORE_ALARM='XFEM2_94',);
+
+# ON IGNORE L'ALARME XFEM2_94 PARCE QUE MEME SI DANS LE CAS OU ELLE EST
+# EMISE ON PEUT OBTENIR DES VALEURS DE KI, KII, KIII ET BETA QUI NE SONT PAS
+# CORRECTES, DANS CE CAS TEST CES VALEURS (CALCULEES PAR CALC_G) NE SONT PAS
+# UTILISEES.
+
+#----------------------------------------------
+#                 MAILLAGE
+#----------------------------------------------
+
+nbcalc = 4
+
+MAILLAG1=LIRE_MAILLAGE(INFO=1,FORMAT='MED');
+
+MAILLAG1=DEFI_GROUP(reuse =MAILLAG1,
+                    MAILLAGE=MAILLAG1,
+                    CREA_GROUP_NO=_F(GROUP_MA=('VOL','SURFINF','LIG1','LIG5'),),);
+
+
+#----------------------------------------------
+#                   MODELE
+#----------------------------------------------
+
+
+MODELE=AFFE_MODELE(MAILLAGE=MAILLAG1,
+                      AFFE=(_F(GROUP_MA=('VOL',),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='3D',),
+                            _F(GROUP_MA=('SURFINF','SURFSUP',),
+                               PHENOMENE='MECANIQUE',
+                               MODELISATION='3D',),),);
+
+MAILLAG1=MODI_MAILLAGE(reuse =MAILLAG1,
+                       MAILLAGE=MAILLAG1,
+                       ORIE_PEAU_3D=_F(GROUP_MA=('SURFSUP','SURFINF',),),
+                       );
+
+#----------------------------------------------
+#                   MATERIAU
+#----------------------------------------------
+
+E=205000.0E6
+nu=0.
+rho=7800.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=rho,),);
+
+CHAMPMA1=AFFE_MATERIAU(MAILLAGE=MAILLAG1,
+                       MODELE=MODELE,
+                       AFFE=_F(TOUT = 'OUI',
+                                MATER=ACIER,
+                                ),
+                             );
+
+#----------------------------------------------
+#              FISSURE INITIALE
+#----------------------------------------------
+
+FISS = [None]*nbcalc
+
+FISS[0]=DEFI_FISS_XFEM(MAILLAGE=MAILLAG1,
+                       DEFI_FISS=_F(
+                                 FORM_FISS = 'DEMI_PLAN',
+                                 PFON      =(0. , 2. ,9.),
+                                 NORMALE   =(0. , 0 , 1.),
+                                 DTAN      =(0. , 1. , 0.)),
+                       );
+
+#----------------------------------------------
+#                   CHARGEMENTS
+#----------------------------------------------
+
+PRES=-1.E6
+
+#----------------------------------------------
+#         PROPAGATION SUR 3 PAS DE TEMPS
+#----------------------------------------------
+
+MODELX = [None]*nbcalc
+CHXFEM = [None]*nbcalc
+CH = [None]*nbcalc
+RESU = [None]*nbcalc
+SIF = [None]*nbcalc
+SIF1 = [None]*nbcalc
+LSN = [None]*nbcalc
+LST = [None]*nbcalc
+
+# AVANCE IMPOSEE
+da=0.4
+
+# ANGLE DE PROPAGATION IMPOSE
+beta=30.0/180.0*pi
+
+# FUNCTION POUR IMPOSER L'ANGLE DE PROPAGATION CI-DESSUS
+# DANS LA TABLE ISSUE PAR CALC_G
+ZERO = FORMULE(VALE='0.0*G+beta',
+               beta=beta,
+               NOM_PARA='G',)
+
+RS = 0.8
+
+VAL_CALC = [
+            0  ,
+            0 ,
+             0 ,
+             0 ,
+            -0.015475284642176118   ,
+            -0.015561155459566272   ,
+            -0.0003095930796191103  ,
+            -0.0003129901788670904 ,
+            -0.0364550431101354   ,
+            -0.03663714075841914   ,
+            -0.008903070799576328  ,
+            -0.008957482192836895  ,
+           ]
+
+for i in range(nbcalc) :
+
+   MODELX[i]=MODI_MODELE_XFEM(MODELE_IN=MODELE,FISSURE=FISS[i],INFO=1,);
+
+   CH[i]=AFFE_CHAR_MECA(MODELE=MODELX[i],
+                        PRES_REP=_F(GROUP_MA=('SURFSUP',),PRES=PRES,),
+                        DDL_IMPO=(_F(GROUP_NO='SURFINF',DZ=0.0,),
+                                  _F(GROUP_NO=('LIG1','LIG5'),DX=0.0,),
+                                  _F(GROUP_NO='P4',DY=0.0,),),);
+
+   RESU[i]=MECA_STATIQUE(MODELE=MODELX[i],
+                         CHAM_MATER=CHAMPMA1,
+                         EXCIT=(
+                                _F(CHARGE=CH[i],),),
+                         INST=1.0,
+                         INFO=1,);
+
+   SIF[i]=CALC_G        (RESULTAT=RESU[i],
+                         OPTION='CALC_K_G',
+                         THETA=_F( FISSURE=FISS[i],),
+                         LISSAGE=_F( DEGRE=0,),);
+
+#  ON MODIFIE LA TABLE DES SIF POUR IMPOSER L'ANGLE VOULU
+   SIF1[i] = CALC_TABLE(TABLE=SIF[i],
+                   ACTION=(_F(OPERATION='EXTR',
+                             NOM_PARA=('NUME_ORDRE','INST','NUM_PT',
+                                       'ABSC_CURV','K1','K2',
+                                       'K3','G','G_IRWIN','NUME_FOND'),
+                             ),
+                          _F(OPERATION='OPER',
+                             FORMULE=ZERO,
+                             NOM_PARA='BETA',),
+                          ),
+                        );
+
+
+   if ( i != (nbcalc-1) ) :
+      FISS[i+1] = CO('FISS_%d'%(i+1))
+      PROPA_FISS(MODELE=MODELX[i],
+                 FISSURE=_F(FISS_ACTUELLE=FISS[i],
+                            FISS_PROPAGEE=FISS[i+1],
+                            TABLE=SIF1[i],
+                           ),
+                 METHODE_PROPA='GEOMETRIQUE',
+                 DA_MAX=da,
+                 LOI_PROPA=_F(LOI='PARIS',
+                              C=1.,
+                              M=1.,
+                              MATER=ACIER),
+                 RAYON=RS,
+                 COMP_LINE=_F(COEF_MULT_MINI=0.,
+                              COEF_MULT_MAXI=1.,),
+                 CRIT_ANGL_BIFURCATION = 'ANGLE_IMPO',
+                 INFO=0,);
+
+#----------------------------------------------
+#         POST TRAITEMENT
+#----------------------------------------------
+
+# POSITION INITIALE DU FOND DE FISSURE
+y=2.0
+z=9.0
+
+# TOLERANCE: 15% LONGUEUR MAXIMALE DES ARETES DES ELEMENTS
+tol=0.15*0.33
+
+CHLN=[None]*nbcalc
+CHLT=[None]*nbcalc
+FOND=[None]*nbcalc
+TABLSN=[None]*nbcalc
+TABLST=[None]*nbcalc
+
+
+# VERIFICATION DE LA POSITION DU CHAQUE FOND DE FISSURE CALCULE
+for i in range(1,nbcalc) :
+
+#   CALCUL DE LA POSITION CORRECTE
+    y=y+da*cos(i*beta)
+    z=z+da*sin(i*beta)
+
+
+#   EXTRACTION DES LEVEL SETS POUR LES POINTS D'INTERSECTION
+#   ENTRE L'ARETE DONNANT LA POSITION CORRECTE DU FOND ET
+#   LES FACES DES ELEMENTS DU MAILLAGE
+    CHLN[i]=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                     OPERATION='EXTR',
+                     NOM_CHAM='LNNO',
+                     FISSURE=FISS[i],);
+
+    CHLT[i]=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                     OPERATION='EXTR',
+                     NOM_CHAM='LTNO',
+                     FISSURE=FISS[i],);
+
+    TABLSN[i]=MACR_LIGN_COUPE(CHAM_GD=CHLN[i], MODELE=MODELX[i], NOM_CHAM='NEUT',
+                     LIGN_COUPE=(
+                       _F(TYPE='SEGMENT', NB_POINTS=10, COOR_ORIG=(0,y,z), COOR_EXTR=(1,y,z),),
+                    ))
+
+    TABLST[i]=MACR_LIGN_COUPE(CHAM_GD=CHLT[i], MODELE=MODELX[i], NOM_CHAM='NEUT',
+                     LIGN_COUPE=(
+                       _F(TYPE='SEGMENT', NB_POINTS=10, COOR_ORIG=(0,y,z), COOR_EXTR=(1,y,z),),
+                    ))
+
+
+#   VERIFICATION DES VALEURS DES LEVEL SETS. POUR LES POINTS
+#   SELECTIONNES, LES LEVEL SETS DOIVENT ETRE EGAL A ZERO.
+    TEST_TABLE(TABLE=TABLSN[i],
+               REFERENCE='ANALYTIQUE',
+               NOM_PARA='X1',
+               PRECISION=tol,
+
+               TYPE_TEST='MAX',
+               CRITERE='ABSOLU',
+               VALE_CALC=VAL_CALC[(i-1)*4+0],
+               VALE_REFE=0.0  )
+
+    TEST_TABLE(TABLE=TABLSN[i],
+               REFERENCE='ANALYTIQUE',
+               NOM_PARA='X1',
+               PRECISION=tol,
+
+               TYPE_TEST='MIN',
+               CRITERE='ABSOLU',
+               VALE_CALC=VAL_CALC[(i-1)*4+1],
+               VALE_REFE=0.0  )
+
+    TEST_TABLE(TABLE=TABLST[i],
+               REFERENCE='ANALYTIQUE',
+               NOM_PARA='X1',
+               PRECISION=tol,
+
+               TYPE_TEST='MAX',
+               CRITERE='ABSOLU',
+               VALE_CALC=VAL_CALC[(i-1)*4+2],
+               VALE_REFE=0.0  )
+
+    TEST_TABLE(TABLE=TABLST[i],
+               REFERENCE='ANALYTIQUE',
+               NOM_PARA='X1',
+               PRECISION=tol,
+
+               TYPE_TEST='MIN',
+               CRITERE='ABSOLU',
+               VALE_CALC=VAL_CALC[(i-1)*4+3],
+               VALE_REFE=0.0  )
+
+FIN();

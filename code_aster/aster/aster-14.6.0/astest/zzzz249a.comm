@@ -1,0 +1,199 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'),
+      IGNORE_ALARM=('MODELE1_63','MODELE1_64',))
+
+# <MODELE1_64> : LE MODELE NE COMPORTE PAS D'ELEMENTS CAPABLES DE CALCULER LA RIGIDITE
+# <MODELE1_63> : LE MODELE UTILISE NE COMPORTE QU'UNE PEAU DE 3D.
+#                  L'OBJECTIF DU TEST EST DE CALCULER UNE INTEGRALE, PAS DE FAIRE UN CALCUL MECANIQUE
+
+#...........................................................................................
+# CECI EST UN TEST DE LA FONCTIONNALITE POST_ELEM / INTEGRALE :
+#  - ON CALCULE L'INTEGRALE DE LA FONCTION F(X,Y) = 2X SUR LE CARRE (0, 2) X (0, 2)
+#  - LE RESULTAT VAUT : 8
+#
+#  - ON VALIDE LES CAS : 1) CHAM_ELEM / 'ELGA'
+#                        2) CHAM_ELEM / 'ELNO'
+#                        3) CHAM_ELEM / 'ELEM' + DEJA_INTEGRE='NON'
+#                        4) CHAM_ELEM / 'ELEM' + DEJA_INTEGRE='OUI'
+#
+#...........................................................................................
+
+MA1=LIRE_MAILLAGE(FORMAT="ASTER",)
+MO1=AFFE_MODELE(MAILLAGE=MA1, AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='D_PLAN') )
+MO2=AFFE_MODELE(MAILLAGE=MA1, AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='3D') )
+
+
+
+# 1) CREATION DES CHAMPS A INTEGRER :
+#    X4 :  CHAM_ELEM / ELNO
+#    X5 :  CHAM_ELEM / ELEM
+#    X6 :  CHAM_ELEM / ELGA
+#-----------------------------------------
+CHXN=CREA_CHAMP(OPERATION='EXTR', TYPE_CHAM='NOEU_GEOM_R',
+                NOM_CHAM='GEOMETRIE', MAILLAGE=MA1, INFO=1)
+
+FONCX = FORMULE(VALE='2*X',
+                NOM_PARA='X',)
+X1=CREA_CHAMP(OPERATION='AFFE', TYPE_CHAM='NOEU_NEUT_F', MAILLAGE=MA1,    INFO=1,
+              AFFE=_F( TOUT = 'OUI', NOM_CMP = ('X1',), VALE_F  = (FONCX,)))
+
+X2=CREA_CHAMP(OPERATION='EVAL', TYPE_CHAM='NOEU_NEUT_R', INFO=1,
+              CHAM_F=X1,  CHAM_PARA=( CHXN,)   )
+
+
+X3=CREA_CHAMP(OPERATION='ASSE', TYPE_CHAM='NOEU_PRES_R', MAILLAGE=MA1,  INFO=1,
+             ASSE=_F( TOUT = 'OUI',   CHAM_GD = X2,
+                      NOM_CMP = ('X1', ),  NOM_CMP_RESU = ('PRES',)))
+
+X4=CREA_CHAMP(OPERATION='DISC', TYPE_CHAM='ELNO_PRES_R',
+              MODELE=MO2,   CHAM_GD=X3,  INFO=1 )
+
+X5=CREA_CHAMP(OPERATION='DISC', TYPE_CHAM='ELEM_PRES_R',
+              MODELE=MO2,   CHAM_GD=X3,  INFO=1 )
+
+X6=CREA_CHAMP(OPERATION='DISC', TYPE_CHAM='ELGA_PRES_R',
+              MODELE=MO2,   CHAM_GD=X3,  INFO=1 )
+
+# pour tester DISC : ELGA -> ELNO :
+X7=CREA_CHAMP(OPERATION='DISC', TYPE_CHAM='ELNO_PRES_R',
+              MODELE=MO2,   CHAM_GD=X6,  INFO=1 )
+
+
+#  CAS 'ELGA' :
+#  ----------------------------------------------------------------------------------------
+
+XXX2=CREA_RESU( OPERATION='AFFE', TYPE_RESU='EVOL_CHAR', NOM_CHAM='PRES',
+                   AFFE=(_F( CHAM_GD=X6, INST=1., )))
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., RESULTAT=XXX2,
+                INTEGRALE=_F(NOM_CHAM='PRES',  NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX2, XXX3),),)
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., CHAM_GD=X6,
+                INTEGRALE=_F( NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0000000000,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX3),),)
+
+
+#  CAS 'ELNO' :
+#  ----------------------------------------------------------------------------------------
+
+XXX2=CREA_RESU( OPERATION='AFFE', TYPE_RESU='EVOL_CHAR', NOM_CHAM='PRES',
+                   AFFE=(_F( CHAM_GD=X4, INST=1., )))
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., RESULTAT=XXX2,
+                INTEGRALE=_F(NOM_CHAM='PRES',  NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX2, XXX3),),)
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., CHAM_GD=X4,
+                INTEGRALE=_F(NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX3),),)
+
+#  CAS 'ELEM' + DEJA_INTEGRE='NON' :
+#  ----------------------------------------------------------------------------------------
+
+XXX2=CREA_RESU( OPERATION='AFFE', TYPE_RESU='EVOL_CHAR', NOM_CHAM='PRES',
+                   AFFE=(_F( CHAM_GD=X5, INST=1., )))
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., RESULTAT=XXX2,
+                INTEGRALE=_F(NOM_CHAM='PRES', DEJA_INTEGRE='NON', NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX2, XXX3),),)
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., CHAM_GD=X5,
+                INTEGRALE=_F(DEJA_INTEGRE='NON', NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=8.0,
+           VALE_REFE=8.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX3),),)
+
+#  CAS 'ELEM' + DEJA_INTEGRE='OUI' :
+#  ----------------------------------------------------------------------------------------
+
+XXX2=CREA_RESU( OPERATION='AFFE', TYPE_RESU='EVOL_CHAR', NOM_CHAM='PRES',
+                   AFFE=(_F( CHAM_GD=X5, INST=1., )))
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., RESULTAT=XXX2,
+                INTEGRALE=_F(NOM_CHAM='PRES', DEJA_INTEGRE='OUI', NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+
+# DANS LE MAILLAGE DU CARRE, CHAQUE ELEMENT A LA MEME SURFACE : 0.5
+# CE QUI DOUBLE L'INTEGRALE SI DEJA_INTEGRE='OUI'
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=16.0,
+           VALE_REFE=16.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX2, XXX3),),)
+
+XXX3=POST_ELEM(MODELE=MO2, INST=1., CHAM_GD=X5,
+                INTEGRALE=_F(DEJA_INTEGRE='OUI', NOM_CMP=('PRES'), TOUT='OUI', TYPE_MAILLE='2D'),)
+
+# DANS LE MAILLAGE DU CARRE, CHAQUE ELEMENT A LA MEME SURFACE : 0.5
+# CE QUI DOUBLE L'INTEGRALE SI DEJA_INTEGRE='OUI'
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-09,
+           VALE_CALC=16.0,
+           VALE_REFE=16.0,
+           NOM_PARA='INTE_PRES',
+           TABLE=XXX3,)
+
+DETRUIRE(CONCEPT=_F(NOM=(XXX3),),)
+
+FIN()

@@ -1,0 +1,345 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+from math import *
+
+# LECTURE ET CREATION DES MAILLAGES
+
+MESH_Q4 = LIRE_MAILLAGE(FORMAT = 'MED')
+
+MESH_Q8 = CREA_MAILLAGE(MAILLAGE  = MESH_Q4,
+                        LINE_QUAD = _F(TOUT='OUI'));
+
+MESH_Q9 = CREA_MAILLAGE(MAILLAGE=MESH_Q8,
+                        MODI_MAILLE=_F(OPTION='QUAD8_9',
+                                       PREF_NOEUD='NM',
+                                       TOUT='OUI'))
+
+
+rho_cp = 2.0
+LAMBDA = DEFI_CONSTANTE(VALE = rho_cp)
+RHO_CP = DEFI_CONSTANTE(VALE = rho_cp)
+
+
+# Closed-form solution
+
+w      = 2.0**0.5
+T_max  = (1-1/cosh(w))/w**2 - exp(-(w**2+pi**2/4))
+T_INF = FORMULE(VALE='(1-cosh(w*Y)/cosh(w))/w**2',
+                w=w,
+                NOM_PARA='Y',)
+T_INI = FORMULE(VALE='T_INF(Y)-cos(pi*Y/2.0)',
+                T_INF=T_INF,
+                NOM_PARA='Y',)
+
+# source(T) = rho_cp - rho_cp*w**2 * T
+
+SOURCE = DEFI_FONCTION( NOM_PARA    = 'TEMP',
+                        VALE        = (0,rho_cp, 1,rho_cp-rho_cp*w**2),
+                        PROL_DROITE = 'LINEAIRE',
+                        PROL_GAUCHE = 'LINEAIRE',
+                      )
+
+  
+# Usual data setting
+
+FAKE_MAT = DEFI_MATERIAU(THER_NL = _F(LAMBDA=LAMBDA, RHO_CP=RHO_CP),
+                        )
+TIME = DEFI_LIST_REEL(DEBUT      =  0.0,
+                      INTERVALLE = _F(JUSQU_A = 1.0, NOMBRE = 100)
+                     )
+
+
+#===================================================================
+# Verification des mailles de type QUAD4 avec une modelisation AXIS
+#===================================================================
+
+MAT_Q4 = AFFE_MATERIAU(MAILLAGE = MESH_Q4,
+                        AFFE     = _F(GROUP_MA = 'ROD', MATER = FAKE_MAT),
+                      )
+  
+MODEL_Q4 = AFFE_MODELE(MAILLAGE = MESH_Q4,
+                       AFFE     = _F(GROUP_MA='ROD',PHENOMENE='THERMIQUE',MODELISATION='AXIS'),
+                       )
+  
+BND_Q4 = AFFE_CHAR_THER(MODELE    = MODEL_Q4,
+                        TEMP_IMPO = _F(GROUP_MA = 'END', TEMP=0),
+                       )
+
+# Non linear heating source
+
+HEAT_Q4 = AFFE_CHAR_THER_F(MODELE  = MODEL_Q4,
+                           SOUR_NL = _F(GROUP_MA='ROD', SOUR=SOURCE),    
+                           )
+
+# Initial temperature field
+
+ND_COOR = CREA_CHAMP(OPERATION = 'EXTR',
+                     TYPE_CHAM = 'NOEU_GEOM_R',
+                     MAILLAGE  =  MESH_Q4,
+                     NOM_CHAM  = 'GEOMETRIE',
+                    )
+  
+TEMP_1 = CREA_CHAMP(OPERATION ='AFFE', 
+                    TYPE_CHAM ='NOEU_NEUT_F',
+                    MAILLAGE  = MESH_Q4,
+                    AFFE      =_F(TOUT='OUI', NOM_CMP='X1', VALE_F=T_INI),
+                   )
+
+TEMP_2 = CREA_CHAMP(OPERATION ='EVAL',
+                    TYPE_CHAM ='NOEU_NEUT_R',
+                    CHAM_F    = TEMP_1 , 
+                    CHAM_PARA = ND_COOR,
+                   )
+
+INI_TEMP = CREA_CHAMP(OPERATION ='ASSE', 
+                      TYPE_CHAM ='NOEU_TEMP_R',
+                      MAILLAGE  = MESH_Q4,
+                      ASSE      =_F(TOUT='OUI', CHAM_GD=TEMP_2, NOM_CMP='X1', NOM_CMP_RESU='TEMP'),
+                     )
+
+# Computation
+
+EVOL_Q4 = THER_NON_LINE( MODELE      = MODEL_Q4,
+                         INCREMENT   = _F(LIST_INST = TIME),
+                         CHAM_MATER  = MAT_Q4,
+                         EXCIT       = (_F(CHARGE = BND_Q4),
+                                        _F(CHARGE = HEAT_Q4),
+                                       ),
+                         ETAT_INIT   = _F(CHAM_NO = INI_TEMP),
+                         CONVERGENCE = _F(RESI_GLOB_MAXI = 1.E-9),
+                         NEWTON      = _F(REAC_ITER = 1),
+                        )
+
+# Result checking (middle of the rod)
+
+TEST_RESU(RESU=_F(GROUP_NO='PROBE',
+                  INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=EVOL_Q4,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=0.258839935318,
+                  VALE_REFE=0.25897382948803593,),
+          )
+
+#========================================================================
+# Verification des mailles de type QUAD4 avec une modelisation AXIS_DIAG
+#========================================================================
+
+MAT_Q4D = AFFE_MATERIAU(MAILLAGE = MESH_Q4,
+                        AFFE     = _F(GROUP_MA = 'ROD', MATER = FAKE_MAT),
+                      )
+  
+MODL_Q4D = AFFE_MODELE(MAILLAGE = MESH_Q4,
+                       AFFE     = _F(GROUP_MA='ROD',PHENOMENE='THERMIQUE',MODELISATION='AXIS_DIAG'),
+                       )
+  
+BND_Q4D = AFFE_CHAR_THER(MODELE    = MODL_Q4D,
+                        TEMP_IMPO = _F(GROUP_MA = 'END', TEMP=0),
+                       )
+
+# Non linear heating source
+
+HEAT_Q4D = AFFE_CHAR_THER_F(MODELE  = MODL_Q4D,
+                           SOUR_NL = _F(GROUP_MA='ROD', SOUR=SOURCE),    
+                           )
+
+# Computation
+
+EVOL_Q4D = THER_NON_LINE( MODELE      = MODL_Q4D,
+                         INCREMENT   = _F(LIST_INST = TIME),
+                         CHAM_MATER  = MAT_Q4D,
+                         EXCIT       = (_F(CHARGE = BND_Q4D),
+                                        _F(CHARGE = HEAT_Q4D),
+                                       ),
+                         ETAT_INIT   = _F(CHAM_NO = INI_TEMP),
+                         CONVERGENCE = _F(RESI_GLOB_MAXI = 1.E-9),
+                         NEWTON      = _F(REAC_ITER = 1),
+                        )
+
+# Result checking (middle of the rod)
+
+TEST_RESU(RESU=_F(GROUP_NO='PROBE',
+                  INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=EVOL_Q4D,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=0.258810615057,
+                  VALE_REFE=0.25897382948803593,),
+          )
+
+IMPR_RESU(FORMAT = 'MED',
+          RESU = _F(RESULTAT = EVOL_Q4D))
+
+DETRUIRE( CONCEPT = _F(NOM = (ND_COOR,TEMP_1,TEMP_2,INI_TEMP)))
+
+#===================================================================
+# Verification des mailles de type QUAD8 avec une modelisation AXIS
+#===================================================================
+
+MAT_Q8 = AFFE_MATERIAU(MAILLAGE = MESH_Q8,
+                        AFFE     = _F(GROUP_MA = 'ROD', MATER = FAKE_MAT),
+                      )
+  
+MODEL_Q8 = AFFE_MODELE(MAILLAGE = MESH_Q8,
+                       AFFE     = _F(GROUP_MA='ROD',PHENOMENE='THERMIQUE',MODELISATION='AXIS'),
+                       )
+  
+BND_Q8 = AFFE_CHAR_THER(MODELE    = MODEL_Q8,
+                        TEMP_IMPO = _F(GROUP_MA = 'END', TEMP=0),
+                       )
+
+# Non linear heating source
+
+HEAT_Q8 = AFFE_CHAR_THER_F(MODELE  = MODEL_Q8,
+                           SOUR_NL = _F(GROUP_MA='ROD', SOUR=SOURCE),    
+                           )
+
+# Initial temperature field
+
+ND_COOR = CREA_CHAMP(OPERATION = 'EXTR',
+                     TYPE_CHAM = 'NOEU_GEOM_R',
+                     MAILLAGE  =  MESH_Q8,
+                     NOM_CHAM  = 'GEOMETRIE',
+                    )
+  
+TEMP_1 = CREA_CHAMP(OPERATION ='AFFE', 
+                    TYPE_CHAM ='NOEU_NEUT_F',
+                    MAILLAGE  = MESH_Q8,
+                    AFFE      =_F(TOUT='OUI', NOM_CMP='X1', VALE_F=T_INI),
+                   )
+
+TEMP_2 = CREA_CHAMP(OPERATION ='EVAL',
+                    TYPE_CHAM ='NOEU_NEUT_R',
+                    CHAM_F    = TEMP_1 , 
+                    CHAM_PARA = ND_COOR,
+                   )
+
+INI_TEMP = CREA_CHAMP(OPERATION ='ASSE', 
+                      TYPE_CHAM ='NOEU_TEMP_R',
+                      MAILLAGE  = MESH_Q8,
+                      ASSE      =_F(TOUT='OUI', CHAM_GD=TEMP_2, NOM_CMP='X1', NOM_CMP_RESU='TEMP'),
+                     )
+
+# Computation
+  
+EVOL_Q8 = THER_NON_LINE( MODELE      = MODEL_Q8,
+                         INCREMENT   = _F(LIST_INST = TIME),
+                         CHAM_MATER  = MAT_Q8,
+                         EXCIT       = (_F(CHARGE = BND_Q8),
+                                        _F(CHARGE = HEAT_Q8),
+                                       ),
+                         ETAT_INIT   = _F(CHAM_NO = INI_TEMP),
+                         CONVERGENCE = _F(RESI_GLOB_MAXI = 1.E-9),
+                         NEWTON      = _F(REAC_ITER = 1),
+                        )
+
+# Result checking (middle of the rod)
+
+TEST_RESU(RESU=_F(GROUP_NO='PROBE',
+                  INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=EVOL_Q8,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=0.258821437238,
+                  VALE_REFE=0.25897382948803593,),
+          )
+DETRUIRE( CONCEPT = _F(NOM = (ND_COOR,TEMP_1,TEMP_2,INI_TEMP)))
+
+#===================================================================
+# Verification des mailles de type QUAD9 avec une modelisation AXIS
+#===================================================================
+
+MAT_Q9 = AFFE_MATERIAU(MAILLAGE = MESH_Q9,
+                        AFFE     = _F(GROUP_MA = 'ROD', MATER = FAKE_MAT),
+                      )
+  
+MODEL_Q9 = AFFE_MODELE(MAILLAGE = MESH_Q9,
+                       AFFE     = _F(GROUP_MA='ROD',PHENOMENE='THERMIQUE',MODELISATION='AXIS'),
+                       )
+  
+BND_Q9 = AFFE_CHAR_THER(MODELE    = MODEL_Q9,
+                        TEMP_IMPO = _F(GROUP_MA = 'END', TEMP=0),
+                       )
+
+# Non linear heating source
+
+HEAT_Q9 = AFFE_CHAR_THER_F(MODELE  = MODEL_Q9,
+                           SOUR_NL = _F(GROUP_MA='ROD', SOUR=SOURCE),    
+                           )
+
+# Initial temperature field
+
+ND_COOR = CREA_CHAMP(OPERATION = 'EXTR',
+                     TYPE_CHAM = 'NOEU_GEOM_R',
+                     MAILLAGE  =  MESH_Q9,
+                     NOM_CHAM  = 'GEOMETRIE',
+                    )
+  
+TEMP_1 = CREA_CHAMP(OPERATION ='AFFE', 
+                    TYPE_CHAM ='NOEU_NEUT_F',
+                    MAILLAGE  = MESH_Q9,
+                    AFFE      =_F(TOUT='OUI', NOM_CMP='X1', VALE_F=T_INI),
+                   )
+
+TEMP_2 = CREA_CHAMP(OPERATION ='EVAL',
+                    TYPE_CHAM ='NOEU_NEUT_R',
+                    CHAM_F    = TEMP_1 , 
+                    CHAM_PARA = ND_COOR,
+                   )
+
+INI_TEMP = CREA_CHAMP(OPERATION ='ASSE', 
+                      TYPE_CHAM ='NOEU_TEMP_R',
+                      MAILLAGE  = MESH_Q9,
+                      ASSE      =_F(TOUT='OUI', CHAM_GD=TEMP_2, NOM_CMP='X1', NOM_CMP_RESU='TEMP'),
+                     )
+
+# Computation
+  
+EVOL_Q9 = THER_NON_LINE( MODELE      = MODEL_Q9,
+                         INCREMENT   = _F(LIST_INST = TIME),
+                         CHAM_MATER  = MAT_Q9,
+                         EXCIT       = (_F(CHARGE = BND_Q9),
+                                        _F(CHARGE = HEAT_Q9),
+                                       ),
+                         ETAT_INIT   = _F(CHAM_NO = INI_TEMP),
+                         CONVERGENCE = _F(RESI_GLOB_MAXI = 1.E-9),
+                         NEWTON      = _F(REAC_ITER = 1),
+                        )
+
+# Result checking (middle of the rod)
+
+TEST_RESU(RESU=_F(GROUP_NO='PROBE',
+                  INST=1.0,
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=EVOL_Q9,
+                  NOM_CHAM='TEMP',
+                  NOM_CMP='TEMP',
+                  VALE_CALC=0.258821437238,
+                  VALE_REFE=0.25897382948803593,),
+          )
+DETRUIRE( CONCEPT = _F(NOM = (ND_COOR,TEMP_1,TEMP_2,INI_TEMP)))
+
+
+FIN()

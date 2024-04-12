@@ -1,0 +1,144 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',   )
+
+MA=DEFI_GROUP(reuse=MA,   MAILLAGE=MA,
+                   CREA_GROUP_NO=_F(  NOM = 'BORD_INF',
+                  NOEUD = ('NO2','NO112','NO3','NO113','NO5',))
+                )
+
+MA = DEFI_GROUP(reuse = MA,
+  MAILLAGE = MA,
+  CREA_GROUP_MA = _F(
+    NOM  = 'MATIERE',
+    TOUT = 'OUI'
+    ),
+  CREA_GROUP_NO = _F(
+    NOM        = 'SOMMETS',
+    GROUP_MA   = 'MATIERE',
+    CRIT_NOEUD = 'SOMMET'
+    )
+  )
+
+
+# ------------DEFINITION DU MODELE -----------------------------
+
+MO=AFFE_MODELE(   MAILLAGE=MA,
+                         AFFE=_F(  TOUT = 'OUI',
+                                PHENOMENE = 'MECANIQUE',
+                                MODELISATION = 'AXIS_INCO_UPG')
+                  )
+
+INCOMP = AFFE_CHAR_MECA(
+  MODELE = MO,
+  DDL_IMPO = _F(
+    GROUP_NO = 'SOMMETS',
+    GONF     = 0
+    )
+  )
+
+# ----------- CONDITIONS AUX LIMITES ---------------------------
+
+CONDLIM=AFFE_CHAR_MECA(      MODELE=MO,
+
+                           DDL_IMPO=_F(  GROUP_NO = 'BORD_INF', DY = 0.)
+                         )
+
+# ---------- CHARGEMENT A PILOTER ------------------------------
+
+CH1=AFFE_CHAR_MECA(    MODELE=MO,
+                         PRES_REP=_F( GROUP_MA = 'B_D',
+                                   PRES = 1.0)
+                        )
+
+# ------------ DEFINITION DU MATERIAU -------------
+
+MATPLAQ=DEFI_MATERIAU(
+  ECRO_LINE=_F(SY=100, D_SIGM_EPSI = 0)
+                    )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                      AFFE=_F(  TOUT = 'OUI', MATER = MATPLAQ)
+                         )
+
+# ------------ CALCUL  AVEC LA LOI DE NORTON-HOFF ------
+
+L_INST=DEFI_LIST_REEL(
+  DEBUT = 0,
+  INTERVALLE = (
+    _F(JUSQU_A = 1,     NOMBRE = 1),
+    _F(JUSQU_A = 2,     NOMBRE = 1),
+#    _F(JUSQU_A = 2.491361694, NOMBRE = 1),
+#    _F(JUSQU_A = 2.707570176, NOMBRE = 1),
+#    _F(JUSQU_A = 2.851258349, NOMBRE = 1),
+#    _F(JUSQU_A = 3.004321374, NOMBRE = 1)
+    )
+  )
+
+RESU1=STAT_NON_LINE(
+  MODELE = MO,
+  CHAM_MATER = CHMAT,
+  EXCIT = (
+    _F(CHARGE = CONDLIM),
+    _F(CHARGE = INCOMP),
+    _F(CHARGE = CH1,  TYPE_CHARGE = 'FIXE_PILO')
+    ),
+  PILOTAGE = _F(TYPE = 'ANA_LIM'),
+  RECH_LINEAIRE = _F(METHODE = 'PILOTAGE',ITER_LINE_MAXI = 50),
+  COMPORTEMENT = _F( RELATION = 'NORTON_HOFF'),
+  INCREMENT = _F(
+    LIST_INST = L_INST,),
+  NEWTON = _F(
+    MATRICE   = 'TANGENTE',
+    REAC_ITER = 1
+    ),
+    SOLVEUR=_F( METHODE = 'LDLT',  NPREC = 12),
+  CONVERGENCE   = _F(
+    RESI_GLOB_MAXI = 5.E-3,
+    ITER_GLOB_MAXI = 100
+    ),
+  )
+
+ECHL1=POST_ELEM(
+                  RESULTAT=RESU1,
+                  NUME_ORDRE=(1,2),
+                  CHAR_LIMITE=_F( )  )
+
+#--------------------------------------------------------------
+#      TEST DE LA CHARGE LIMITE
+#  COMPARAISON AVEC LES VALEURS DE l UNIVERSITE DE LIEGE
+#--------------------------------------------------------------
+
+
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=3.958113030,
+           VALE_REFE=3.931,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='CHAR_LIMI_SUP',
+           TABLE=ECHL1,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=2.0,),
+           )
+
+FIN()
+#

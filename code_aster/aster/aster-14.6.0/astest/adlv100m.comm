@@ -1,0 +1,142 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# AVEC MODELISATION AXIS ELEMENTS TRIA6 ET SEG3
+# VALIDATION INDEPENDANTE PAR LMS_NT (J.P.ROSSION)
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+#
+MA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                   UNITE=19,
+                   )
+
+MO=AFFE_MODELE(
+         MAILLAGE=MA,AFFE=(
+         _F( GROUP_MA = ('triaeau', 'triaair',),
+                   MODELISATION = 'AXIS_FLUIDE', PHENOMENE = 'MECANIQUE'),
+         _F( GROUP_MA = ('lineau', 'linair',),
+                   MODELISATION = 'AXIS_FLUI_STRU',
+                   PHENOMENE = 'MECANIQUE'),
+         _F( GROUP_MA = 'triapist',
+                   MODELISATION = 'AXIS', PHENOMENE = 'MECANIQUE'))
+         )
+
+#
+# PROPRIETES MECANIQUES
+#
+AIR=DEFI_MATERIAU(
+          FLUIDE=_F( RHO = 1.2,
+                CELE_R = 340.0)
+         )
+
+EAU=DEFI_MATERIAU(
+          FLUIDE=_F( RHO = 1000.,
+                CELE_R = 1400.0)
+         )
+
+ACIER=DEFI_MATERIAU(
+          ELAS=_F( RHO = 7800.,
+              NU = 0.3,
+                E = 2.E+11)
+         )
+
+CHM=AFFE_MATERIAU(
+         MAILLAGE=MA,AFFE=(
+         _F( GROUP_MA = ('triaeau', 'lineau',),
+              MATER = EAU),
+         _F( GROUP_MA = ('triaair', 'linair',),
+              MATER = AIR),
+         _F( GROUP_MA = 'triapist',
+              MATER = ACIER))
+         )
+
+#
+# CONDITIONS AUX LIMITES
+#
+SURFLIBR=AFFE_CHAR_MECA(
+         MODELE=MO,
+         DDL_IMPO=_F( GROUP_NO = 'surflib',
+                    PRES = 0., PHI = 0.)
+         )
+
+GUIDAGE=AFFE_CHAR_MECA(
+         MODELE=MO,
+         DDL_IMPO=_F( GROUP_NO = 'noeudpis',
+                    DX = 0.)
+         )
+
+#
+# MATRICES ELEMENTAIRES
+#
+MK=CALC_MATR_ELEM(
+         OPTION='RIGI_MECA',
+         MODELE=MO,
+         CHAM_MATER=CHM,
+         CHARGE=(SURFLIBR, GUIDAGE,)
+        )
+
+MM=CALC_MATR_ELEM(
+         OPTION='MASS_MECA',
+         MODELE=MO,
+         CHAM_MATER=CHM,
+         CHARGE=(SURFLIBR, GUIDAGE,)
+        )
+
+NDDL=NUME_DDL(
+         MATR_RIGI=MK
+        )
+
+#
+# ASSEMBLAGE
+#
+MATK=ASSE_MATRICE(
+         MATR_ELEM=MK,
+         NUME_DDL=NDDL
+        )
+
+MATM=ASSE_MATRICE(
+         MATR_ELEM=MM,
+         NUME_DDL=NDDL
+        )
+
+#
+# CALCUL DES MODES
+#
+MODES=CALC_MODES(MATR_RIGI=MATK,
+                 OPTION='AJUSTE', SOLVEUR=_F(METHODE='MULT_FRONT'),
+                 CALC_FREQ=_F(FREQ=(10.,20.,),
+                              ),
+    SOLVEUR_MODAL=_F(PREC_AJUSTE=1.E-4,PREC_INV=1.E-07),
+                 MATR_MASS=MATM,
+                 )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODES,
+                  VALE_CALC=13.827678259,
+                  VALE_REFE=13.8285,
+                  REFERENCE='NON_DEFINI',
+                  CRITERE='RELATIF',
+                  PRECISION=5.0000000000000001E-3,),
+          )
+
+FIN()
+#

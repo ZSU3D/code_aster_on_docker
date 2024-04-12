@@ -1,0 +1,312 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(  CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'), IMPR_MACRO='OUI')
+
+
+MA = LIRE_MAILLAGE(FORMAT='IDEAS',
+                   UNITE=19,
+                   )
+
+MO=AFFE_MODELE( MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            PHENOMENE='MECANIQUE',
+                            MODELISATION='3D',),);
+
+RESU = LIRE_RESU( FORMAT='IDEAS', UNITE=38,
+                  MODELE=MO,
+                  TYPE_RESU='EVOL_NOLI',
+                  NOM_CHAM= ('DEPL','SIGM_ELNO',),
+                  TOUT_ORDRE='OUI',
+                  FORMAT_IDEAS= (_F( NOM_CHAM='DEPL',
+                                     NUME_DATASET=55,
+                                     POSI_ORDRE=(7,3),
+                                     NOM_CMP=('DX','DY','DZ','DRX','DRY','DRZ'),
+                                     POSI_INST=(8,1),
+                                     RECORD_6=(1,4,3,8,2,6) ,),
+                                 _F( NOM_CHAM='SIGM_ELNO',
+                                     NUME_DATASET=57,
+                                     POSI_ORDRE=(7,3),
+                                     NOM_CMP=('SIXX','SIXY','SIYY','SIXZ','SIYZ','SIZZ'),
+                                     POSI_INST=(8,1),
+                                     RECORD_6=(1,4,4,2,2,6) ,),
+                                 )
+                ) ;
+
+CHNO = CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='NOEU_DEPL_R',
+                   RESULTAT=RESU, NOM_CHAM='DEPL',
+                   INST=0. )
+
+CHEL = CREA_CHAMP( OPERATION='EXTR', TYPE_CHAM='ELNO_SIEF_R',
+                   RESULTAT=RESU, NOM_CHAM='SIGM_ELNO',
+                   INST=0. )
+
+#
+# face 1 definit par les noeuds NO1 NO4 NO3 NO2
+# face 2 definit par les noeuds NO1 NO5 NO8 NO4
+# face 3 definit par les noeuds NO1 NO2 NO6 NO5
+# face 4 definit par les noeuds NO5 NO6 NO7 NO8
+# face 5 definit par les noeuds NO2 NO3 NO7 NO6
+# face 6 definit par les noeuds NO3 NO4 NO8 NO7
+#
+
+#----------------------------------------------------------------------
+TS1 = MACR_LIGN_COUPE( CHAM_GD = CHEL, MODELE=MO,
+          LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  1., 0.5, 0.5, ), COOR_EXTR=(  0., 0.5, 0.5, ),
+                          NB_POINTS=10,
+                          NOM_CMP  ='SIXX', OPERATION='EXTRACTION', INTITULE='TS1', ))
+
+IMPR_TABLE( TABLE=TS1,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','SIXX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=4.750000000,
+           VALE_REFE=4.75,
+           NOM_PARA='SIXX',
+           TABLE=TS1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=3.500000000,
+           VALE_REFE=3.5,
+           NOM_PARA='SIXX',
+           TABLE=TS1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           )
+
+TN1 = MACR_LIGN_COUPE( CHAM_GD = CHNO, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  1., 0.5, 0.5, ), COOR_EXTR=(  0., 0.5, 0.5, ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='DX', OPERATION='EXTRACTION', INTITULE='TN1', ))
+
+IMPR_TABLE( TABLE=TN1,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','DX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=4.750000000,
+           VALE_REFE=4.75,
+           NOM_PARA='DX',
+           TABLE=TN1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=3.500000000,
+           VALE_REFE=3.5,
+           NOM_PARA='DX',
+           TABLE=TN1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           );
+
+#----------------------------------------------------------------------
+
+TS2 = MACR_LIGN_COUPE( CHAM_GD = CHEL, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  0.25, 0., 0.25, ), COOR_EXTR=(0.25, 1., 0.25, ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='SIXX', OPERATION='EXTRACTION', INTITULE='TS2', ))
+
+IMPR_TABLE( TABLE=TS2,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','SIXX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=1.312500000,
+           VALE_REFE=1.3125,
+           NOM_PARA='SIXX',
+           TABLE=TS2,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=6.125000000,
+           VALE_REFE=6.125,
+           NOM_PARA='SIXX',
+           TABLE=TS2,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           ) ;
+
+TN2 = MACR_LIGN_COUPE( CHAM_GD = CHNO, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  0.25, 0., 0.25, ), COOR_EXTR=(0.25, 1., 0.25, ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='DX', OPERATION='EXTRACTION', INTITULE='TN2', ))
+
+IMPR_TABLE( TABLE=TN2,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','DX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=1.312500000,
+           VALE_REFE=1.3125,
+           NOM_PARA='DX',
+           TABLE=TN2,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=6.125000000,
+           VALE_REFE=6.125,
+           NOM_PARA='DX',
+           TABLE=TN2,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           )
+
+
+#----------------------------------------------------------------------
+
+TS4 = MACR_LIGN_COUPE( CHAM_GD = CHEL, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=( 0.5, 0., 1., ), COOR_EXTR=(0.5, 1., 1., ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='SIXX', OPERATION='EXTRACTION', INTITULE='TS4', ))
+
+IMPR_TABLE( TABLE=TS4,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','SIXX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=5.000000000,
+           VALE_REFE=5.0,
+           NOM_PARA='SIXX',
+           TABLE=TS4,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=4.000000000,
+           VALE_REFE=4.0,
+           NOM_PARA='SIXX',
+           TABLE=TS4,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           )
+
+TN4 = MACR_LIGN_COUPE( CHAM_GD = CHNO, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=( 0.5, 0., 1., ), COOR_EXTR=(0.5, 1., 1., ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='DX', OPERATION='EXTRACTION', INTITULE='TN4', ))
+
+IMPR_TABLE( TABLE=TN4,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','DX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=5.000000000,
+           VALE_REFE=5.0,
+           NOM_PARA='DX',
+           TABLE=TN4,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=4.000000000,
+           VALE_REFE=4.0,
+           NOM_PARA='DX',
+           TABLE=TN4,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=1.0,),
+           )
+
+#----------------------------------------------------------------------
+
+TS5 = MACR_LIGN_COUPE( CHAM_GD = CHEL, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  1.  , 0.25, 0.,), COOR_EXTR=( 0.75, 1.  , 0.,),
+                             NB_POINTS=10,
+                             NOM_CMP  ='SIXX', OPERATION='EXTRACTION', INTITULE='TS5', ))
+
+IMPR_TABLE( TABLE=TS5,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','SIXX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=3.500000000,
+           VALE_REFE=3.5,
+           NOM_PARA='SIXX',
+           TABLE=TS5,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=5.500000000,
+           VALE_REFE=5.5,
+           NOM_PARA='SIXX',
+           TABLE=TS5,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.79056899999999997,),
+           )
+
+TN5 = MACR_LIGN_COUPE( CHAM_GD = CHNO, MODELE=MO,
+             LIGN_COUPE = _F(TYPE='SEGMENT', COOR_ORIG=(  1.  , 0.25, 0.,), COOR_EXTR=(0.75, 1.  , 0., ),
+                             NB_POINTS=10,
+                             NOM_CMP  ='DX', OPERATION='EXTRACTION', INTITULE='TN5', ))
+
+IMPR_TABLE( TABLE=TN5,
+            NOM_PARA =('CHAM_GD','ABSC_CURV','DX'),
+          ) ;
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=3.500000000,
+           VALE_REFE=3.5,
+           NOM_PARA='DX',
+           TABLE=TN5,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-08,
+           VALE_CALC=5.500000000,
+           VALE_REFE=5.5,
+           NOM_PARA='DX',
+           TABLE=TN5,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.79056899999999997,),
+           )
+
+#----------------------------------------------------------------------
+
+FIN( )
+#

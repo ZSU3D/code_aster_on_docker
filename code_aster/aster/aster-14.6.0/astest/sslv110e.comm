@@ -1,0 +1,184 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# TEST SSLV110E (non documente)
+# CALCUL DE G LOCAL PAR LES METHODES 'LEGENDRE' ET 'LAGRANGE'
+# PRESSION SUR LES LEVRES DE LA FISSURE (UNE SEULE LEVRE REPRESENTEE !)
+#
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      DEBUG=_F(SDVERI='OUI'),
+      IGNORE_ALARM=('RUPTURE0_55','RESULT1_40'))
+
+# on ignore les 2 alarmes'RUPTURE0_55' et 'RESULT1_40' car le but de ce cas test 
+# est de tester CALC_G avec different type de charges (fcontion, constante, pression...)
+# sans pour autant realiser un calcul mecanique avec chacune de ces charges.
+# Ainsi, on realise un unique calcul mecanique et on fait plusieurs post-traitements.
+# Dans chaque post-traitement, la charge est equivalente a celle utilisee dans le calcul
+#
+# --------------------------------------------------------------------
+
+MA=LIRE_MAILLAGE(FORMAT='MED',  )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                    AFFE=_F(  TOUT = 'OUI',
+                           PHENOMENE = 'MECANIQUE',
+                           MODELISATION = '3D', ) )
+
+MA=MODI_MAILLAGE( reuse=MA,   MAILLAGE=MA,
+                        ORIE_PEAU_3D=_F(  GROUP_MA = 'GRPRES',  )
+                      )
+
+MAT=DEFI_MATERIAU( ELAS=_F(  E = 210000.,
+                            NU = 0.3,    ))
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',
+                              MATER = MAT, ))
+
+# ------------------------------------------------------------------
+#    --- STRUCTURE EN APPUI SIMPLE AVEC PRESSION SUR LES LEVRES
+
+CH=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+                     _F(  GROUP_NO = 'MACSYM',    DZ = 0.,  ),
+                              _F(  GROUP_NO = 'ELISYM',    DX = 0.,  ),
+                              _F(  GROUP_NO = 'GRNINF',    DY = 0.,  )),
+                     PRES_REP=_F(  GROUP_MA = 'GRPRES',  PRES = 1.,  ) )
+
+PRESF = FORMULE(VALE='1.',
+                NOM_PARA=['X', 'Y', 'Z'],)
+FORCF = FORMULE(VALE='1.',
+                NOM_PARA=['X', 'Y', 'Z'],)
+
+CHFONC=AFFE_CHAR_MECA_F(MODELE=MO,
+                        PRES_REP=_F(GROUP_MA = 'GRPRES',
+                                    PRES = PRESF))
+
+CHFACER=AFFE_CHAR_MECA(MODELE=MO,
+                       FORCE_FACE=_F(GROUP_MA = 'GRPRES',  FZ = 1.,))
+
+CHFACEF=AFFE_CHAR_MECA_F(MODELE=MO,
+                         FORCE_FACE=_F(GROUP_MA = 'GRPRES',
+                                       FZ = FORCF,   )      )
+
+# resolution avec une charge en pression constante
+CHAMDEPL=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=_F( CHARGE = CH,  ))
+
+
+#----------------------------------------------------------------------
+#              post-traitement
+#----------------------------------------------------------------------
+
+FONDFISS=DEFI_FOND_FISS(MAILLAGE=MA,
+                        SYME='OUI',
+                        FOND_FISS=_F(GROUP_MA='FONDFISS',
+                            GROUP_NO_ORIG='GNO1099',
+                        ),
+                        LEVRE_SUP=_F(GROUP_MA='GRPRES'),
+                        )
+
+# on ne post-traite les resultat que pour la couronne 2
+MODUF=DEFI_FONCTION(  NOM_PARA='ABSC',  VALE=( 0., 1.,     26.69, 1., ))
+RINF=DEFI_FONCTION(  NOM_PARA='ABSC',  VALE=( 0., 0.1875, 26.69, 0.7812,))
+RSUP=DEFI_FONCTION(  NOM_PARA='ABSC',  VALE=( 0., 0.375,  26.69, 1.5625,))
+
+
+# post-traitement avec la charge du calcul (pression constante)
+
+Gloc1=CALC_G(RESULTAT=CHAMDEPL,
+             THETA=_F(
+                      FOND_FISS=FONDFISS,
+                      R_SUP_FO=RSUP,
+                      R_INF_FO=RINF), 
+             )
+
+# post-traitement avec une charge en force face constante
+
+Gloc2=CALC_G(RESULTAT=CHAMDEPL,
+             THETA=_F(
+                      FOND_FISS=FONDFISS,
+                      R_SUP_FO=RSUP,
+                      R_INF_FO=RINF),
+             EXCIT=_F(CHARGE=CHFACER))
+
+# post-traitement avec une charge en force face 'fonction'
+
+Gloc3=CALC_G(RESULTAT=CHAMDEPL,
+             THETA=_F(
+                      FOND_FISS=FONDFISS,
+                      R_SUP_FO=RSUP,
+                      R_INF_FO=RINF),
+             EXCIT=_F(CHARGE=CHFACEF))
+
+#----------------------------------------------------------------------
+#              TEST DE G(A)
+#----------------------------------------------------------------------
+
+Ga_ref = 7.16e-5
+
+# premier test pour verif que l'on ne calcule pas n'importe quoi
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=6.98286998689E-05,
+           VALE_REFE=7.1600000000000006E-05,
+           NOM_PARA='G',
+           TABLE=Gloc1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+Ga_cal = 6.9828699868854E-05 
+# deuxieme test pour verif que la valeur que l'on cherche a reproduire n'a pas bouge
+TEST_TABLE(
+           VALE_CALC=6.98286998689E-05,
+           
+           NOM_PARA='G',
+           TABLE=Gloc1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+# dans la suite, on ne cherche pas a se comparer a la valeur analytique
+# on fait juste une comparaison avec les resultats de la charge du calcul
+
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=6.9828683233E-05,
+           VALE_REFE=6.9828699868854002E-05,
+           NOM_PARA='G',
+           TABLE=Gloc2,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+TEST_TABLE(REFERENCE='AUTRE_ASTER',
+           PRECISION=9.9999999999999995E-07,
+           VALE_CALC=6.9828683233E-05,
+           VALE_REFE=6.9828699868854002E-05,
+           NOM_PARA='G',
+           TABLE=Gloc3,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=0.0,),
+           )
+
+FIN()
+#

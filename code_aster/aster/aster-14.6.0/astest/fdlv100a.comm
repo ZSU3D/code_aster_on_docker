@@ -1,0 +1,152 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+#      RESOLUTION D'UN LAPLACIEN DANS UNE COLONNE 1D DE
+
+#  FLUIDE+CALCUL D'UNE MATR_ASSE_GENE DE MASSE AJOUTEE SUR UN
+
+#                        PISTON
+
+#                     FAIT DE D_PLAN
+
+#                      CALCUL 2D
+
+#                  CALCUL MODAL EN EAU
+
+#                   CAS TEST FDLV100A
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAYA=LIRE_MAILLAGE(FORMAT='MED', )
+
+EAU=DEFI_MATERIAU( THER=_F( LAMBDA = 1., RHO_CP = 1000.))
+
+ACIER=DEFI_MATERIAU( ELAS=_F( RHO = 7800.,  NU = 0.3, E = 2.E11))
+
+CHAMMAT1=AFFE_MATERIAU(  MAILLAGE=MAYA,AFFE=(
+                       _F( GROUP_MA = 'FLUIDE', MATER = EAU),
+                       _F( GROUP_MA = 'ENTREE', MATER = EAU))    )
+
+CHAMMAT2=AFFE_MATERIAU(  MAILLAGE=MAYA,
+                       AFFE=_F( GROUP_MA = 'PISTON', MATER = ACIER)  )
+
+FLUIDE=AFFE_MODELE( MAILLAGE=MAYA,AFFE=(
+                     _F( GROUP_MA = 'FLUIDE',
+                MODELISATION = 'PLAN',  PHENOMENE = 'THERMIQUE'),
+                     _F( GROUP_MA = 'ENTREE',
+                MODELISATION = 'PLAN',  PHENOMENE = 'THERMIQUE'))  )
+
+INTERF=AFFE_MODELE( MAILLAGE=MAYA,
+                     AFFE=_F( GROUP_MA = 'ENTREE',
+                MODELISATION = 'PLAN',  PHENOMENE = 'THERMIQUE')  )
+
+STRUCT=AFFE_MODELE( MAILLAGE=MAYA,AFFE=(
+                     _F( GROUP_MA = 'PISTON',
+                MODELISATION = 'D_PLAN',  PHENOMENE = 'MECANIQUE'),
+                     _F( GROUP_MA = 'RESSORT',
+                MODELISATION = '2D_DIS_T',  PHENOMENE = 'MECANIQUE'))
+                          )
+
+CHARGE=AFFE_CHAR_THER( MODELE=FLUIDE,
+                    TEMP_IMPO=_F( GROUP_NO = 'SORTIE', TEMP = 0.)   )
+
+CHAMPCAR=AFFE_CARA_ELEM( MODELE=STRUCT,
+                         DISCRET_2D=(_F( GROUP_MA = 'RESSORT', CARA = 'K_T_D_L',
+                                        VALE = (1.E5, 1.E5, )),
+                                    _F( GROUP_MA = 'RESSORT', CARA = 'M_T_D_L',
+                                        VALE = (0.0, ))))
+
+CHARGS=AFFE_CHAR_MECA( MODELE=STRUCT,DDL_IMPO=(
+                    _F( GROUP_NO = 'NOEUPIST', DY = 0.),
+                    _F( GROUP_NO = 'ENCASTRE', DX = 0., DY = 0.))
+                                          )
+
+MEL_KSTR=CALC_MATR_ELEM( MODELE=STRUCT,
+                               CARA_ELEM=CHAMPCAR,
+                              CHAM_MATER=CHAMMAT2,  OPTION='RIGI_MECA',
+                               CHARGE=(CHARGS, ))
+
+MEL_MSTR=CALC_MATR_ELEM( MODELE=STRUCT,
+                               CARA_ELEM=CHAMPCAR,
+                              CHAM_MATER=CHAMMAT2,  OPTION='MASS_MECA',
+                               CHARGE=(CHARGS, ))
+
+NUSTR=NUME_DDL(MATR_RIGI=MEL_KSTR)
+
+MATASKS=ASSE_MATRICE( MATR_ELEM=MEL_KSTR,  NUME_DDL=NUSTR)
+
+MATASMS=ASSE_MATRICE( MATR_ELEM=MEL_MSTR,  NUME_DDL=NUSTR)
+
+MODES=CALC_MODES(MATR_RIGI=MATASKS,
+                 OPTION='PLUS_PETITE',
+                 CALC_FREQ=_F(NMAX_FREQ=1,
+                              ),
+                 MATR_MASS=MATASMS,
+                 )
+
+NUMGEN=NUME_DDL_GENE(   BASE=MODES,
+                             STOCKAGE='PLEIN'   )
+
+MGENE=PROJ_MATR_BASE(  BASE=MODES,
+                           NUME_DDL_GENE=NUMGEN,
+                          MATR_ASSE=MATASMS)
+
+RIGGEN=PROJ_MATR_BASE(  BASE=MODES,
+                           NUME_DDL_GENE=NUMGEN,
+                           MATR_ASSE=MATASKS)
+
+MATRAJ=CALC_MATR_AJOU( MODELE_FLUIDE=FLUIDE,
+                         MODELE_INTERFACE=INTERF,
+                        OPTION='MASS_AJOU',
+                         NUME_DDL_GENE=NUMGEN,
+                        CHARGE=CHARGE,
+                        CHAM_MATER=CHAMMAT1,
+                        MODE_MECA=MODES)
+
+MASTOT=COMB_MATR_ASSE( COMB_R=(  _F( MATR_ASSE = MATRAJ,
+                                      COEF_R = 1.),
+                                     _F( MATR_ASSE = MGENE,
+                                      COEF_R = 1.)))
+
+MODHUMI=CALC_MODES(MATR_RIGI=RIGGEN,
+                   CALC_FREQ=_F(NMAX_FREQ=1,
+                                ),
+                   OPTION='PLUS_PETITE',
+                   SOLVEUR=_F(METHODE='LDLT',
+                              ),
+                   MATR_MASS=MASTOT,
+                   )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODHUMI,
+                  VALE_REFE=3.018,
+                  VALE_CALC=3.0185442998327,
+                  PRECISION=1.E-3,
+                  REFERENCE='ANALYTIQUE',
+                  CRITERE='RELATIF',
+                  ),
+          )
+
+FIN()
+#

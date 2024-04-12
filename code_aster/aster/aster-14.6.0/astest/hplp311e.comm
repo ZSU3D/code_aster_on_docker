@@ -1,0 +1,356 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#       AU CENTRE D'UNE PLAQUE MINCE RECTANGULAIRE
+#
+# RT = 0.1*A, NS=8, NC = 4
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'))
+
+#
+MA=LIRE_MAILLAGE(FORMAT='MED', )
+
+#
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+                           CREA_GROUP_NO=_F(
+                         GROUP_MA = ( 'LP9P10',  'LP9P10B',
+                                      'LP8P9',   'LP8P9B',
+                                         ))
+                       )
+
+#
+#
+# -------------------------------------------------------------------
+#                    DEBUT DU THERMIQUE
+# -------------------------------------------------------------------
+MOTH=AFFE_MODELE(    MAILLAGE=MA,
+                                AFFE=_F(  TOUT = 'OUI',
+                                       PHENOMENE = 'THERMIQUE',
+                                       MODELISATION = 'PLAN')
+                        )
+
+#
+MATH=DEFI_MATERIAU(    THER=_F(  RHO_CP = 0.,
+                                     LAMBDA = 54.)
+                          )
+
+#
+CMTH=AFFE_MATERIAU(        MAILLAGE=MA,
+                                      AFFE=_F(  TOUT = 'OUI',
+                                             MATER = MATH)
+                          )
+
+#
+CHTH=AFFE_CHAR_THER(       MODELE=MOTH,TEMP_IMPO=(
+                               _F(  GROUP_NO = 'LP9P10',
+                                           TEMP = 100.),
+                               _F(  GROUP_NO = 'LP9P10B',
+                                           TEMP = -100.))
+                           )
+
+#
+METH=CALC_MATR_ELEM(        MODELE=MOTH,
+                                   CHARGE=CHTH,
+                               CHAM_MATER=CMTH,
+                                   OPTION='RIGI_THER'
+                           )
+
+#
+VETH=CALC_VECT_ELEM(        CHARGE=CHTH,
+                                   OPTION='CHAR_THER'
+                           )
+
+#
+NUTH=NUME_DDL(          MATR_RIGI=METH )
+
+#
+KTH=ASSE_MATRICE(      MATR_ELEM=METH,
+                                NUME_DDL=NUTH
+                           )
+
+#
+FTH=ASSE_VECTEUR(      VECT_ELEM=VETH,
+                                NUME_DDL=NUTH
+                           )
+
+#
+KTH=FACTORISER(      reuse=KTH,   MATR_ASSE=KTH )
+
+#
+TEMP=RESOUDRE(         MATR=KTH,
+                                 CHAM_NO=FTH
+                           )
+
+#
+# -------------------------------------------------------------------
+#                    FIN DU THERMIQUE
+# -------------------------------------------------------------------
+#
+#
+MO=AFFE_MODELE( MAILLAGE=MA,
+                             AFFE=_F(  TOUT = 'OUI',
+                                    PHENOMENE = 'MECANIQUE',
+                                    MODELISATION = 'C_PLAN')
+                       )
+
+#
+MAT=DEFI_MATERIAU(    ELAS=_F(  E = 2.E11,
+                                     NU = 0.3,
+                                     RHO = 7800.,
+                                     ALPHA = 1.2E-5)
+                          )
+
+#
+CHMAT=AFFE_MATERIAU(    MAILLAGE=MA,
+                    AFFE=_F(  TOUT = 'OUI', MATER = MAT),
+                    AFFE_VARC=_F(NOM_VARC='TEMP',TOUT='OUI',CHAM_GD=TEMP,VALE_REF=0.),
+                          )
+
+#
+CH=AFFE_CHAR_MECA(           MODELE=MO,
+                               #TEMP_CALCULEE=TEMP,
+                               DDL_IMPO=(
+                                    _F(  GROUP_NO = 'LP8P9',
+                                               DX = 0.),
+                                             _F(  GROUP_NO = 'LP8P9B',
+                                               DX = 0.),
+                                             _F(  GROUP_NO = 'P11',
+                                               DY = 0.))
+                            )
+
+#
+RIGI_ELE=CALC_MATR_ELEM(        MODELE=MO,
+                               CHAM_MATER=CHMAT,
+                                   CHARGE=CH,
+                                   OPTION='RIGI_MECA'
+                           )
+
+#
+# prise en compte des variables de commande
+
+LIST1=DEFI_LIST_REEL(DEBUT=0.0,
+                    INTERVALLE=_F(JUSQU_A=1.0,
+                                  NOMBRE=1,),);
+
+CONT1=CALCUL(OPTION=('FORC_VARC_ELEM_P'),
+            MODELE=MO,
+            CHAM_MATER=CHMAT,
+            INCREMENT=_F(LIST_INST=LIST1,
+                         NUME_ORDRE=1),
+            EXCIT=_F(CHARGE=CH),
+            COMPORTEMENT=_F(RELATION='ELAS',),
+            );
+
+VECT_ELE=EXTR_TABLE(TYPE_RESU='VECT_ELEM_DEPL_R',
+                 TABLE=CONT1,
+                 NOM_PARA='NOM_SD',
+                 FILTRE=_F(NOM_PARA='NOM_OBJET',
+                           VALE_K='FORC_VARC_ELEM_P'),)
+
+#
+NUMEDDL=NUME_DDL(  MATR_RIGI=RIGI_ELE)
+
+#
+RIGIDITE=ASSE_MATRICE(  MATR_ELEM=RIGI_ELE,
+                            NUME_DDL=NUMEDDL
+                        )
+
+#
+FORCE=ASSE_VECTEUR(    VECT_ELEM=VECT_ELE,
+                              NUME_DDL=NUMEDDL
+                         )
+
+#
+RIGIDITE=FACTORISER(    reuse=RIGIDITE,  MATR_ASSE=RIGIDITE)
+
+#
+DEP=RESOUDRE(   MATR=RIGIDITE,
+                            CHAM_NO=FORCE
+                       )
+
+RESU=CREA_RESU(  OPERATION='AFFE',
+                 TYPE_RESU='EVOL_ELAS',
+                 NOM_CHAM='DEPL',
+                      AFFE=_F(  CHAM_GD = DEP,
+                                INST=0.,
+                                MODELE=MO,
+                                CHAM_MATER = CHMAT)     )
+#
+FOND=DEFI_FOND_FISS(    MAILLAGE=MA, SYME='NON',
+                         FOND_FISS=_F( GROUP_NO = ('P0',)),
+                        LEVRE_SUP=_F(GROUP_MA='LEVRE_SUP',),
+                        LEVRE_INF=_F(GROUP_MA='LEVRE_INF',),
+                      )
+
+#
+G00=CALC_G(        RESULTAT=RESU,
+                   THETA=_F(
+                            R_INF=3.75E-3,
+                            R_SUP=7.50E-3,
+                            FOND_FISS=FOND,),
+                   EXCIT=_F(CHARGE=CH,),
+                     )
+
+#
+GK00=CALC_G(        RESULTAT=RESU,
+                    THETA=_F(R_INF = 3.75E-3,
+                              R_SUP = 7.50E-3,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G'
+                      )
+
+#
+#
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=2562.34998994,
+           VALE_REFE=2496.9000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G00,)
+
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=22632274.0008,
+           VALE_REFE=2.2347040E7,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K2',
+           TABLE=GK00,)
+
+
+#
+G01=CALC_G(        RESULTAT=RESU,
+                   THETA=_F(
+                            R_INF=7.50E-3,
+                            R_SUP=1.125E-2,
+                            FOND_FISS=FOND,),
+                   EXCIT=_F(CHARGE=CH,),
+                     )
+
+#
+GK01=CALC_G(       RESULTAT=RESU,
+                   THETA=_F(R_INF = 7.50E-3,
+                              R_SUP = 1.125E-2,
+                              FOND_FISS=FOND),
+                   EXCIT=_F(CHARGE=CH,),
+                   OPTION='CALC_K_G'
+                      )
+
+#
+#
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=2550.30610172,
+           VALE_REFE=2496.9000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G01,)
+
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=22572499.2676,
+           VALE_REFE=2.2347040E7,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K2',
+           TABLE=GK01,)
+
+#
+G02=CALC_G(        RESULTAT=RESU,
+                   THETA=_F(
+                            R_INF=1.125E-2,
+                            R_SUP=1.500E-2,
+                            FOND_FISS=FOND,),
+                   EXCIT=_F(CHARGE=CH,),
+                     )
+
+#
+GK02=CALC_G(        RESULTAT=RESU,
+                    THETA=_F(R_INF = 1.125E-2,
+                              R_SUP = 1.500E-2,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G'
+                      )
+
+#
+#
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=2549.93723879,
+           VALE_REFE=2496.9000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G02,)
+
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=22572238.4224,
+           VALE_REFE=2.2347040E7,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K2',
+           TABLE=GK02,)
+
+#
+G03=CALC_G(        RESULTAT=RESU,
+                   THETA=_F(
+                            R_INF=1.500E-2,
+                            R_SUP=1.875E-2,
+                            FOND_FISS=FOND,),
+                   EXCIT=_F(CHARGE=CH,),
+                    )
+
+#
+GK03=CALC_G(        RESULTAT=RESU,
+                    THETA=_F(R_INF = 1.500E-2,
+                              R_SUP = 1.875E-2,
+                              FOND_FISS=FOND),
+                    EXCIT=_F(CHARGE=CH,),
+                    OPTION='CALC_K_G'
+                      )
+
+#
+#
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=2548.93882892,
+           VALE_REFE=2496.9000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='G',
+           TABLE=G03,)
+
+#
+
+TEST_TABLE(PRECISION=0.050000000000000003,
+           VALE_CALC=22564162.0024,
+           VALE_REFE=2.2347040E7,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K2',
+           TABLE=GK03,)
+
+FIN()
+#

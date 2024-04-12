@@ -1,0 +1,742 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#  DETAILS : MODELISATION : MULTI-COUCHES
+#                          (DKT- ENDO_ISOT_BETON+2*GRILLE ACIER)
+#                                           VS.
+#                           DKTG (GLRC_DM)
+#            MAILLAGE     : TRIA3
+#            CHARGEMENT   : CYCLIQUE TRACTION - COMPRESSION
+#            REMARQUE 1   : ON TESTE DEFI_GLRC
+
+import aster
+
+POURSUITE(CODE='OUI',
+          DEBUG=_F(SDVERI='OUI',),
+          PAR_LOT='NON');
+
+
+
+import aster
+
+
+MPa = 1E6
+fc = 48E6
+epsi_c = 0.7*((fc)/MPa)**(0.31)*1e-3
+
+BETON_E2 = DEFI_MATER_GC(
+          BETON_GLRC=_F(
+                        CODIFICATION='ESSAI',
+                        FCJ=fc,
+                        EIJ=EB,
+                        FTJ=3.4E6,
+                        EPSI_C=epsi_c,
+                        NU=0.2,),
+          RHO=2500.0,
+          AMOR_ALPHA=AMOR_ALP,
+          AMOR_BETA=AMOR_BET,)
+
+ACIER2 = DEFI_MATER_GC(
+                      ACIER=_F(
+                               E = 2.E11,
+                               NU = 0.2,
+                               SY=5.70000000E8,
+                               D_SIGM_EPSI=3.E8,),
+                      RHO=7800.0,
+                      AMOR_ALPHA=AMOR_ALP,
+                      AMOR_BETA=AMOR_BET,)
+
+
+
+#TEST DE DEFI_GLRC
+#PAR DEFAUT PENTE='RIGI_ACIER'
+MAT_G_RA=DEFI_GLRC(RELATION='GLRC_DM',
+                   BETON=_F(MATER=BETON_E2,
+                            EPAIS=EP,),
+                   NAPPE=(_F(MATER=ACIER2,
+                             OMX=8.E-4,
+                             OMY=8.E-4,
+                             RX=0.8,
+                             RY=0.8,),),
+                   PENTE=_F(),
+                   INFO=2,);
+
+matph = MAT_G_RA.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:9]=='ELAS_GLRC' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_1','ELAS_GLRC non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_RA.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_RA.nom, ns,'.VALR'))
+
+TAB_G_RA=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES ELASTIQUES
+TEST_TABLE(
+           VALE_CALC=3.5624885924251E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.18263425664217,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.8659819824196E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.16912420588888,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2749.6,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='RHO',),
+           )
+
+#TESTE LE PASSAGE DES PARAMATRES D AMORTISSEMENT
+TEST_TABLE(
+           VALE_CALC=3.7771128018012E-05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_ALP',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=2.6476993459625,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_BET',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB_G_RA),),);
+
+
+
+matph = MAT_G_RA.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:7]=='GLRC_DM' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_2','GLRC_DM non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_RA.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_RA.nom, ns,'.VALR'))
+
+TAB_G_RA=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES SPECIFIQUE A GLRC_DM
+
+TEST_TABLE(
+           VALE_CALC=3.7355447425603E+05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYT',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=9035.259115074074,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='MYF',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=677701.4724,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYC',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.089824849034019,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_T',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.34566566442116703,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_F',),
+           CRITERE='ABSOLU')
+
+TEST_TABLE(
+           VALE_CALC=0.640067689972,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_RA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_C',),
+           )
+
+#TEST DE DEFI_GLRC
+#PENTE='PLAS_ACIER'
+MAT_G_PA=DEFI_GLRC(RELATION='GLRC_DM',
+                   BETON=_F(MATER=BETON_E2,
+                            EPAIS=EP,),
+                   NAPPE=(_F(MATER=ACIER2,
+                             OMX=8.E-4,
+                             OMY=8.E-4,
+                             RX=0.8,
+                             RY=0.8,),),
+                   PENTE=_F(TRACTION='PLAS_ACIER',
+                            FLEXION='PLAS_ACIER'),
+                   RHO=2700.0,
+                   AMOR_ALPHA=5.e-05,
+                   AMOR_BETA=4.0,
+                   INFO=2,);
+matph = MAT_G_PA.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:9]=='ELAS_GLRC' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_3','ELAS_GLRC non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_PA.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_PA.nom, ns,'.VALR'))
+
+TAB_G_PA=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES ELASTIQUES
+TEST_TABLE(
+           VALE_CALC=3.5624885924251E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.18263425664217,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.8659819824196E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.16912420588888,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_F',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=2700.0,
+           VALE_REFE=2700.0,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='RHO',),
+           )
+
+#TESTE DE L IMPOSITION DES PARAMATRES D AMORTISSEMENT
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=5.0E-05,
+           VALE_REFE=5.0000000000000002E-05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_ALP',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=4.0,
+           VALE_REFE=4.0,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_BET',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB_G_PA),),);
+matph = MAT_G_PA.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:7]=='GLRC_DM' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_4','GLRC_DM non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_PA.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_PA.nom, ns,'.VALR'))
+
+TAB_G_PA=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+TEST_TABLE(
+           VALE_CALC=3.7355447425603E+05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYT',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=6737.407007468165,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='MYF',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=997082.97515,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYC',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.055058380566095,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_T',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.23507998496810334,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_F',),
+           CRITERE='ABSOLU')
+
+TEST_TABLE(
+           VALE_CALC=0.62428364007,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_PA,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_C',),
+           )
+
+#TEST DE DEFI_GLRC
+#PENTETRAC='UTIL' PENTE_FLEX='UTIL'
+MAT_G_UT=DEFI_GLRC(RELATION='GLRC_DM',
+                   BETON=_F(MATER=BETON_E2,
+                            EPAIS=EP,),
+                   NAPPE=(_F(MATER=ACIER2,
+                             OMX=8.E-4,
+                             OMY=8.E-4,
+                             RX=0.8,
+                             RY=0.8,),),
+                   PENTE=_F(TRACTION='UTIL',
+                            FLEXION = 'UTIL',
+                            EPSI_MEMB=0.002,
+                            KAPPA_FLEX=0.03, ),
+                   INFO=2,);
+matph = MAT_G_UT.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:9]=='ELAS_GLRC' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_5','ELAS_GLRC non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_UT.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_UT.nom, ns,'.VALR'))
+
+TAB_G_UT=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES ELASTIQUES
+TEST_TABLE(
+           VALE_CALC=3.5624885924251E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.18263425664217,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.8659819824196E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.16912420588888,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_F',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=2749.6,
+           VALE_REFE=2749.5999999999999,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='RHO',),
+           )
+
+#TESTE DE L IMPOSITION DES PARAMATRES D AMORTISSEMENT
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=3.7771128018012E-05,
+           VALE_REFE=3.7771128018011707E-05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_ALP',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=2.6476993459625,
+           VALE_REFE=2.6476993459625175,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_BET',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB_G_UT),),);
+matph = MAT_G_UT.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:7]=='GLRC_DM' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_6','GLRC_DM non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_UT.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_UT.nom, ns,'.VALR'))
+
+TAB_G_UT=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+
+TEST_TABLE(
+           VALE_CALC=3.7355447425603E+05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYT',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=6737.4070074682,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='MYF',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=1221079.17403,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYC',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.039465093087101,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_T',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.2213810112412963,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.612361466447,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_UT,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_C',),
+           )
+
+
+#TEST DE DEFI_GLRC
+#PAR DEFAUT PENTE='RIGI_ACIER' CISAIL = OUI
+MAT_G_CI=DEFI_GLRC(RELATION='GLRC_DM',
+                   BETON=_F(MATER=BETON_E2,
+                            EPAIS=EP,),
+                   NAPPE=(_F(MATER=ACIER2,
+                             OMX=8.E-4,
+                             OMY=8.E-4,
+                             RX=0.8,
+                             RY=0.8,),),
+                   PENTE=_F(),
+                   CISAIL='OUI',
+                   INFO=2,);
+matph = MAT_G_CI.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:9]=='ELAS_GLRC' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_11','ELAS_GLRC non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_CI.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_CI.nom, ns,'.VALR'))
+
+TAB_G_CI=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES ELASTIQUES
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=3.4868E+10,
+           VALE_REFE=3.4868000000E10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_M',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.29508480871611,
+           VALE_REFE=0.295084809,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_M',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=3.8659819824196E+10,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='E_F',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.16912420588888,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NU_F',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=2749.6,
+           VALE_REFE=2749.5999999999999,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='RHO',),
+           )
+
+#TESTE LE PASSAGE DES PARAMATRES D AMORTISSEMENT
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=3.7771128018012E-05,
+           VALE_REFE=3.7771128018011707E-05,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_ALP',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=2.6476993459625,
+           VALE_REFE=2.6476993459625175,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='AMOR_BET',),
+           )
+
+DETRUIRE(CONCEPT=_F(NOM=(TAB_G_CI),),);
+
+matph = MAT_G_CI.sdj.NOMRC.get()
+phenom=None
+ind=0
+for cmpt in matph :
+   ind=ind+1
+   if cmpt[:7]=='GLRC_DM' :
+      phenom=cmpt
+      break
+if phenom is None :
+   from Utilitai.Utmess import UTMESS
+   UTMESS('F','GENERIC_12','GLRC_DM non trouvé')
+ns = '{:06d}'.format(ind)
+
+nomres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_CI.nom, ns,'.VALK'))
+valres=aster.getvectjev('%-8s.CPT.%s%s' % (MAT_G_CI.nom, ns,'.VALR'))
+
+TAB_G_CI=CREA_TABLE(LISTE=(_F(PARA='NOM_PARA',
+                              LISTE_K=nomres,),
+                           _F(PARA='VAL_PARA',
+                              LISTE_R=valres,),),);
+
+#TESTE LE CALCUL DES PARAMETRES SPECIFIQUE A GLRC_DM
+
+TEST_TABLE(
+           VALE_CALC=260219.429895,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYT',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=9035.259115074074,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='MYF',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=223732.594683,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='NYC',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.23771202179027,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_T',),
+           )
+
+TEST_TABLE(
+           VALE_CALC=0.34566566442116703,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_F',),
+           CRITERE='ABSOLU')
+
+TEST_TABLE(
+           VALE_CALC=0.675090797175,
+           NOM_PARA='VAL_PARA',
+           TABLE=TAB_G_CI,
+           FILTRE=_F(NOM_PARA='NOM_PARA',
+                     VALE_K='GAMMA_C',),
+           )
+
+FIN();

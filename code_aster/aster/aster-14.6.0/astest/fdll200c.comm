@@ -1,0 +1,134 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),);
+#
+#
+
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_MA=_F(NOM='TOUT',
+                               TOUT='OUI',),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='POU_FLUI_STRU',),);
+#
+# PROPRIETES MECANIQUES
+#
+#
+
+
+MATER=DEFI_MATERIAU(ELAS=_F(E=1.E10,
+                            NU=0.30,
+                            RHO=1.E4,),
+                    FLUIDE=_F(RHO=1000.0,
+                              CELE_R=1000.0,),);
+
+CARATU=AFFE_CARA_ELEM(MODELE=MO,
+                      POUTRE=_F(GROUP_MA='TOUT',
+                                SECTION='CERCLE',
+                                VARI_SECT = 'HOMOTHETIQUE',
+                                CARA=('R_DEBUT','R_FIN','EP_DEBUT','EP_FIN',),
+                                VALE=(0.100,0.11,0.011,0.01,),),);
+
+
+CHM=AFFE_MATERIAU(MAILLAGE=MA,
+                  AFFE=_F(TOUT='OUI',
+                          MATER=MATER,),);
+#
+# CONDITIONS AUX LIMITES
+#
+#
+
+
+SURFLIBR=AFFE_CHAR_MECA(MODELE=MO,
+                        DDL_IMPO=_F(NOEUD='NO1',
+                                    PRES=0.0,
+                                    PHI=0.0,),);
+
+TUYAU=AFFE_CHAR_MECA(MODELE=MO,
+                     DDL_IMPO=(_F(GROUP_NO='IMPDDL',
+                                  DY=0.0,
+                                  DZ=0.0,
+                                  DRX=0.0,
+                                  DRY=0.0,
+                                  DRZ=0.0,),
+                               _F(NOEUD='NO1',
+                                  DX=0.0,
+                                  DY=0.0,
+                                  DZ=0.0,
+                                  DRX=0.0,
+                                  DRY=0.0,
+                                  DRZ=0.0,),),);
+#
+# MATRICES ELEMENTAIRES
+#
+#
+
+
+MK=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                  MODELE=MO,
+                  CHAM_MATER=CHM,
+                  CARA_ELEM=CARATU,
+                  CHARGE=(SURFLIBR,TUYAU,),);
+
+MM=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                  MODELE=MO,
+                  CHAM_MATER=CHM,
+                  CARA_ELEM=CARATU,
+                  CHARGE=(SURFLIBR,TUYAU,),);
+
+NDDL=NUME_DDL(MATR_RIGI=MK,);
+#
+# ASSEMBLAGE
+#
+#
+
+
+MATK=ASSE_MATRICE(MATR_ELEM=MK,
+                  NUME_DDL=NDDL,);
+
+MATM=ASSE_MATRICE(MATR_ELEM=MM,
+                  NUME_DDL=NDDL,);
+#
+# CALCUL DES MODES
+#
+
+
+MODES=CALC_MODES(MATR_RIGI=MATK,
+                 OPTION='BANDE',
+                 CALC_FREQ=_F(FREQ=(10.0,300.0,),
+                              ),
+                 MATR_MASS=MATM,
+                 )
+
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  PARA='FREQ',
+                  RESULTAT=MODES,
+                  VALE_CALC=141.290782294 ,
+                  ),
+          )
+
+FIN( );

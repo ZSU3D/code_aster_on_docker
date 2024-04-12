@@ -1,0 +1,473 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# VALIDATION DE L'OPERATEUR POST_RCCM
+# OPTION PM_PB en B3200 AVEC TYPE_RESU='DETAILS'
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+#Définition du matériau (courbe de fatigue etc)
+COURFATA = FORMULE(VALE='5.E5/SIGM ',
+                   NOM_PARA='SIGM',)
+
+L_INST=DEFI_LIST_REEL(  DEBUT=1.,
+                        INTERVALLE=_F(  JUSQU_A = 1000., PAS = 1.) )
+                           
+FWOHLER=CALC_FONC_INTERP( FONCTION=COURFATA, LIST_PARA=L_INST,
+                          NOM_PARA = 'SIGM',PROL_DROITE='LINEAIRE',
+                          PROL_GAUCHE='CONSTANT',
+                          NOM_RESU='NADM'       )
+
+MAT=DEFI_MATERIAU(  ELAS=_F( E = 200000.,  NU = 0.3,  ALPHA = 1.0E-5),
+                    FATIGUE=_F(  WOHLER = FWOHLER, E_REFE = 200000.),
+                    RCCM=_F(  M_KE = 2.,
+                              N_KE = 0.2,
+                              SM = 200.,
+                              SY_02 = 200.)
+                               )
+ 
+#--------------------------------------------------------------------------------
+# VALIDATION DE LA METHODE EVOLUTION
+#--------------------------------------------------------------------------------
+# SITUATION 1 : CONTRAINTES TOTALES                               
+T_TOT1 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=1,)
+
+# SITUATION 1 : CONTRAINTES THERMIQUES                            
+T_TH1 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=2,)
+
+# SITUATION 2 : CONTRAINTES TOTALES                        
+T_TOT2 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=5,)
+
+# SITUATION 2 : CONTRAINTES THERMIQUES                            
+T_TH2 = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=6,)
+
+# CALCUL DE PM ET PB POUR LA SITUATION 1
+PMPB1=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                OPTION='PM_PB',
+                TYPE_RESU='DETAILS',
+                MATER=MAT,
+                TITRE='CALCUL DE PM_PB (DETAILS), SITUATION 1, EVOLUTION',
+                TRANSITOIRE=_F(  TABL_RESU_MECA = T_TOT1,
+                                 TABL_SIGM_THER = T_TH1  )
+                 )
+
+IMPR_TABLE(    TABLE=PMPB1,)        
+
+# CALCUL DE PM ET PB POUR LA SITUATION 2
+PMPB2=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                OPTION='PM_PB',
+                TYPE_RESU='DETAILS',
+                MATER=MAT,
+                TITRE='CALCUL DE PM_PB (DETAILS), SITUATION 2, EVOLUTION',
+                TRANSITOIRE=_F(  TABL_RESU_MECA = T_TOT2,
+                                 TABL_SIGM_THER = T_TH2  )
+                 )
+
+IMPR_TABLE(    TABLE=PMPB2,)         
+
+# CALCUL DE PM ET PB EN SUPPOSANT QUE LA SITUATION 1 N'A PAS DE THERMIQUE
+PMPB1ath=POST_RCCM(TYPE_RESU_MECA='EVOLUTION',
+                OPTION='PM_PB',
+                TYPE_RESU='DETAILS',
+                MATER=MAT,
+                TITRE='CALCUL DE PM-PB (DETAILS), SITUATION 1 SANS TRANSITOIRE THERMIQUE, EVOLUTION',
+                TRANSITOIRE=_F(  TABL_RESU_MECA = T_TOT1 )
+                 )
+
+IMPR_TABLE(    TABLE=PMPB1ath,)        
+ 
+#--------------------------------------------------------------------------------
+# VALIDATION DE LA METHODE UNITAIRE
+#--------------------------------------------------------------------------------
+# CONTRAINTES "MX" UNITAIRES           
+T_MX = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=9,)
+
+# CONTRAINTES "MY" UNITAIRES                           
+T_MY = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=10,)
+                      
+# CONTRAINTES "MZ" UNITAIRES                            
+T_MZ = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=11,)
+
+# CONTRAINTES "PRES" UNITAIRES                            
+T_PRES = LIRE_TABLE (UNITE=35, FORMAT='ASTER',SEPARATEUR=' ',
+                      NUME_TABLE=12,)
+
+# CALCUL DE PM ET PB POUR LA SITUATION 3
+PMPB3=POST_RCCM( MATER=MAT,
+                 TITRE='CALCUL DE PM_PB (DETAILS), SITUATION 3, UNITAIRE',
+                 TYPE_RESU='DETAILS',
+                 TYPE_RESU_MECA='B3200',
+                 OPTION='PM_PB',
+                 INFO=2,
+                 CHAR_MECA=(
+                   _F(NUME_CHAR=1,
+                      NOM_CHAR='ETAT A - SITU3',
+                      MX=1.0,  MY=-1.0,  MZ=-1.5,),
+                   _F(NUME_CHAR=2,
+                      NOM_CHAR='ETAT B - SITU3',
+                      MX=-10.0,  MY=1.0,  MZ=0.1,),),
+                 RESU_MECA_UNIT=(
+                   _F(TABL_MX=T_MX,
+                      TABL_MY=T_MY,
+                      TABL_MZ=T_MZ,
+                      TABL_PRES=T_PRES,),),
+                 SITUATION=(
+                  _F(NB_OCCUR=1,
+                     NUME_SITU=1,
+                     NOM_SITU='Situation 3',
+                     NUME_GROUPE=1,
+                     CHAR_ETAT_A=1,
+                     CHAR_ETAT_B=2,
+                     PRES_A=1.0,
+                     PRES_B=10.0,),),);
+
+IMPR_TABLE(    TABLE=PMPB3,) 
+
+# CALCUL DE PM ET PB POUR LA SITUATION 4
+PMPB4=POST_RCCM( MATER=MAT,
+                 TITRE='CALCUL DE PM_PB (DETAILS), SITUATION 4, UNITAIRE',
+                 TYPE_RESU='DETAILS',
+                 TYPE_RESU_MECA='B3200',
+                 OPTION='PM_PB',
+                 INFO=2,
+                 CHAR_MECA=(
+                   _F(NUME_CHAR=3,
+                      NOM_CHAR='ETAT A - SITU4',
+                      MX=0.4,  MY=0.0,  MZ=-0.6,),
+                   _F(NUME_CHAR=4,
+                      NOM_CHAR='ETAT B - SITU4',
+                      MX=1.0,  MY=-1.0,  MZ=-1.5,),),
+                 RESU_MECA_UNIT=(
+                   _F(TABL_MX=T_MX,
+                      TABL_MY=T_MY,
+                      TABL_PRES=T_PRES,
+                      TABL_MZ=T_MZ,),),
+                 SITUATION=(
+                  _F(NB_OCCUR=1,
+                     NUME_SITU=1,
+                     NOM_SITU='Situation 4',
+                     NUME_GROUPE=1,
+                     CHAR_ETAT_A=3,
+                     CHAR_ETAT_B=4,
+                     PRES_A=0.4,
+                     PRES_B=1.0,),),);
+
+IMPR_TABLE(    TABLE=PMPB4,) 
+
+#--------------------------------------------------------------------------------
+#   TEST SUR EVOLUTION (SOLUTION DE REFERENCE ANALYTIQUE)
+#--------------------------------------------------------------------------------
+# SITUATION 1 
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.500000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.500000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=40.000000000,
+           VALE_REFE=40.0,
+           NOM_PARA='PMB',
+           TABLE=PMPB1,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+                  _F(NOM_PARA='INST',
+                     VALE=1.0,),),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=40.000000000,
+           VALE_REFE=40.0,
+           NOM_PARA='PMB',
+           TABLE=PMPB1,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+                  _F(NOM_PARA='INST',
+                     VALE=1.0,),),
+           )
+
+# SITUATION 2
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM',
+           TYPE_TEST='MAX',
+           TABLE=PMPB2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB2,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.500000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.500000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB2,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=45.000000000,
+           VALE_REFE=45.0,
+           NOM_PARA='PMB',
+           TABLE=PMPB2,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+                  _F(NOM_PARA='INST',
+                     VALE=1.5,),),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=55.000000000,
+           VALE_REFE=55.0,
+           NOM_PARA='PMB',
+           TABLE=PMPB2,
+           FILTRE=(_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+                  _F(NOM_PARA='INST',
+                     VALE=1.5,),),
+           )
+
+
+# SITUATION 1 SANS THERMIQUE 
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=100.000000000,
+           VALE_REFE=100.0,
+           NOM_PARA='PM',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1ath,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=100.000000000,
+           VALE_REFE=100.0,
+           NOM_PARA='PB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1ath,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=90.000000000,
+           VALE_REFE=90.0,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1ath,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PMB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB1ath,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+#--------------------------------------------------------------------------------
+#   TEST SUR UNITAIRE (SOLUTION DE REFERENCE ANALYTIQUE)
+#--------------------------------------------------------------------------------
+# SITUATION 3 
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM',
+           TYPE_TEST='MAX',
+           TABLE=PMPB3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.500000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMPB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.500000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMPB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM_MAX',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           TABLE=PMPB3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB_MAX',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           TABLE=PMPB3,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.500000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMPB_MAX',
+           TABLE=PMPB3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.500000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMPB_MAX',
+           TABLE=PMPB3,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+# SITUATION 4
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM',
+           TYPE_TEST='MAX',
+           TABLE=PMPB4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.50000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMPB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.5000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMPB',
+           TYPE_TEST='MAX',
+           TABLE=PMPB4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=37.500000000,
+           VALE_REFE=37.5,
+           NOM_PARA='PM_MAX',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           TABLE=PMPB4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=125.000000000,
+           VALE_REFE=125.0,
+           NOM_PARA='PB_MAX',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           TABLE=PMPB4,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=87.50000000,
+           VALE_REFE=87.5,
+           NOM_PARA='PMPB_MAX',
+           TABLE=PMPB4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ORIG',),
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=162.5000000,
+           VALE_REFE=162.5,
+           NOM_PARA='PMPB_MAX',
+           TABLE=PMPB4,
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='EXTR',),
+           )
+
+FIN()

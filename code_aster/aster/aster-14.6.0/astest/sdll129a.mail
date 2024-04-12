@@ -1,0 +1,133 @@
+TITRE
+        Modele avec 2 disques, 2 paliers
+FINSF
+%
+COOR_3D NOBJ=13
+N1     0.   0.    0.000000E+00
+N2     0.   0.    2.000000E-02
+N3     0.   0.    5.500000E-02
+N4     0.   0.    9.000000E-02
+N5     0.   0.    1.150000E-01
+N6     0.   0.    1.400000E-01
+N7     0.   0.    1.700000E-01
+N8     0.   0.    2.000000E-01
+N9     0.   0.    2.500000E-01
+N10    0.   0.    3.000000E-01
+N11    0.   0.    3.500000E-01
+N12    0.   0.    4.000000E-01
+N13    0.   0.    4.500000E-01
+N14    0.   0.    5.000000E-01
+N15    0.   0.    5.500000E-01
+N16    0.   0.    6.000000E-01
+N17    0.   0.    6.300000E-01
+N18    0.   0.    6.700000E-01
+N19    0.   0.    7.100000E-01
+N20    0.   0.    7.500000E-01
+N21    0.   0.    7.750000E-01
+N22    0.   0.    8.000000E-01
+FINSF
+%
+SEG2    NOBJ=12
+M1      N1      N2
+M2      N2      N3
+M3      N3      N4
+M4      N4      N5
+M5      N5      N6
+M6      N6      N7
+M7      N7      N8  
+M8      N8      N9
+M9      N9      N10
+M10     N10     N11
+M11     N11     N12
+M12     N12     N13
+M13     N13     N14
+M14     N14     N15
+M15     N15     N16
+M16     N16     N17
+M17     N17     N18
+M18     N18     N19
+M19     N19     N20
+M20     N20     N21
+M21     N21     N22
+FINSF
+%
+POI1
+DISQUE1 N2
+DISQUE2 N4
+DISQUE3 N20
+MP1     N8    
+MP2     N17     
+FINSF
+%       
+GROUP_MA 
+ROTOR
+M1     M2      M3      M4      M5      M6      
+M7     M8      M9      M10     M11     M12     
+M13    M14     M15     M16     M17     M18
+M19    M20     M21
+FINSF                                           
+%                                               
+GROUP_MA
+DISQ1
+DISQUE1
+FINSF
+%
+GROUP_MA
+DISQ2
+DISQUE2
+FINSF
+%
+GROUP_MA
+DISQ3
+DISQUE3
+FINSF
+%
+GROUP_MA 
+PALIER1
+MP1
+FINSF
+%
+GROUP_MA 
+PALIER2
+MP2
+FINSF
+%
+GROUP_MA 
+SA1
+M1  M2  M3  M4  M5  
+FINSF           
+%
+GROUP_MA 
+SA2
+M6            
+FINSF           
+%
+GROUP_MA 
+SA3
+M7  M8  M9  M10  M11 M12  M13  M14  M15
+FINSF
+%
+GROUP_MA 
+SA4
+M16  M17  M18  M19  M20  M21
+FINSF
+%
+GROUP_NO 
+PALIER1
+N8
+FINSF
+%
+GROUP_NO 
+PALIER2
+N17
+FINSF
+%
+GROUP_NO
+ROTOR
+N1 N2 N3 N4 N5 N6 N7 N8
+N9  N10 N11 N12 N13 N14
+N15 N16 N17 N18 N19 N20
+N21 N22
+FINSF
+%
+FIN

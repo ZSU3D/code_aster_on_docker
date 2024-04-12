@@ -1,0 +1,87 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',);
+
+MATER=DEFI_MATERIAU(ELAS=_F(E=2.1e11,
+                            NU=0.3,),);
+
+AFFMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                     AFFE=_F(TOUT='OUI',
+                             MATER=MATER,),);
+
+AFFMOD=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI',
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='POU_D_E',),);
+
+AFFCI=AFFE_CHAR_CINE(MODELE=AFFMOD,
+                     MECA_IMPO=(_F(GROUP_NO='A',
+                                   DX=0,
+                                   DY=0,
+                                   DZ=0,
+                                   DRX=0,
+                                   DRY=0,
+                                   DRZ=0,),
+                                _F(GROUP_NO='B',
+                                   DX=0,
+                                   DY=0,
+                                   DZ=0,),
+                                _F(GROUP_NO='C',
+                                   DY=0.03,),),);
+
+CAREL=AFFE_CARA_ELEM(MODELE=AFFMOD,
+                     INFO=2,
+                     POUTRE=_F(GROUP_MA='Tout',
+                               SECTION='GENERALE',
+                               CARA=('A','IY','IZ','JX','RY','RZ','RT',),
+                               VALE=(0.02,0.166666666666E-4,0.666666666666E-4,0.45776E-4,0.1,0.05,0.0892632,),),
+                     ORIENTATION=_F(GROUP_MA='Tout',
+                                    CARA='ANGL_VRIL',
+                                    VALE=(0.0,),),);
+
+MESTA=MECA_STATIQUE(MODELE=AFFMOD,
+                    CHAM_MATER=AFFMAT,
+                    CARA_ELEM=CAREL,
+                    EXCIT=_F(CHARGE=AFFCI,),);
+
+MESTA=CALC_CHAMP(reuse=MESTA,
+                 RESULTAT=MESTA,
+                 CONTRAINTE=('EFGE_NOEU',),);
+
+TEST_RESU(RESU=(_F(GROUP_NO='POINT',
+                   INST=0.0,
+                   RESULTAT=MESTA,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=2.5064053269599E-3,
+                   ),
+                _F(GROUP_NO='POINT',
+                   INST=0.0,
+                   RESULTAT=MESTA,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=0.018356988883787,
+                   ),
+                ),
+          )
+
+FIN();

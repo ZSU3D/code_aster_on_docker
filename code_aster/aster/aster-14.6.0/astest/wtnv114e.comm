@@ -1,0 +1,317 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+####################################
+#   OPERATIONS SUR LE MAILLAGE
+#
+####################################
+MAIL=LIRE_MAILLAGE(FORMAT='MED',)
+
+MAIL=DEFI_GROUP( reuse=MAIL,  MAILLAGE=MAIL,CREA_GROUP_NO=(
+                      _F( GROUP_MA = 'BAS'),
+                      _F( GROUP_MA = 'HAUT'))
+                     )
+
+MODELE=AFFE_MODELE(   MAILLAGE=MAIL,
+                        AFFE=_F(  TOUT = 'OUI',
+                      PHENOMENE = 'MECANIQUE',
+                      MODELISATION = '3D_HM')
+                     )
+
+####################################
+#  LISTE DES INSTANTS DE CALCUL
+####################################
+LI=DEFI_LIST_REEL(   DEBUT=0.,INTERVALLE=(
+                       _F(  JUSQU_A = 1.E0,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E0,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E1,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E1,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E2,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E2,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E3,  NOMBRE = 1))
+                     )
+
+ARCHI=DEFI_LIST_REEL(    DEBUT=0.,INTERVALLE=(
+                       _F(  JUSQU_A = 1.E0,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E0,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E1,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E1,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E2,  NOMBRE = 1),
+                       _F(  JUSQU_A = 5.E2,  NOMBRE = 1),
+                       _F(  JUSQU_A = 1.E3,  NOMBRE = 1))
+                 )
+
+############################################
+#
+# DEFINITION DES FONCTIONS DE COMPORTEMENT :
+# VISCOSITE LIQUIDE ET GAZ : UNITE : PA.S
+#
+####
+VISCOLIQ=DEFI_CONSTANTE(    VALE=1.E-3)
+
+DVISCOL=DEFI_CONSTANTE(    VALE=0.)
+
+VISCOGAZ=DEFI_CONSTANTE(    VALE=1.8E-5)
+
+DVISCOG=DEFI_CONSTANTE(    VALE=0.)
+
+####
+
+#
+# AUTRES FONCTIONS DE COMPORTEMENT
+# PERMEABILITE INTRINSEQUE, RELATIVE DU LIQUIDE, RELATIVE DU GAZ
+# UNITE INTRINSEQUE : METRES CARRES , UNITE RELATIVE : SANS
+#
+KINT=DEFI_CONSTANTE(    VALE=1.E-18)
+
+#
+PERMGAZ=DEFI_CONSTANTE(    VALE=1.)
+
+DPERGSA=DEFI_CONSTANTE(    VALE=0.)
+
+DPERGPG=DEFI_CONSTANTE(    VALE=0.)
+
+#
+#
+UN=DEFI_CONSTANTE(    VALE=1.)
+
+ZERO=DEFI_CONSTANTE(    VALE=0.)
+
+#
+
+THMALP1 = DEFI_CONSTANTE(VALE=0.000100)
+
+MATERIAU=DEFI_MATERIAU(     THM_LIQU=_F(
+   RHO = 1000.,
+   UN_SUR_K = 3.77E-9,
+   ALPHA = THMALP1,
+   CP = 2.85E6,
+   VISC = UN,
+   D_VISC_TEMP = ZERO,),
+                              THM_GAZ=_F(
+   MASS_MOL = 28.96E-3,
+   CP = 1000.,
+   VISC = UN,
+   D_VISC_TEMP = ZERO,),
+                            THM_VAPE_GAZ=_F(
+   MASS_MOL = 18.E-3,
+   CP = 1870.,
+   VISC = VISCOGAZ,
+   D_VISC_TEMP = DVISCOG),
+                              THM_DIFFU=_F(
+   R_GAZ = 8.315,
+   RHO = 1.6E3,
+   CP = 2.85E6,
+   BIOT_COEF = 1.,
+   SATU_PRES = UN,
+   D_SATU_PRES = ZERO,
+   PESA_X = 0.,
+   PESA_Y = 0.,
+   PESA_Z = 0.,
+   PERM_IN = KINT,
+   PERM_LIQU = UN,
+   D_PERM_LIQU_SATU = ZERO,
+   PERM_GAZ = PERMGAZ,
+   D_PERM_SATU_GAZ = DPERGSA,
+   D_PERM_PRES_GAZ = DPERGPG,),
+                              THM_INIT=_F(
+   TEMP = 273.,
+   PRE1 = 0.,
+   PRE2 = 0.,
+   PORO = 0.4,
+   PRES_VAPE = 1.,
+   DEGR_SATU = 1.),
+              COMP_THM = 'LIQU_GAZ_ATM',
+                                     ELAS=_F(
+   E = 225.E6,
+   NU = 0.,
+   RHO = 2000.,
+   ALPHA = 8.E-6)
+   )
+
+CHMAT0=AFFE_MATERIAU(   MAILLAGE=MAIL,
+                          AFFE=_F( TOUT = 'OUI',
+                        MATER = MATERIAU))
+
+CH_FLU1=AFFE_CHAR_MECA(   MODELE=MODELE,FLUX_THM_REP=(
+                          _F(
+                                  GROUP_MA = 'HAUT',
+                                  FLUN_HYDR1 = -0.005),
+                          _F(
+                                  GROUP_MA = 'BAS',
+                                  FLUN_HYDR1 = 0.))
+                                   )
+
+CHARHO=AFFE_CHAR_MECA(   MODELE=MODELE,
+                          DDL_IMPO=_F(  TOUT = 'OUI',
+                                    DX = 0.,
+                                    DY = 0.,
+                                    DZ = 0.)
+                                   )
+
+RESU0=STAT_NON_LINE(
+                            MODELE=MODELE,
+                           SOLVEUR=_F(
+                               METHODE = 'LDLT',),
+                        CHAM_MATER=CHMAT0,EXCIT=(
+                             _F(
+                CHARGE = CHARHO),
+                             _F(
+                CHARGE = CH_FLU1)),
+                SCHEMA_THM=_F(PARM_THETA=1.,),
+                         COMPORTEMENT=_F(
+                RELATION = 'KIT_HM',
+                RELATION_KIT = ('ELAS','LIQU_GAZ_ATM','HYDR_UTIL',),
+                ITER_INTE_MAXI = 5),
+                         INCREMENT=_F(
+                LIST_INST = LI),
+                            NEWTON=_F(
+                MATRICE = 'TANGENTE',MATR_RIGI_SYME='OUI',
+                REAC_ITER = 121),
+                       CONVERGENCE=_F(
+                RESI_GLOB_RELA = 1.E-8,
+                ITER_GLOB_MAXI = 120),
+                         ARCHIVAGE=_F(
+                LIST_INST = ARCHI)
+              )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO20',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=-6.63134110E+03,
+                  VALE_REFE=-6631.96,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=1,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC= 1.32628066E+04,
+                  VALE_REFE=1.3260E4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO20',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=-3.31575332E+04,
+                  VALE_REFE=-3.315E4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=2,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC= 6.63181769E+04,
+                  VALE_REFE=6.631E4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO20',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=-6.63171370E+04,
+                  VALE_REFE=-6.631E4,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=3,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC= 1.32646716E+05,
+                  VALE_REFE=1.326E5,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO20',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=-3.31668532E+05,
+                  VALE_REFE=-3.314E5,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=4,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC= 6.63648407E+05,
+                  VALE_REFE=6.629E5,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=7,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO20',
+                  NOM_CMP='PRE1',
+                  VALE_CALC=-6.67346445E+06,
+                  VALE_REFE=-6.5530E6,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=7,
+                  RESULTAT=RESU0,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO1',
+                  NOM_CMP='PRE1',
+                  VALE_CALC= 1.34740800E+07,
+                  VALE_REFE=1.318E7,
+                  REFERENCE='ANALYTIQUE',
+                  PRECISION=0.050000000000000003,
+                  ),
+          )
+
+FIN()
+#

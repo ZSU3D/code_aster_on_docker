@@ -1,0 +1,190 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+import os
+os.rename('fort.91', 'comp003a.py')
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+# donnee materiau et fonction
+
+#parametres elastiques
+RYOUNG = 31000;
+YOUNG=DEFI_FONCTION( NOM_PARA='TEMP',
+                 PROL_DROITE='LINEAIRE',
+                 PROL_GAUCHE='LINEAIRE',
+                 VALE=(0.0, RYOUNG, 1.0, RYOUNG,)
+               )
+
+RNU = 0.2;
+POISSON=DEFI_FONCTION( NOM_PARA='TEMP',
+                  PROL_DROITE='LINEAIRE',
+                  PROL_GAUCHE='LINEAIRE',
+                  VALE=(0.0,RNU,1.0,RNU,));
+
+ALPHA=DEFI_CONSTANTE(VALE=1.0E-6);
+
+FONC1=DEFI_FONCTION( NOM_PARA='SECH',
+                     PROL_DROITE='LINEAIRE',
+                     PROL_GAUCHE='LINEAIRE',
+                     VALE=(0.0, 0.0, 1.0, 1.0,)
+                   )
+
+#parametres viscosite
+
+K_RS      = 2.E5;
+ETA_RS    = 4.E10;
+ETA_IS    = 1.E11;
+K_RD      = 5.0E4;
+ETA_RD    = 1.0E10;
+ETA_ID    = 1.E11;
+KAPPA     = 3.E-3;
+QSR_K     = 0.;
+TEMP_0_C  = 20.;
+
+
+# def des materiaux
+BETON = [None]*3
+#unite en Pa
+C_Pa = 1.e+6
+E = 31000.*C_Pa;
+YOUNG_Pa=DEFI_FONCTION( NOM_PARA='TEMP',
+                 PROL_DROITE='LINEAIRE',
+                 PROL_GAUCHE='LINEAIRE',
+                 VALE=(0.0, 31000.*C_Pa, 1.0, 31000.*C_Pa,)
+               )
+
+K_RS_Pa = K_RS * C_Pa
+ETA_RS_Pa = ETA_RS * C_Pa
+ETA_IS_Pa = ETA_IS * C_Pa
+K_RD_Pa = K_RD * C_Pa
+ETA_RD_Pa = ETA_RD * C_Pa
+ETA_ID_Pa = ETA_ID * C_Pa
+
+BETON[0] = DEFI_MATERIAU( ELAS_FO =_F( NU = POISSON,
+                                       E = YOUNG_Pa,
+                                       ALPHA = ALPHA,
+                                       TEMP_DEF_ALPHA = 0.,
+                                       FONC_DESORP = FONC1),
+                          BETON_BURGER =_F( YoungModulus = E,
+                                            PoissonRatio = RNU,
+                                            K_RS = K_RS_Pa,
+                                            ETA_RS = ETA_RS_Pa,
+                                            ETA_IS = ETA_IS_Pa,
+                                            K_RD = K_RD_Pa,
+                                            ETA_RD = ETA_RD_Pa,
+                                            ETA_ID = ETA_ID_Pa,
+                                            ETA_FD = 0.,
+                                            KAPPA = KAPPA,
+                                            QSR_K = QSR_K,
+                                            TEMP_0_C = TEMP_0_C,),);
+
+#unite en MPa
+
+BETON[1] = DEFI_MATERIAU( ELAS_FO =_F( NU = POISSON,
+                                       E = YOUNG,
+                                       ALPHA = ALPHA,
+                                       TEMP_DEF_ALPHA = 0.,
+                                       FONC_DESORP = FONC1),
+                          BETON_BURGER =_F( YoungModulus = RYOUNG,
+                                            PoissonRatio = RNU,
+                                            K_RS = K_RS,
+                                            ETA_RS = ETA_RS,
+                                            ETA_IS = ETA_IS,
+                                            K_RD = K_RD,
+                                            ETA_RD = ETA_RD,
+                                            ETA_ID = ETA_ID,
+                                            ETA_FD = 0.,
+                                            KAPPA = KAPPA,
+                                            QSR_K = QSR_K,
+                                            TEMP_0_C = TEMP_0_C,),);
+
+compor='BETON_BURGER'
+
+##################################################################################
+#Discretisation du calcul. nbequi = nombre de calculs "equivalents" : Pa, Rot
+Ncal = 4
+N_pas = 2*[5] + [5, 25]
+nbequi=2
+# les differents calculs effectues
+label_cal=['_Pa_','_rot_'] + 2* ['_N']
+#pointeur materiau
+P_imat = [0] + [1] + (Ncal-2)*[1]
+
+#parametres vitesse de sollicitation
+vitesse = 1.e-2
+t_0 = 5.e-2/(8.0*vitesse)
+# calibrage des deformations maximum dans l'extension 93
+calibrage = 1.0e-2;
+CALIB_E=RYOUNG
+CALIB_NU=RNU
+
+# liste d'archivage
+temps_ar=DEFI_LIST_REEL( VALE =[t_0*i for i in range(9)],)
+
+# angles utilises pour la rotation
+angle2=30.
+angle0=0.
+angles=[angle0,angle2] + (Ncal-2)*[angle0]
+
+# les precisions sur chaque TEST_RESU
+prec_ecart=[
+            [1.E-10, 4.E-8,  1.E-8,   1.E-10],
+            [1.E-10, 5.E-9, 1.E-9,  1.E-10]]
+vale_calc=[
+  [2.6372563740117E-14, 3.5832287690377E-15, 3.7287755594394E-09, 0.0E+00],
+  [0.0E+00,             0.0E+00,             0.0E+00,             0.0E+00],
+    ]
+
+
+prec_tgt=2.e-2
+prec_zero=[0.01, 0.01]
+
+# les quantites (invariants...) sur lequels portent les calculs d'erreur et les test_resu
+ch_param2=['VMIS','TRACE']
+# coefficients pour ch_param2 pour calculer l'erreur sur le cas "Pa"
+coef_para=[C_Pa,C_Pa]
+
+# definition de la temperature imposee
+TIMP=DEFI_FONCTION(
+                      NOM_PARA='INST',  NOM_RESU='TEMP',
+                       VALE=(  0.E0,  20.,
+                             10.E0*t_0, 20.,)
+                        )
+
+SECHIMP=DEFI_FONCTION(
+                      NOM_PARA='INST',  NOM_RESU='SECH',
+                       VALE=(  0.E0,  1.,
+                             10.E0*t_0, 1.,)
+                        )
+
+
+###################################################################################
+#  TEST 3D
+##################################################################################
+
+# les quantites extraites du calcul
+ch_param=['VMIS','TRACE','SIXX','SIYY','SIZZ','SIXY','SIXZ','SIYZ']
+
+# resultats
+RESU=[None]*Ncal
+R_SI=[None]*len(ch_param)
+TMP_S=[None]
+
+FIN()

@@ -1,0 +1,657 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+from sslv154a import lissGchap, lissGbar
+
+DEBUT(PAR_LOT='NON', CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+      DEBUG=_F(SDVERI='OUI'))
+
+# MODELISATION A : FEM, MAILLAGE QUADRATIQUE
+
+# parametres utiles
+#------------------
+
+# angle d'inclinaison de la force imposee
+alpha = pi / 4.0
+
+# valeur nominale de la force imposee
+sig = 1000000.
+
+# rayon de la fissure
+a = 2
+
+#-----------------------------------------------------------------------------------------------------------------------------
+#                                 CALCUL
+#-----------------------------------------------------------------------------------------------------------------------------
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=_F(OPTION='NOEUD_ORDO',
+                               NOM='NFF3',
+                               GROUP_MA='LFF1',
+                               GROUP_NO_ORIG='NFF1',
+                               GROUP_NO_EXTR='NFF2',),);
+
+# Barsoum
+MA=MODI_MAILLAGE(reuse=MA,
+                 MAILLAGE=MA,
+                 MODI_MAILLE=_F(OPTION='NOEUD_QUART',
+                                GROUP_NO_FOND='NFF3'))
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_3D=_F(GROUP_MA=('FACE_AV','FACE_SUP','FACE_INF','FACE_LAD','FACE_LAG',),),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='3D',),);
+
+E=2.E11
+nu = 0.3
+MAT=DEFI_MATERIAU(ELAS=_F(E=E,
+                          NU=nu),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=MAT,),);
+
+SYMETR=AFFE_CHAR_MECA(MODELE=MO,
+                      DDL_IMPO=(_F(GROUP_NO='D1',
+                                   DX=0,
+                                   DZ=0,),
+                                _F(GROUP_NO='D2',
+                                   DZ=0,),),
+                      FACE_IMPO=_F(GROUP_MA='FACE_AV',
+                                   DY=0.,),);
+
+PRESSION=AFFE_CHAR_MECA(MODELE=MO,
+                        FORCE_FACE=(_F(GROUP_MA='FACE_SUP', FX= cos(alpha)*sin(alpha)*sig, FZ= sin(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_INF', FX=-cos(alpha)*sin(alpha)*sig, FZ=-sin(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_LAG', FX=-cos(alpha)*cos(alpha)*sig, FZ=-cos(alpha)*sin(alpha)*sig ),
+                                    _F(GROUP_MA='FACE_LAD', FX= cos(alpha)*cos(alpha)*sig, FZ= cos(alpha)*sin(alpha)*sig ),
+                                    )
+                        )
+
+RESU=MECA_STATIQUE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=PRESSION,),
+                          _F(CHARGE=SYMETR,),)
+                   )
+
+
+#-----------------------------------------------------------------------------------------------------------------------------
+#                                 POST-TRAITEMENT
+#-----------------------------------------------------------------------------------------------------------------------------
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MA, SYME='NON',
+                    FOND_FISS=_F(GROUP_MA='LFF1'),
+                    LEVRE_SUP=_F(GROUP_MA='LEVSUP'),
+                    LEVRE_INF=_F(GROUP_MA='LEVINF'),
+                    )
+
+RSUP = 0.528
+RINF = 0.12
+
+# Methode G-theta
+CG=CALC_G(THETA=_F(FOND_FISS=FISS,
+                   R_INF=RINF,
+                   R_SUP=RSUP),
+          RESULTAT=RESU,
+          OPTION='CALC_K_G')
+
+# Methode G-theta LAGRANGE
+CG2=CALC_G(THETA=_F(FOND_FISS=FISS,
+                    R_INF=RINF,
+                    R_SUP=RSUP),
+           LISSAGE=_F(LISSAGE_G='LAGRANGE',
+                      LISSAGE_THETA='LAGRANGE',),
+           RESULTAT=RESU,
+           OPTION='CALC_K_G')
+
+
+# Extrapolation des sauts de deplacements
+PK=POST_K1_K2_K3(FOND_FISS=FISS,
+                 RESULTAT=RESU,
+                 )
+
+# formule pour le calcul de l'angle en degre
+ANGLE = FORMULE(VALE='ABSC_CURV/a * 180./pi',
+                a=a,
+                NOM_PARA='ABSC_CURV',)
+
+# formules pour les valeurs de reference
+K1REF = FORMULE(VALE=' 2/pi * sig * sin(alpha)**2 * sqrt(pi*a) ',
+                sig=sig,
+                alpha=alpha,
+                a=a,
+                NOM_PARA='ANGLE',)
+K2REF = FORMULE(VALE=' 4./(pi*(2.-nu)) * sig*sin(alpha)*cos(alpha) * cos(ANGLE/180*pi) * sqrt(pi*a)',
+                nu=nu,
+                sig=sig,
+                alpha=alpha,
+                a=a,
+                NOM_PARA='ANGLE',)
+K3REF = FORMULE(VALE=' 4.*(1 - nu)/(pi*(2.-nu)) * sig*sin(alpha)*cos(alpha) * sin(ANGLE/180*pi) * sqrt(pi*a) ',
+                nu=nu,
+                sig=sig,
+                alpha=alpha,
+                a=a,
+                NOM_PARA='ANGLE',)
+GREF = FORMULE(VALE=' (1-nu**2)/E * ( K1REF(ANGLE)**2 + K2REF(ANGLE)**2 ) + (1+nu)/E * K3REF(ANGLE)**2 ',
+               nu=nu,
+               E=E,
+               K1REF=K1REF,
+               K2REF=K2REF,
+               K3REF=K3REF,
+               NOM_PARA='ANGLE',)
+
+# ajout des colonnes 'angle' et valeurs de ref dans les tables
+CG=CALC_TABLE(TABLE=CG,
+              reuse=CG,
+              ACTION=(_F(OPERATION='OPER',FORMULE=ANGLE,NOM_PARA='ANGLE'),
+                      _F(OPERATION='OPER',FORMULE=K1REF,NOM_PARA='K1REF'),
+                      _F(OPERATION='OPER',FORMULE=K2REF,NOM_PARA='K2REF'),
+                      _F(OPERATION='OPER',FORMULE=K3REF,NOM_PARA='K3REF'),
+                      _F(OPERATION='OPER',FORMULE=GREF ,NOM_PARA='GREF'),
+                      )
+              )
+
+CG2=CALC_TABLE(TABLE=CG2,
+              reuse=CG2,
+              ACTION=(_F(OPERATION='OPER',FORMULE=ANGLE,NOM_PARA='ANGLE'),
+                      _F(OPERATION='OPER',FORMULE=K1REF,NOM_PARA='K1REF'),
+                      _F(OPERATION='OPER',FORMULE=K2REF,NOM_PARA='K2REF'),
+                      _F(OPERATION='OPER',FORMULE=K3REF,NOM_PARA='K3REF'),
+                      _F(OPERATION='OPER',FORMULE=GREF ,NOM_PARA='GREF'),
+                      )
+              )
+
+CG2=CALC_TABLE(TABLE=CG2,
+              reuse=CG2,
+              ACTION=(_F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'G_CHAP',VALE_COLONNE =  lissGchap(CG2)),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'G_BAR', VALE_COLONNE =  lissGbar(CG2)),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K1_CHAP',VALE_COLONNE = lissGchap(CG2, val='K1')),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K1_BAR', VALE_COLONNE = lissGbar(CG2,  val='K1')),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K2_CHAP',VALE_COLONNE = lissGchap(CG2, val='K2')),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K2_BAR', VALE_COLONNE = lissGbar(CG2,  val='K2')),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K3_CHAP',VALE_COLONNE = lissGchap(CG2, val='K3')),
+                      _F(OPERATION = 'AJOUT_COLONNE',NOM_PARA = 'K3_BAR', VALE_COLONNE = lissGbar(CG2,  val='K3')),
+                      )
+              )
+
+PK=CALC_TABLE(TABLE=PK,
+              reuse=PK,
+              ACTION=(_F(OPERATION='OPER',FORMULE=ANGLE,NOM_PARA='ANGLE'),
+                      _F(OPERATION='OPER',FORMULE=K1REF,NOM_PARA='K1REF'),
+                      _F(OPERATION='OPER',FORMULE=K2REF,NOM_PARA='K2REF'),
+                      _F(OPERATION='OPER',FORMULE=K3REF,NOM_PARA='K3REF'),
+                      _F(OPERATION='OPER',FORMULE=GREF ,NOM_PARA='GREF'),
+                      )
+               )
+
+# impression de chaque table
+IMPR_TABLE(TABLE=CG)
+IMPR_TABLE(TABLE=CG2)
+IMPR_TABLE(TABLE=PK)
+
+
+#-----------------------------------------------------------------------------------------------------------------------------
+#                                 TESTS DES TABLES
+#-----------------------------------------------------------------------------------------------------------------------------
+
+# TEST DE CALC_G LEGENDRE
+#---------------
+
+# test de KI sur tout le fond de fissure
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.055,
+           VALE_CALC=840228.2456752205,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=CG,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.04,
+           VALE_CALC=823744.5119264444,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=CG,)
+
+# test de KII au premier point du fond (angle = 0)
+# le signe n'est pas important, mais on ne peut pas tester |K2|
+# il se trouve que le K2 de CALC_G est de signe oppose a celui de POST_K
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.09,
+           VALE_CALC=860153.4868790199,
+           VALE_REFE=K2REF(0),
+           NOM_PARA='K2',
+           TABLE=CG,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de KIII au milieu du fond (angle = 90 avec + ou -0.5 degre)
+# le signe n'est pas important, mais on ne peut pas tester |K3|
+# il se trouve que le K3 de CALC_G est de signe oppose a celui de POST_K
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.03,
+           VALE_CALC=670795.6445977942,
+           VALE_REFE=K3REF(90),
+           NOM_PARA='K3',
+           TABLE=CG,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# TEST DE CALC_G LAGRANGE (uniquement lissages chapeau et lissage bar)
+#---------------
+# test de G chapeau au bord (angle = 0 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.035,
+           VALE_CALC=7.13141836799,
+           VALE_REFE=GREF(0),
+           NOM_PARA='G_CHAP',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de G chapeau au milieu du fond (angle = 90 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.01,
+           VALE_CALC=5.7165298733,
+           VALE_REFE=GREF(90),
+           NOM_PARA='G_CHAP',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# test de G bar au bord (angle = 90 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.015,
+           VALE_CALC=7.00562997283,
+           VALE_REFE=GREF(0),
+           NOM_PARA='G_BAR',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de G bar au milieu du fond (angle = 90 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.005,
+           VALE_CALC=5.72780705574,
+           VALE_REFE=GREF(90),
+           NOM_PARA='G_BAR',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# test de K1 chapeau au bord (angle = 0 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.06,
+           VALE_CALC=842805.8742142409,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1_CHAP',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de K1 chapeau au milieu du fond (angle = 90 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.055,
+           VALE_CALC=838233.5178878801,
+           VALE_REFE=K1REF(90),
+           NOM_PARA='K1_CHAP',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# test de K1 bar au bord (angle = 0 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=836336.3881019881,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1_BAR',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de K1 bar au milieu du fond (angle = 90 avec + ou -0.5 degre)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.05,
+           VALE_CALC=836800.3526800307 ,
+           VALE_REFE=K1REF(90),
+           NOM_PARA='K1_BAR',
+           TABLE=CG2,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+# TEST DE POST_K
+#---------------
+
+# test de KI sur tout le fond de fissure
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.03,
+           VALE_CALC=814169.891521,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1',
+           TYPE_TEST='MAX',
+           TABLE=PK,)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=787418.519602,
+           VALE_REFE=K1REF(0),
+           NOM_PARA='K1',
+           TYPE_TEST='MIN',
+           TABLE=PK,)
+
+# test de KII au premier point du fond (angle = 0)
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=927160.421423,
+           VALE_REFE=K2REF(0),
+           NOM_PARA='K2',
+           TABLE=PK,
+           FILTRE=_F(NOM_PARA='ANGLE',
+                     VALE=0.0,),
+           )
+
+# test de KIII au milieu du fond (angle = 90 avec + ou -0.5 degre)
+# le signe n'est pas important, mais on ne peut pas tester |K3|
+# il se trouve que le K3 de CALC_G est de signe oppose a celui de POST_K
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=0.02,
+           VALE_CALC=-647639.019926,
+           VALE_REFE=-K3REF(90),
+           NOM_PARA='K3',
+           TABLE=PK,
+           FILTRE=_F(CRITERE='ABSOLU',
+                     PRECISION=0.5,
+                     NOM_PARA='ANGLE',
+                     VALE=90.0,),
+           )
+
+#-----------------------------------------------------------------------------------------------------------------------------
+#                                 TRACE DES COURBES
+#-----------------------------------------------------------------------------------------------------------------------------
+
+# courbe de G
+C_G_REF=RECU_FONCTION(TABLE=CG,
+                      PARA_X='ANGLE',
+                      PARA_Y='GREF',)
+
+C_G_CG=RECU_FONCTION(TABLE=CG,
+                     PARA_X='ANGLE',
+                     PARA_Y='G',)
+
+C_G_CGC=RECU_FONCTION(TABLE=CG2,
+                     PARA_X='ANGLE',
+                     PARA_Y='G_CHAP',)
+
+C_G_CGB=RECU_FONCTION(TABLE=CG2,
+                     PARA_X='ANGLE',
+                     PARA_Y='G_BAR',)
+
+C_G_PK=RECU_FONCTION(TABLE=PK,
+                     PARA_X='ANGLE',
+                     PARA_Y='G',)
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=30,
+              COURBE=(_F(FONCTION=C_G_REF,
+                         LEGENDE='G reference',
+                         MARQUEUR=8,
+                         STYLE=0,
+                         COULEUR=1),
+                      _F(FONCTION=C_G_CG,
+                         LEGENDE='G CALC_G LEG',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                      _F(FONCTION=C_G_CGC,
+                         LEGENDE='G CALC_G CHAP',
+                         MARQUEUR=0,
+                         COULEUR=3),
+                      _F(FONCTION=C_G_CGB,
+                         LEGENDE='G CALC_G BAR',
+                         MARQUEUR=0,
+                         COULEUR=4),
+                      _F(FONCTION=C_G_PK,
+                         LEGENDE='G POST_K1_K2_K3',
+                         MARQUEUR=0,
+                         COULEUR=12),
+                       ),
+              TITRE='Taux de restitution d energie',
+              BORNE_X=(0.0,180,),
+              BORNE_Y=(0.0,10,),
+              GRILLE_X=20,
+              GRILLE_Y=1.0,
+              LEGENDE_X='angle (degre)',
+              LEGENDE_Y='G (J.m\S-2\\N)',);
+
+
+# courbe de K1
+C_K1_REF=RECU_FONCTION(TABLE=CG,
+                       PARA_X='ANGLE',
+                       PARA_Y='K1REF',)
+
+C_K1_CG=RECU_FONCTION(TABLE=CG,
+                      PARA_X='ANGLE',
+                      PARA_Y='K1',)
+
+C_K1_CGC=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K1_CHAP',)
+
+C_K1_CGB=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K1_BAR',)
+
+C_K1_PK=RECU_FONCTION(TABLE=PK,
+                      PARA_X='ANGLE',
+                      PARA_Y='K1',)
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=31,
+              COURBE=(_F(FONCTION=C_K1_REF,
+                         LEGENDE='K1 reference',
+                         MARQUEUR=8,
+                         STYLE=0,
+                         COULEUR=1),
+                      _F(FONCTION=C_K1_CG,
+                         LEGENDE='K1 CALC_G LEG',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                      _F(FONCTION=C_K1_CGC,
+                         LEGENDE='K1 CALC_G CHAP',
+                         MARQUEUR=0,
+                         COULEUR=3),
+                      _F(FONCTION=C_K1_CGB,
+                         LEGENDE='K1 CALC_G BAR',
+                         MARQUEUR=0,
+                         COULEUR=4),
+                      _F(FONCTION=C_K1_PK,
+                         LEGENDE='K1 POST_K1_K2_K3',
+                         MARQUEUR=0,
+                         COULEUR=12),
+                       ),
+              TITRE='K1',
+              BORNE_X=(0.0,180,),
+              BORNE_Y=(0.0,1e6,),
+              GRILLE_X=20,
+              GRILLE_Y=1e5,
+              LEGENDE_X='angle (degre)',
+              LEGENDE_Y='KI (Pa.m\S-1/2\\N)',)
+
+# courbe de K2
+C_K2_REF=RECU_FONCTION(TABLE=CG,
+                       PARA_X='ANGLE',
+                       PARA_Y='K2REF',)
+
+C_K2_CG=RECU_FONCTION(TABLE=CG,
+                      PARA_X='ANGLE',
+                      PARA_Y='K2',)
+
+C_K2_CGC=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K2_CHAP',)
+
+C_K2_CGB=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K2_BAR',)
+
+C_K2_PK=RECU_FONCTION(TABLE=PK,
+                      PARA_X='ANGLE',
+                      PARA_Y='K2',)
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=32,
+              COURBE=(_F(FONCTION=C_K2_REF,
+                         LEGENDE='K2 reference',
+                         MARQUEUR=8,
+                         STYLE=0,
+                         COULEUR=1),
+                      _F(FONCTION=C_K2_CG,
+                         LEGENDE='K2 CALC_G LEG',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                      _F(FONCTION=C_K2_CGC,
+                         LEGENDE='K2 CALC_G CHAP',
+                         MARQUEUR=0,
+                         COULEUR=3),
+                      _F(FONCTION=C_K2_CGB,
+                         LEGENDE='K2 CALC_G BAR',
+                         MARQUEUR=0,
+                         COULEUR=4),
+                      _F(FONCTION=C_K2_PK,
+                         LEGENDE='K2 POST_K1_K2_K3',
+                         MARQUEUR=0,
+                         COULEUR=12),
+                       ),
+              TITRE='K2',
+              BORNE_X=(0.0,180,),
+              BORNE_Y=(-1e6,1e6,),
+              GRILLE_X=20,
+              GRILLE_Y=1e5,
+              LEGENDE_X='angle (degre)',
+              LEGENDE_Y='KII (Pa.m\S-1/2\\N)',)
+
+# courbe de K3
+C_K3_REF=RECU_FONCTION(TABLE=CG,
+                       PARA_X='ANGLE',
+                       PARA_Y='K3REF',)
+
+C_K3_CG=RECU_FONCTION(TABLE=CG,
+                      PARA_X='ANGLE',
+                      PARA_Y='K3',)
+
+C_K3_CGC=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K3_CHAP',)
+
+C_K3_CGB=RECU_FONCTION(TABLE=CG2,
+                      PARA_X='ANGLE',
+                      PARA_Y='K3_BAR',)
+
+C_K3_PK=RECU_FONCTION(TABLE=PK,
+                      PARA_X='ANGLE',
+                      PARA_Y='K3',)
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=33,
+              COURBE=(_F(FONCTION=C_K3_REF,
+                         LEGENDE='K3 reference',
+                         MARQUEUR=8,
+                         STYLE=0,
+                         COULEUR=1),
+                      _F(FONCTION=C_K3_CG,
+                         LEGENDE='K3 CALC_G LEG',
+                         MARQUEUR=0,
+                         COULEUR=2),
+                      _F(FONCTION=C_K3_CGC,
+                         LEGENDE='K3 CALC_G CHAP',
+                         MARQUEUR=0,
+                         COULEUR=3),
+                      _F(FONCTION=C_K3_CGB,
+                         LEGENDE='K3 CALC_G BAR',
+                         MARQUEUR=0,
+                         COULEUR=4),
+                      _F(FONCTION=C_K3_PK,
+                         LEGENDE='K3 POST_K1_K2_K3',
+                         MARQUEUR=0,
+                         COULEUR=12),
+                       ),
+              TITRE='K3',
+              BORNE_X=(0.0,180,),
+              BORNE_Y=(0.0,1e6,),
+              GRILLE_X=20,
+              GRILLE_Y=1e5,
+              LEGENDE_X='angle (degre)',
+              LEGENDE_Y='KIII (Pa.m\S-1/2\\N)',)
+
+
+FIN()

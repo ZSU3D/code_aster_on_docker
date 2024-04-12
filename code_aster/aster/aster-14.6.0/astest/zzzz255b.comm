@@ -1,0 +1,119 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: samuel.geniaut at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'),
+            IGNORE_ALARM=('XFEM2_60'),)
+
+# ON IGNORE LE MESSAGE D'ALARME XFEM2_60 QUI DIT QUE L'OPTION TEST_MAIL A ETE
+# UTILISEE PAR L'UTILISATEUR.
+
+MaiPlate=LIRE_MAILLAGE(FORMAT='MED',INFO=1,);
+
+plate=AFFE_MODELE(MAILLAGE=MaiPlate,
+                   AFFE=(_F(GROUP_MA=('ALL',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='3D',),),);
+
+#***********************************
+# DEFINITION DE LA FISSURE (CERCLE)
+#***********************************
+nbcalc = 3
+rayon = 250.
+avance = 25.
+
+Fiss = [None]*2
+
+Fiss[0] = DEFI_FISS_XFEM(MAILLAGE=MaiPlate,
+                         DEFI_FISS=_F(FORM_FISS      = 'ELLIPSE',
+                                      DEMI_GRAND_AXE = rayon,
+                                      DEMI_PETIT_AXE = rayon,
+                                      CENTRE         = (0., 0., 0.),
+                                      VECT_X         = (1. , 0. , 0. ),
+                                      VECT_Y         = (0., 1. , 0. ),),);
+
+
+#****************************
+# TEST_MAIL
+#****************************
+
+ModX=MODI_MODELE_XFEM(MODELE_IN=plate,
+                      FISSURE=Fiss[0],);
+
+Fiss[1]=CO('Fiss_1')
+PROPA_FISS(MODELE=ModX,
+           FISSURE=_F(FISS_ACTUELLE=Fiss[0],
+                      FISS_PROPAGEE=Fiss[1],
+                     ),
+           TEST_MAIL='OUI',
+           ITERATIONS=nbcalc,
+           DA_MAX=avance,
+           METHODE_PROPA='SIMPLEXE',
+           RAYON=avance*4,
+           ZONE_MAJ='TOUT',
+           INFO=0,);
+
+#****************************
+# TEST TABLE
+#****************************
+
+# LA PART SUIVANTE N'EST PAS UTILISEE POUR LA VERIFICATION
+# DU BON FONCTIONNEMENT DE L'OPTION TEST_MAIL.
+# ON PROPOSE DE FAIRE UN TEST UN TEST UN PEU EQUIVALENT A
+# TEST_MAIL POUR VERIFIER LA PROPAGATION HOMOTHETIQUE DU FRONT
+
+
+
+CHLT=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+                OPERATION='EXTR',
+                NOM_CHAM='LTNO',
+                FISSURE=Fiss[1],);
+
+TABLST = POST_RELEVE_T(ACTION=_F(INTITULE='Test LST',
+                                 GROUP_NO=('A','B','C','D','E','F','G','H',),
+                                 CHAM_GD=CHLT,
+                                 TOUT_CMP='OUI',
+                                 OPERATION='EXTRACTION',),);
+
+IMPR_TABLE(TABLE=TABLST,);
+
+dist = 500.*sqrt(2.) - (rayon+nbcalc*avance)
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='NON_DEFINI',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=382.463468948,
+           VALE_REFE=dist,
+           NOM_PARA='X1',
+           TYPE_TEST='MAX',
+           TABLE=TABLST,
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='NON_DEFINI',
+           PRECISION=0.050000000000000003,
+           VALE_CALC=382.463468948,
+           VALE_REFE=dist,
+           NOM_PARA='X1',
+           TYPE_TEST='MIN',
+           TABLE=TABLST,
+           )
+
+FIN();

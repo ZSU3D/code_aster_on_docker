@@ -1,0 +1,80 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+POURSUITE(CODE='OUI',);
+
+import numpy as NP
+import aster
+
+############################################################
+################  Transitions Phasis    ####################
+############################################################
+tmpd = aster.getvectjev('FT_FRICT           .VALE        ');
+t = NP.array(tmpd[0:len(tmpd)//2])
+# Euler:
+force_tangentielle = NP.array(tmpd[len(tmpd)//2:len(tmpd)])
+del tmpd
+# Definition de la force tangentielle de transition
+force_tangentielle_transition = -2e3
+############################################################
+# Time transition search
+############################################################
+N=len(t)
+dd=[]
+for i in range(N):
+    dd.append(NP.abs((force_tangentielle[i]-force_tangentielle_transition)/force_tangentielle_transition) - 1E-6)
+d_force = NP.array(dd) <= 0
+d_force = d_force.astype(int)
+diff_force = NP.zeros(N, int)
+diff_force[1:len(diff_force)] = d_force[1:N]-d_force[0:N-1]
+transition_1 = NP.nonzero(diff_force>=1)[0]
+transition_2 = NP.nonzero(diff_force<=-1)[0]
+
+indice_transition=[transition_1[0],transition_2[0]]
+instants_transition=[t[i] for i in indice_transition]
+instants_transition.sort()
+
+
+############################################################
+# Analitical time transition
+############################################################
+instants_transition_analytique=[0.03512, 0.31492]
+
+
+############################################################
+# Time transition tests :
+############################################################
+tio_inst = DEFI_LIST_REEL(VALE=instants_transition,);
+tio_fonc= DEFI_FONCTION(NOM_PARA='INST',
+                        VALE_PARA=tio_inst,
+                        VALE_FONC=tio_inst,);
+
+vale_calc=[0.0352, 0.31495624999436]
+for i in range(0,len(instants_transition)):
+   TEST_FONCTION(VALEUR=_F(VALE_CALC=vale_calc[i],
+                           VALE_REFE=instants_transition_analytique[i],
+                           CRITERE='ABSOLU',
+                           VALE_PARA=instants_transition[i],
+                           REFERENCE='ANALYTIQUE',
+                           PRECISION=1.E-4,
+                           FONCTION=tio_fonc,),
+                 )
+
+FIN();

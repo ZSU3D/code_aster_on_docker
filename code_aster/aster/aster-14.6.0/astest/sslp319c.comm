@@ -1,0 +1,318 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# VALIDATION DE LA METHODE MAILLAGE
+
+#  REMARQUE : ON TESTE AUSSI LE CALCUL DU CYCLE DANS PROPA_FISS
+#  SANS UTILISER COMP_LINE.
+#  ON IGNORE L'ALARME XFEM2_76 DEPUIS LE FICHE 13329. AVEC LE PASSAGE DE STAT_NON_LINE EN MECA_STATIQUE,
+#  ON NE CALCULE PLUS QU'UN INSTANT. LE CALCUL DE PROPA_FISS EMET ALORS CETTE ALARME.
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI'),IGNORE_ALARM=('TEST0_12')
+        )
+
+#***********************************
+# MAILLAGE ET MODELE
+#***********************************
+
+MaiPlate=LIRE_MAILLAGE(FORMAT='MED',
+                       INFO_MED=1,);
+
+MaiPlate=MODI_MAILLAGE(reuse =MaiPlate,
+                       MAILLAGE=MaiPlate,
+                       ORIE_PEAU_2D=_F(GROUP_MA='force',),);
+
+plate=AFFE_MODELE(MAILLAGE=MaiPlate,
+                   AFFE=(_F(GROUP_MA=('All',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),
+                        _F(GROUP_MA=('force',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),),);
+
+#***********************************
+# MATERIAU
+#***********************************
+
+steel=DEFI_MATERIAU(ELAS=_F(E=2.06E11,
+                            NU=0.33,),);
+
+
+#***********************************
+# CHARGEMENTS ET CONDITIONS AUX LIMITES
+#***********************************
+
+
+TimeStep=DEFI_LIST_REEL(DEBUT=0,
+                        INTERVALLE=_F(JUSQU_A=1,
+                                      NOMBRE=1,),);
+
+sigma=1E6
+
+#***********************************
+# DEFINITION DES FISSURES
+#***********************************
+
+# LONGUEUR DE LA FISSURE INITIALE
+a0 = 300
+
+# NOMBRE DE PROPAGATIONS
+NPS = 3
+NPS = NPS+2
+
+FissR = [None]*NPS
+FissL = [None]*NPS
+MaFiR = [None]*NPS
+MaFiL = [None]*NPS
+
+MaFiR[1]=CO('MaFiR_%d'%(1))
+PROPA_FISS(METHODE_PROPA='INITIALISATION',
+         MAIL_STRUC=MaiPlate,
+         MAIL_FISS = MaFiR[1],
+         MAIL_TOTAL = CO('MaTot0'),
+         FORM_FISS='DEMI_DROITE',
+         GROUP_MA_FISS='FISSR',
+         GROUP_MA_FOND='FONDR',
+         INFO=2,
+         PFON = (200., 0., 0.),
+         DTAN = (-1., 0., 0.),
+         );
+                        
+
+MaFiL[1]=CO('MaFiL_%d'%(1))
+PROPA_FISS(METHODE_PROPA='INITIALISATION',
+         MAIL_STRUC=MaiPlate,
+         MAIL_FISS = MaFiL[1],
+         MAIL_TOTAL = CO('toto'),
+         FORM_FISS='DEMI_DROITE',
+         GROUP_MA_FISS='FISSL',
+         GROUP_MA_FOND='FONDL',
+         INFO=2,
+         PFON = (-200., 0., 0.),
+         DTAN = (1., 0., 0.),
+         );
+                        
+#****************************
+# PROPAGATION DES FISSURES
+#****************************
+
+MATOT = [None]*NPS
+Mod  = [None]*NPS
+ModX = [None]*NPS
+ChgX = [None]*NPS
+ResX = [None]*NPS
+SIFL = [None]*NPS
+SIFR = [None]*NPS
+SIFL1 = [None]*NPS
+SIFR1 = [None]*NPS
+Char = [None]*NPS
+MATE = [None]*NPS
+
+RI = 2*25.
+RS = 2*RI
+
+# AVANCE DE LA FISSURE A CHAQUE ITERATION
+da_fiss = 30.
+
+MATOT[1] = ASSE_MAILLAGE(MAILLAGE_1 = MaTot0,
+                        MAILLAGE_2 = MaFiL[1],
+                        OPERATION='SUPERPOSE')
+
+for i in range(1,NPS-1) :
+    Mod[i]=AFFE_MODELE(MAILLAGE=MATOT[i],
+                   AFFE=(_F(GROUP_MA=('All','force',),
+                           PHENOMENE='MECANIQUE',
+                           MODELISATION='C_PLAN',),
+                       ),);
+    FissL[i]=DEFI_FISS_XFEM(MAILLAGE=MATOT[i],NB_COUCHES=3,
+                        DEFI_FISS=_F(GROUP_MA_FISS='FISSL_'+str(i-1),
+                                 GROUP_MA_FOND='FONDL_'+str(i-1)),);
+
+    FissR[i]=DEFI_FISS_XFEM(MAILLAGE=MATOT[i],
+                        DEFI_FISS=_F(GROUP_MA_FISS='FISSR_'+str(i-1),
+                                 GROUP_MA_FOND='FONDR_'+str(i-1)),);
+
+
+    ModX[i]=MODI_MODELE_XFEM(MODELE_IN=Mod[i],
+                         FISSURE=(FissL[i],FissR[i]),);
+
+    Char[i]=AFFE_CHAR_MECA(MODELE=ModX[i],
+                           DDL_IMPO=(_F(GROUP_NO='incastro',
+                                       DX=0,
+                                       DY=0,),
+                                    _F(GROUP_NO='carrello',
+                                       DY=0,),),
+                           PRES_REP=_F(GROUP_MA='force',
+                                    PRES=-1*sigma,
+                                    ),
+                          );
+                          
+    MATE[i]=AFFE_MATERIAU(MAILLAGE=MATOT[i],
+                      AFFE=_F(TOUT='OUI',
+                              MATER=steel,),);
+
+    ResX[i]=MECA_STATIQUE(MODELE=ModX[i],
+                         CHAM_MATER=MATE[i],
+                         EXCIT=_F(CHARGE=Char[i]),
+                         );
+
+#   CALCULE DES FACTEURS D'INTENSITE DE CONTRAINTES POUR LA FISSURE
+#   A GAUCHE
+    SIFL[i]=CALC_G(THETA=_F(FISSURE=FissL[i],),
+                   RESULTAT=ResX[i],
+                   OPTION='CALC_K_G',
+                   )
+
+#   CALCULE DES FACTEURS D'INTENSITE DE CONTRAINTES POUR LA FISSURE
+#   A DROITE
+    SIFR[i]=CALC_G(THETA=_F(FISSURE=FissR[i],),
+                   RESULTAT=ResX[i],
+                   OPTION='CALC_K_G',
+                   )
+
+    IMPR_TABLE(TABLE=SIFL[i],);
+    IMPR_TABLE(TABLE=SIFR[i],);
+
+    if ( i != NPS-2 ) :
+      MaFiL[i+1]=CO('MaFiL_%d'%(i+1))
+      MaFiR[i+1]=CO('MaFiR_%d'%(i+1))
+      MATOT[i+1]=CO('MATOT_%d'%(i+1))
+      PROPA_FISS(MAIL_STRUC = MaiPlate,
+                 MAIL_TOTAL = MATOT[i+1],
+                 ITERATION = i,
+            
+                 FISSURE=(_F(FISS_ACTUELLE=FissL[i],
+                             MAIL_ACTUEL =  MaFiL[i],
+                             MAIL_PROPAGE = MaFiL[i+1] ,
+                             GROUP_MA_FISS='FISSL',
+                             GROUP_MA_FOND='FONDL',    
+                             TABLE=SIFL[i],
+                            ),
+                          _F(FISS_ACTUELLE=FissR[i],
+                             MAIL_ACTUEL =  MaFiR[i],
+                             MAIL_PROPAGE = MaFiR[i+1] ,
+                             GROUP_MA_FISS='FISSR',
+                             GROUP_MA_FOND='FONDR',    
+                             TABLE=SIFR[i],
+                            ),
+                          ),
+                 DA_MAX=da_fiss,
+                 METHODE_PROPA='MAILLAGE',
+                 LOI_PROPA=_F(LOI='PARIS',
+                              C=1.,
+                              M=1.,
+                              MATER=steel
+                              ),
+                 COMP_LINE=_F(COEF_MULT_MINI=0.,
+                              COEF_MULT_MAXI=1.,
+                             ),
+                 INFO=2,);
+
+#----------------------------------------------
+#         VERIFICATION DES RESULTATS
+#----------------------------------------------
+
+W=1000;
+
+VALE_CALC=[
+38133549.2037,
+-2190.8574459,
+37657779.4313,
+2379.86848872,
+42233337.5965,
+-799.4590979544382,
+41332712.5986,
+1166.279584883152,
+46956486.798321895,
+-1166.7728232977356,
+45954044.56452547,
+923.3044392685406,
+]
+
+for i in range(1,NPS-1) :
+
+   a=a0+da_fiss*(i-1)
+#  VALEUR ANALYTIQUE DE KI (BROEK)
+   Y=1.99+0.76*a/W-8.48*(a/W)**2+27.36*(a/W)**3;
+   KI_broek=Y*sigma*sqrt(a);
+
+#  TOLERANCE SUR KII. LA VALEUR ANALYTIQUE EST ZERO CAR LA FISSURE
+#  PROPAGE EN MODE I. CELA N'EST PAS VERIFIER EXACTEMENT POUR LE
+#  MODELE FEM. ON ASSUME QUE LA VALEUR DE KII EST ZERO SI
+#  ELLE EST EGAL A 1% DE LA VALEUR DE KI.
+   TOL_K2=0.001*KI_broek;
+
+   TEST_TABLE(TABLE=SIFL[i],
+              REFERENCE='ANALYTIQUE',
+              NOM_PARA='K1',
+              PRECISION=0.05,
+              TYPE_TEST='MAX',
+              VALE_REFE=KI_broek,
+              VALE_CALC=VALE_CALC[(i-1)*4],
+              )
+   IMPR_TABLE(TABLE=SIFL[i],FORMAT_R='E20.13',NOM_PARA='K1');
+
+   # TEST DE REFERENCE SUR K2
+   TEST_TABLE(TABLE=SIFL[i],
+              REFERENCE='ANALYTIQUE',
+              NOM_PARA='K2',
+              PRECISION=TOL_K2,
+              TYPE_TEST='MAX',
+              CRITERE='ABSOLU',
+              VALE_REFE=0.,
+              VALE_CALC=0.,
+              )
+   # TEST DE NON REGRESSION SUR K2
+   TEST_TABLE(TABLE=SIFL[i],
+              NOM_PARA='K2',
+              TYPE_TEST='MAX',
+              VALE_CALC=VALE_CALC[(i-1)*4+1],
+              )
+   IMPR_TABLE(TABLE=SIFL[i],FORMAT_R='E20.13',NOM_PARA='K2');
+
+   TEST_TABLE(TABLE=SIFR[i],
+              REFERENCE='ANALYTIQUE',
+              NOM_PARA='K1',
+              PRECISION=0.05,
+              TYPE_TEST='MAX',
+              VALE_REFE=KI_broek,
+              VALE_CALC=VALE_CALC[(i-1)*4+2],
+              )
+   IMPR_TABLE(TABLE=SIFR[i],FORMAT_R='E20.13',NOM_PARA='K1');
+
+   # TEST DE REFERENCE SUR K2
+   TEST_TABLE(TABLE=SIFR[i],
+              REFERENCE='ANALYTIQUE',
+              NOM_PARA='K2',
+              PRECISION=TOL_K2,
+              TYPE_TEST='MAX',
+              CRITERE='ABSOLU',
+              VALE_REFE=0.,
+              VALE_CALC=0.,
+              )
+   # TEST DE NON REGRESSION SUR K2
+   TEST_TABLE(TABLE=SIFR[i],
+              NOM_PARA='K2',
+              TYPE_TEST='MAX',
+              VALE_CALC=VALE_CALC[(i-1)*4+3],
+              )
+   IMPR_TABLE(TABLE=SIFR[i],FORMAT_R='E20.13',NOM_PARA='K2');
+
+FIN();

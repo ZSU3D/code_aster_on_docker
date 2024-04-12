@@ -1,0 +1,175 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+import os
+os.rename('fort.91', 'comp003a.py')
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='NON'))
+# SDVERI='NON' car la verification est trop couteuse en CPU
+
+#
+# !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !!
+#
+#   NE PAS UTILISER LES CARACTÉRISTIQUES MATÉRIAUX DE "BETON_RAG"
+#   DE CE CAS TEST POUR FAIRE DES ÉTUDES.
+#
+#   ILS NE SONT PAS PHYSIQUES, ILS SERVENT À DE LA VÉRIFICATION MATHÉMATIQUE
+#
+# !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !! !!
+#
+
+# Donnée materiau et fonction
+# Paramêtres élastiques
+YOUNG     = 32000.0
+POISSON   = 0.2
+#parametres viscosite
+K_RS      =   200000.0
+K_IS      =    20000.0
+ETA_RS    =   350000.0
+ETA_IS    =  2500000.0
+K_RD      =   100000.0
+K_ID      =    90000.0
+ETA_RD    =  2000000.0
+ETA_ID    =  3000000.0
+#autres parametres
+SIGUC     =  35.00
+SIGUT     =   3.18
+# def des materiaux
+BETON = [None]*3
+#unite en Pa
+C_Pa      = 1.e+6
+YOUNG_Pa  = YOUNG  * C_Pa
+K_RS_Pa   = K_RS   * C_Pa
+K_IS_Pa   = K_IS   * C_Pa
+ETA_RS_Pa = ETA_RS * C_Pa
+ETA_IS_Pa = ETA_IS * C_Pa
+K_RD_Pa   = K_RD   * C_Pa
+K_ID_Pa   = K_ID   * C_Pa
+ETA_RD_Pa = ETA_RD * C_Pa
+ETA_ID_Pa = ETA_ID * C_Pa
+SIGUC_Pa  = SIGUC  * C_Pa
+SIGUT_Pa  = SIGUT  * C_Pa
+
+
+#unite en Pa
+BETON[0]=DEFI_MATERIAU(
+    ELAS =_F(NU=POISSON, E=YOUNG_Pa, ALPHA=1.E-6),
+    BETON_RAG =_F(
+        COMP_BETON  = 'ENDO_FLUA',
+        # unités : Pa
+        ENDO_MC     =   1.95,
+        ENDO_MT     =   2.00,
+        ENDO_SIGUC  =  SIGUC_Pa,
+        ENDO_SIGUT  =  SIGUT_Pa,
+        ENDO_DRUPRA =   0.15,
+        # Unités : Pa Jour
+        FLUA_SPH_KR =   K_RS_Pa,
+        FLUA_SPH_KI =   K_IS_Pa,
+        FLUA_SPH_NR = ETA_RS_Pa,
+        FLUA_SPH_NI = ETA_IS_Pa,
+        FLUA_DEV_KR =   K_RD_Pa,
+        FLUA_DEV_KI =   K_ID_Pa,
+        FLUA_DEV_NR = ETA_RD_Pa,
+        FLUA_DEV_NI = ETA_ID_Pa,
+    ),
+)
+
+#unite en MPa
+BETON[1]=DEFI_MATERIAU(
+    ELAS =_F(NU=POISSON, E=YOUNG, ALPHA=1.E-6),
+    BETON_RAG =_F(
+        COMP_BETON  = 'ENDO_FLUA',
+        # unités : Pa
+        ENDO_MC     =   1.95,
+        ENDO_MT     =   2.00,
+        ENDO_SIGUC  =  SIGUC,
+        ENDO_SIGUT  =  SIGUT,
+        ENDO_DRUPRA =   0.15,
+        # Unités : Pa Jour
+        FLUA_SPH_KR =   K_RS,
+        FLUA_SPH_KI =   K_IS,
+        FLUA_SPH_NR = ETA_RS,
+        FLUA_SPH_NI = ETA_IS,
+        FLUA_DEV_KR =   K_RD,
+        FLUA_DEV_KI =   K_ID,
+        FLUA_DEV_NR = ETA_RD,
+        FLUA_DEV_NI = ETA_ID,
+    ),
+)
+compor='BETON_RAG'
+
+
+##################################################################################
+#Discretisation du calcul. nbequi = nombre de calculs "equivalents" : Pa, Rot
+Ncal   = 3
+N_pas  = [25,25] + [25,25]
+nbequi = 2
+# les differents calculs effectues
+label_cal = ['_Pa_','_rot_'] + 2*['_N']
+#pointeur materiau
+P_imat    = [0 , 1 , 1]
+
+#parametres vitesse de sollicitation
+vitesse = 1.e-2
+t_0 = 5.e-2/(8.0*vitesse)
+# calibrage des deformations maximum dans l'extension 93
+calibrage = 1.0e-2;
+CALIB_E=YOUNG
+CALIB_NU=POISSON
+
+# liste d'archivage
+temps_ar=DEFI_LIST_REEL( VALE =[t_0*i for i in range(9)],)
+
+# angles utilises pour la rotation
+angle2=30.0; angle0=0.0;
+angles=[angle0,angle2,angle0]
+
+# Les précisions sur chaque TEST_RESU
+prec_ecart=[
+    [1.0E-07, 1.0E-07, 1.0E-07,],
+    [1.0E-07, 1.0E-07, 1.0E-07,],
+]
+vale_calc=[
+    [1.000E-12,  1.000E-12,  1.000E-12,],
+    [1.000E-12,  1.000E-12,  1.000E-12,],
+]
+prec_zero=[1.E-08, 1.E-08, 1.0E-08,]
+
+# les quantites (invariants...) sur lequels portent les calculs d'erreur et les test_resu
+ch_param2=['VMIS','TRACE']
+# coefficients pour ch_param2 pour calculer l'erreur sur le cas "Pa"
+coef_para=[C_Pa,C_Pa]
+
+# definition de la temperature imposee
+TIMP=DEFI_FONCTION(
+    NOM_PARA='INST',  NOM_RESU='TEMP',
+    VALE=(  0.E0,     20.,
+           10.E0*t_0, 20.,)
+)
+
+###################################################################################
+#  TEST 3D
+##################################################################################
+# les quantites extraites du calcul
+ch_param=['VMIS','TRACE',]
+# resultats
+RESU=[None]*Ncal
+R_SI=[None]*len(ch_param)
+TMP_S=[None]
+
+FIN()

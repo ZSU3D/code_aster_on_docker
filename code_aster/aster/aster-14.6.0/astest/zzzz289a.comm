@@ -1,0 +1,146 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: sebastien.fayolle at edf.fr
+
+DEBUT(CODE=_F(
+NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+#ON LIT UN MAILLAGE QUADRATIQUE EN TETRA10 POUR TESTER LES ELEM
+# P2P1P1 (3D_INCO_UPG) ET P2P1 (3D_INCO_UP)
+MAIL_Q=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+#ON CREE UN MAILLAGE LINEAIRE POUR TESTER LES ELEM P1+P1 (3D_INCO_UP)
+MAIL_L=CREA_MAILLAGE(MAILLAGE=MAIL_Q,
+                     QUAD_LINE=_F(TOUT='OUI',),);
+
+MATER=DEFI_MATERIAU(ELAS=_F(E=30000.0,
+                            NU=0.2,
+                            RHO=2764.0,),
+                    ECRO_LINE=_F(D_SIGM_EPSI=-1950.0,
+                                 SY=3.0,),);
+
+CHMAT_Q=AFFE_MATERIAU(MAILLAGE=MAIL_Q,
+                      AFFE=_F(TOUT='OUI',
+                              MATER=MATER,),);
+
+CHMAT_L=AFFE_MATERIAU(MAILLAGE=MAIL_L,
+                      AFFE=_F(TOUT='OUI',
+                              MATER=MATER,),);
+
+MODELUPG=AFFE_MODELE(MAILLAGE=MAIL_Q,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D_INCO_UPG',),);
+
+MODELUPQ=AFFE_MODELE(MAILLAGE=MAIL_Q,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D_INCO_UP',),);
+
+MODELUPL=AFFE_MODELE(MAILLAGE=MAIL_L,
+                     AFFE=_F(TOUT='OUI',
+                             PHENOMENE='MECANIQUE',
+                             MODELISATION='3D_INCO_UP',),);
+
+#CALCUL DE LA MATRICE DE MASSE POUR LES ELEM P2P1P1
+MATMUPG=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                       MODELE=MODELUPG,
+                       CHAM_MATER=CHMAT_Q,);
+
+#CALCUL DE LA MATRICE DE MASSE POUR LES ELEM P2P1
+MATMUPQ=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                       MODELE=MODELUPQ,
+                       CHAM_MATER=CHMAT_Q,);
+
+#CALCUL DE LA MATRICE DE MASSE POUR LES ELEM P1+P1
+MATMUPL=CALC_MATR_ELEM(OPTION='MASS_MECA',
+                       MODELE=MODELUPL,
+                       CHAM_MATER=CHMAT_L,);
+
+#CALCUL DE LA MATRICE DE RIGIDITE POUR LES ELEM P2P1P1
+MATRUPG=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                       MODELE=MODELUPG,
+                       CHAM_MATER=CHMAT_Q,);
+
+#CALCUL DE LA MATRICE DE RIGIDITE POUR LES ELEM P2P1
+MATRUPQ=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                       MODELE=MODELUPQ,
+                       CHAM_MATER=CHMAT_Q,);
+
+#CALCUL DE LA MATRICE DE RIGIDITE POUR LES ELEM P1+P1
+MATRUPL=CALC_MATR_ELEM(OPTION='RIGI_MECA',
+                       MODELE=MODELUPL,
+                       CHAM_MATER=CHMAT_L,);
+
+NUMEUPG=NUME_DDL(MODELE=MODELUPG,);
+NUMEUPQ=NUME_DDL(MODELE=MODELUPQ,);
+NUMEUPL=NUME_DDL(MODELE=MODELUPL,);
+
+#MATRICE DE MASSE ASSEMBLEE POUR LES ELEM P2P1P1
+MAMASUPG=ASSE_MATRICE(MATR_ELEM=MATMUPG,
+                      NUME_DDL=NUMEUPG,);
+
+#MATRICE DE MASSE ASSEMBLEE POUR LES ELEM P2P1
+MAMASUPQ=ASSE_MATRICE(MATR_ELEM=MATMUPQ,
+                      NUME_DDL=NUMEUPQ,);
+
+#MATRICE DE MASSE ASSEMBLEE POUR LES ELEM P1+P1
+MAMASUPL=ASSE_MATRICE(MATR_ELEM=MATMUPL,
+                      NUME_DDL=NUMEUPL,);
+
+#MATRICE DE RIGIDITE ASSEMBLEE POUR LES ELEM P2P1P1
+MARASUPG=ASSE_MATRICE(MATR_ELEM=MATRUPG,
+                      NUME_DDL=NUMEUPG,);
+
+#MATRICE DE RIGIDITE ASSEMBLEE POUR LES ELEM P2P1
+MARASUPQ=ASSE_MATRICE(MATR_ELEM=MATRUPQ,
+                      NUME_DDL=NUMEUPQ,);
+
+#MATRICE DE RIGIDITE ASSEMBLEE POUR LES ELEM P1+P1
+MARASUPL=ASSE_MATRICE(MATR_ELEM=MATRUPL,
+                      NUME_DDL=NUMEUPL,);
+
+#Test de non regression sur la matrice de masse
+
+TEST_RESU(OBJET=_F(VALE_CALC=6278.2285714285999,
+                   NOM='MATMUPG        .M01.RESL',),
+          )
+
+TEST_RESU(OBJET=_F(VALE_CALC=6278.2285714285999,
+                   NOM='MATMUPQ        .M01.RESL',),
+          )
+
+TEST_RESU(OBJET=_F(VALE_CALC=5804.4,
+                   NOM='MATMUPL        .M01.RESL',),
+          )
+
+TEST_RESU(OBJET=_F(VALE_CALC=2.6950725246896E+06,
+                   NOM='MATRUPG .ME001     .RESL',),
+          )
+
+TEST_RESU(OBJET=_F(VALE_CALC=1.5333753473997E+06,
+                   NOM='MATRUPQ .ME001     .RESL',),
+          )
+
+TEST_RESU(OBJET=_F(VALE_CALC=3.3334246679193E+05,
+                   NOM='MATRUPL .ME001     .RESL',),
+          )
+
+FIN();

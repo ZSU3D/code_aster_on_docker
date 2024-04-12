@@ -1,0 +1,107 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED')
+
+MA=DEFI_GROUP(reuse=MA,MAILLAGE=MA,
+              CREA_GROUP_MA=(_F(UNION=('GAE','GEB'),NOM='GAB'),),
+              CREA_GROUP_NO=(_F(GROUP_MA='GEF'),
+                             _F(GROUP_MA='GAB'),),)
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       MODELISATION='D_PLAN',
+                       PHENOMENE='MECANIQUE'),)
+
+MAT=DEFI_MATERIAU(ELAS=_F(NU=0.3,E=2.1e+11),)
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',MATER=MAT),)
+
+CH=AFFE_CHAR_MECA(MODELE=MO,
+                  LIAISON_GROUP=(_F(GROUP_MA_1='GEF',GROUP_MA_2='GFE',DDL_1='DNOR',COEF_MULT_1=1.0,DDL_2='DNOR',COEF_MULT_2=-1.0,COEF_IMPO=.0,
+                  ),),
+                  DDL_IMPO=(_F(GROUP_MA='GDA',DX=0,DY=0),
+                            _F(GROUP_MA='GBC',DY=0),
+                            _F(GROUP_MA='GBC',DX=.1),
+                            )),
+
+
+RESU=MECA_STATIQUE(EXCIT=_F(CHARGE=CH),
+                   MODELE=MO,
+                   CHAM_MATER=CHMAT)
+
+CALC_CHAMP(reuse=RESU,RESULTAT=RESU,CRITERES=('SIEQ_ELNO'),CONTRAINTE=('SIGM_ELNO'))
+
+IMPR_RESU(FORMAT="RESULTAT",RESU=_F(RESULTAT=RESU))
+
+TB1=POST_RELEVE_T(ACTION=_F(INTITULE='CONTRAINTES AB',
+                            OPERATION='EXTRACTION',
+                            RESULTAT=RESU,
+                            NOM_CHAM='SIGM_ELNO',
+                            NOM_CMP='SIXX',
+                            GROUP_NO='GAB'),)
+
+TB2=POST_RELEVE_T(ACTION=_F(INTITULE='TRESCA MOYEN EF',
+                            OPERATION='MOYENNE',
+                            RESULTAT=RESU,
+                            NOM_CHAM='SIEQ_ELNO',
+                            NOM_CMP='TRESCA',
+                            GROUP_NO='GEF'),)
+
+TB3=POST_RELEVE_T(ACTION=_F(INTITULE='DEPL EF REPERE UTILISATEUR',
+                            REPERE='UTILISATEUR',
+                            ANGL_NAUT=(60.0,0,0),
+                            OPERATION='EXTRACTION',
+                            RESULTAT=RESU,
+                            NOM_CHAM='DEPL',
+                            NOM_CMP='DX',
+                            GROUP_NO='GEF'),)
+
+TEST_TABLE(
+           VALE_CALC=6.8481239601528001E8,
+           NOM_PARA='SIXX',
+           TABLE=TB1,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=47.278300000000002,),
+           )
+
+IMPR_TABLE(TABLE=TB2)
+
+TEST_TABLE(
+           VALE_CALC=3.0314779240868002E8,
+           NOM_PARA='TRESCA',
+           TABLE=TB2,
+           FILTRE=_F(NOM_PARA='QUANTITE',
+                     VALE_K='MINIMUM',),
+           )
+
+IMPR_TABLE(TABLE=TB3)
+
+TEST_TABLE(
+           VALE_CALC=0.064616750000000001,
+           NOM_PARA='DX',
+           TABLE=TB3,
+           FILTRE=_F(NOM_PARA='ABSC_CURV',
+                     VALE=4.9119700000000002,),
+           )
+
+FIN()

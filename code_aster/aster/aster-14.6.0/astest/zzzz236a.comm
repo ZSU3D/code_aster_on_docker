@@ -1,0 +1,163 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#  Volumes  du maillage : V00[i]
+#  Surfaces             : S00[i]
+#
+#    :-------:-------:-------:-------:-------:
+#    : V001  : V002  : V003  : V004  : V005  :
+#    :-------:-------:-------:-------:-------:
+#  S001    S002    S003    S004    S005    S006
+#
+# VOLAA = V001 et V003
+# VOLBB = V002 et V003 et V005
+#
+
+DEBUT( CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA0=LIRE_MAILLAGE(FORMAT='MED',)
+MA0=DEFI_GROUP(reuse=MA0,MAILLAGE=MA0,
+   CREA_GROUP_NO=_F(GROUP_MA=('S001','S002','S003','S004','S005','S006','V004'),), )
+#RESTREINT  : GROUP_MA, GROUP_NO, TOUT_GROUP_MA, TOUT_GROUP_NO
+
+# Groupes de mailles
+MA1=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='V001'), )
+MA2=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='VOLAA'),)
+MA3=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA=('VOLAA','VOLBB'),),)
+MA4=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA=('VOLAA','VOLBB'),TOUT_GROUP_NO='OUI'),)
+
+# Groupes de mailles, de noeuds
+NA1=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='V001', GROUP_NO='S002'),)
+NA2=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='VOLAA',GROUP_NO='V004'),)
+NA3=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA=('VOLAA','VOLBB'), GROUP_NO=('V004','S004'),),)
+
+# Groupes  de mailles, de noeuds, TOUT_GROUP
+MNA1=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='VOLAA',TOUT_GROUP_MA='OUI'),)
+MNA2=CREA_MAILLAGE(MAILLAGE=MA0, RESTREINT=_F(GROUP_MA='VOLAA',TOUT_GROUP_MA='OUI',TOUT_GROUP_NO='OUI'),)
+
+
+ListeMail = [
+ 'MA1' ,
+ 'MA2' ,
+ 'MA3' ,
+ 'MA4' ,
+ 'MNA1',
+ 'MNA2',
+ 'NA1' ,
+ 'NA2' ,
+ 'NA3' ,
+]
+
+for unmail in ListeMail:
+   nomfic = './REPE_OUT/%s.mail' % unmail
+   unite = DEFI_FICHIER(ACTION='ASSOCIER',
+                        FICHIER=nomfic)
+   IMPR_RESU(UNITE=unite,
+             FORMAT='ASTER',
+             RESU=_F(MAILLAGE=eval('%s' % unmail ) ),)
+   DEFI_FICHIER(ACTION='LIBERER',
+                UNITE=unite)
+   DETRUIRE(CONCEPT=(_F(NOM=unite),),
+            INFO=1)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA1.mail",
+             NB_VALE_I=1469,
+             VALE_CALC_I=164444,
+             NB_VALE=648,
+             VALE_CALC=3.2400000000e+02,
+             VALE_CALC_K="17dd6e6f906f148b196a29a6abccce9f",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/NA2.mail",
+             NB_VALE_I=3331,
+             VALE_CALC_I=1068403,
+             NB_VALE=1836,
+             VALE_CALC=1.9080000000e+03,
+             VALE_CALC_K="e7ed913566239d0ef533780631e2ec73",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA3.mail",
+             NB_VALE_I=5919,
+             VALE_CALC_I=2385780,
+             NB_VALE=2376,
+             VALE_CALC=2.6280000000e+03,
+             VALE_CALC_K="db564b356974fc13ba22ccaa67aa37db",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA2.mail",
+             NB_VALE_I=2934,
+             VALE_CALC_I=811593,
+             NB_VALE=1296,
+             VALE_CALC=1.0800000000e+03,
+             VALE_CALC_K="1cb4700c1c5f4f8ea88cd3cb201aec64",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MA4.mail",
+             NB_VALE_I=6214,
+             VALE_CALC_I=2498479,
+             NB_VALE=2376,
+             VALE_CALC=2.6280000000e+03,
+             VALE_CALC_K="42bbddf861b757d083e6075dc90f1fee",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/NA1.mail",
+             NB_VALE_I=1506,
+             VALE_CALC_I=166480,
+             NB_VALE=648,
+             VALE_CALC=3.2400000000e+02,
+             VALE_CALC_K="679298ec8335eae41c4abfa0127c29be",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MNA2.mail",
+             NB_VALE_I=3746,
+             VALE_CALC_I=986148,
+             NB_VALE=1296,
+             VALE_CALC=1.0800000000e+03,
+             VALE_CALC_K="28e4060886fe3a68c979845ad13d516e",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/MNA1.mail",
+             NB_VALE_I=3561,
+             VALE_CALC_I=944722,
+             NB_VALE=1296,
+             VALE_CALC=1.0800000000e+03,
+             VALE_CALC_K="1bbe4fb95f9f24442aaf1522844d3dc6",
+             EXPR_IGNORE=('ASTER',),
+)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/NA3.mail",
+             NB_VALE_I=6317,
+             VALE_CALC_I=2636078,
+             NB_VALE=2808,
+             VALE_CALC=3.2760000000e+03,
+             VALE_CALC_K="b06f496cfb5aa04c3d4c5a6dcdb6b23a",
+             EXPR_IGNORE=('ASTER',),
+)
+
+
+
+FIN()

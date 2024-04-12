@@ -1,0 +1,98 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# Interet du test :
+#-------------------
+# Ce test calcule les premieres frequences propres d'une plaque modelisee en 3D
+# On compare les resultats obtenus avec CALC_MODES
+# selon que l'on utilise (ou non) la commande ELIM_LAGR.
+# ======================================================================
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'),
+      )
+
+
+MAIL=LIRE_MAILLAGE(UNITE=20, FORMAT='MED',);
+
+MODELE=AFFE_MODELE(MAILLAGE=MAIL,
+                   AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='3D',),);
+
+MAT=DEFI_MATERIAU(ELAS=_F(E=200.e9, NU=0.3, RHO=8000.0,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(TOUT='OUI', MATER=MAT,),);
+
+BLOCAGE=AFFE_CHAR_MECA(MODELE=MODELE,
+                       DDL_IMPO=_F(GROUP_MA='BLOK',
+                                   DX=0.0,
+                                   DY=0.0,
+                                   DZ=0.0,),);
+
+ASSEMBLAGE (    MODELE=MODELE,
+                CHAM_MATER=CHMAT,
+                CHARGE=BLOCAGE,
+                NUME_DDL=CO('NUMEDDL'),
+                MATR_ASSE=(_F(MATRICE=CO('K1'),
+                              OPTION='RIGI_MECA',),
+                           _F(MATRICE=CO('M1'),
+                              OPTION='MASS_MECA',),),);
+
+
+# 1. Calcul de reference avec les matrices "completes" :
+#--------------------------------------------------------
+if 1 :
+    MODE1=CALC_MODES( OPTION='BANDE',
+                      MATR_RIGI=K1,
+                      MATR_MASS=M1,
+                      CALC_FREQ=_F( FREQ=(10., 250.) ),
+                      VERI_MODE=_F( SEUIL=1e-03 )
+                     )
+
+    TEST_RESU(RESU=_F(RESULTAT=MODE1, NUME_MODE=2, PARA='FREQ', VALE_CALC= 85.631015163879, ))
+
+
+# 2. Calcul avec les matrices reduites :
+#--------------------------------------------------------
+if 1 :
+    K2=ELIM_LAGR(MATR_RIGI=K1)
+    M2=ELIM_LAGR(MATR_ASSE=M1, MATR_RIGI=K1)
+
+#   2.1 avec MULT_FRONT :
+    MODE2=CALC_MODES( OPTION='BANDE',
+                      MATR_RIGI=K2,
+                      MATR_MASS=M2,
+                      CALC_FREQ=_F( FREQ=(10., 250.) ),
+                      VERI_MODE=_F( SEUIL=1e-03 ),
+                     )
+
+    TEST_RESU(RESU=_F(RESULTAT=MODE2, NUME_MODE=2, PARA='FREQ', VALE_CALC= 85.631015163879, ))
+
+#   2.2 avec MUMPS :
+    MODE3=CALC_MODES( OPTION='BANDE',
+                      MATR_RIGI=K2,
+                      MATR_MASS=M2,
+                      CALC_FREQ=_F( FREQ=(10., 250.) ),
+                      VERI_MODE=_F( SEUIL=1e-03 ),
+                      SOLVEUR=_F(METHODE='MUMPS'),
+                     )
+
+    TEST_RESU(RESU=_F(RESULTAT=MODE3, NUME_MODE=2, PARA='FREQ', VALE_CALC= 85.631015163879, ))
+
+
+FIN();

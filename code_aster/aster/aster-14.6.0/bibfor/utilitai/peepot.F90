@@ -1,0 +1,351 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+!
+subroutine peepot(resu, modele, mate, cara, nh, nbocc)
+!
+implicit none
+!
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "asterfort/gettco.h"
+#include "asterc/r8vide.h"
+#include "asterfort/assert.h"
+#include "asterfort/chpve2.h"
+#include "asterfort/dismoi.h"
+#include "asterfort/exlim3.h"
+#include "asterfort/getvem.h"
+#include "asterfort/getvid.h"
+#include "asterfort/getvr8.h"
+#include "asterfort/getvtx.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jedetr.h"
+#include "asterfort/jeexin.h"
+#include "asterfort/jelira.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/jenonu.h"
+#include "asterfort/jerecu.h"
+#include "asterfort/jeveuo.h"
+#include "asterfort/jexnom.h"
+#include "asterfort/compEnergyPotential.h"
+#include "asterfort/mecham.h"
+#include "asterfort/mechti.h"
+#include "asterfort/meharm.h"
+#include "asterfort/peenca.h"
+#include "asterfort/rsadpa.h"
+#include "asterfort/rsexch.h"
+#include "asterfort/rsutnu.h"
+#include "asterfort/tbajli.h"
+#include "asterfort/tbajpa.h"
+#include "asterfort/tbcrsd.h"
+#include "asterfort/utmess.h"
+#include "asterfort/vrcins.h"
+#include "asterfort/vrcref.h"
+#include "asterfort/wkvect.h"
+!
+    integer :: nh, nbocc
+    character(len=*) :: resu, modele, mate, cara
+!     OPERATEUR   POST_ELEM
+!     TRAITEMENT DU MOT CLE-FACTEUR "ENER_POT"
+!     ------------------------------------------------------------------
+!
+!
+    integer :: nd, nr, ni, iret, np, nc, jord, jins, jad, nbordr, iord, numord, iainst, jnmo, ibid
+    integer :: ire1, ire2, nt, nm, ng, nbgrma, ig, jgr, nbma, nume, im, nbparr, nbpard, nbpaep
+    integer :: iocc, jma, icheml, ier
+    parameter (nbpaep=2,nbparr=6,nbpard=4)
+    real(kind=8) :: prec, varpep(nbpaep), inst, valer(3), rundf
+    character(len=1) :: base
+    character(len=2) :: codret
+    character(len=8) :: k8b, noma, resul, crit, nommai, typarr(nbparr), typard(nbpard), valk(2)
+    character(len=8) :: nomgd
+    character(len=16) :: typres, option, optio2, noparr(nbparr), nopard(nbpard)
+    character(len=19) :: chelem, knum, kins, ligrel, tabtyp(3), chvarc, chvref
+    character(len=19) :: field_node, field_elem
+    character(len=24) :: chtime, typcha, chgeom, chcara(18), chtemp, chharm, chdisp
+    character(len=24) :: compor, mlggma, mlgnma, nomgrm, valk2(2)
+    aster_logical :: exitim, l_temp
+    complex(kind=8) :: c16b
+    integer :: iarg
+!
+    data noparr/'NUME_ORDRE','INST','LIEU','ENTITE','TOTALE',&
+     &     'POUR_CENT'/
+    data typarr/'I','R','K24','K8','R','R'/
+    data nopard/'LIEU','ENTITE','TOTALE','POUR_CENT'/
+    data typard/'K8','K8','R','R'/
+    data tabtyp/'NOEU#DEPL_R','NOEU#TEMP_R','ELEM#ENER_R'/
+    data chvarc,chvref /'&&PEEPOT.VARC','&&PEEPOT.VARC_REF'/
+!
+!     ------------------------------------------------------------------
+    call jemarq()
+    c16b=(0.d0,0.d0)
+
+!
+    base   = 'V'
+    rundf  = r8vide()
+    exitim = .false.
+    inst   = 0.d0
+    chtemp = ' '
+    chdisp = ' '
+    typres = ' '
+    call getvid(' ', 'CHAM_GD', scal=field_node, nbret=nd)
+    if (nd .ne. 0) then
+        call chpve2(field_node, 3, tabtyp, ier)
+        call dismoi('TYPE_SUPERVIS', field_node, 'CHAMP', repk=typcha)
+        call dismoi('NOM_GD', field_node, 'CHAMP', repk=nomgd)
+    endif
+    call getvid(' ', 'RESULTAT', scal=resul, nbret=nr)
+    call getvr8(' ', 'INST', scal=inst, nbret=ni)
+    if (ni .ne. 0) exitim = .true.
+    if (nr .ne. 0) then
+        call gettco(resul, typres)
+        if (typres(1:9) .eq. 'MODE_MECA') then
+            noparr(2) = 'FREQ'
+        else if (typres(1:9) .eq. 'EVOL_THER' .or. typres(1:9) .eq. 'EVOL_ELAS' .or.&
+                 typres(1:9) .eq. 'MULT_ELAS' .or. typres(1:9) .eq. 'EVOL_NOLI' .or.&
+                 typres(1:10) .eq. 'DYNA_TRANS') then
+            noparr(2) = 'INST'
+        else
+            ASSERT(ASTER_FALSE)
+        endif
+    endif
+!
+    option = 'ENER_POT'
+    call mecham(option, modele, cara, nh, chgeom,&
+                chcara, chharm, iret)
+    if (iret .ne. 0) goto 90
+    noma = chgeom(1:8)
+    mlgnma = noma//'.NOMMAI'
+    mlggma = noma//'.GROUPEMA'
+!
+    call exlim3('ENER_POT', 'V', modele, ligrel)
+!
+    knum = '&&PEEPOT.NUME_ORDRE'
+    kins = '&&PEEPOT.INSTANT'
+
+    if (nd .ne. 0) then
+        nbordr = 1
+        call wkvect(knum, 'V V I', nbordr, jord)
+        zi(jord) = 1
+        call wkvect(kins, 'V V R', nbordr, jins)
+        zr(jins) = inst
+        call tbcrsd(resu, 'G')
+        call tbajpa(resu, nbpard, nopard, typard)
+    else
+        call getvr8(' ', 'PRECISION', scal=prec, nbret=np)
+        call getvtx(' ', 'CRITERE', scal=crit, nbret=nc)
+        call rsutnu(resul, ' ', 0, knum, nbordr, prec, crit, iret)
+        if (iret .ne. 0) goto 80
+        call jeveuo(knum, 'L', jord)
+!        --- ON RECUPERE LES INSTANTS ---
+        call wkvect(kins, 'V V R', nbordr, jins)
+        call jenonu(jexnom(resul//'           .NOVA', 'INST'), iret)
+        if (iret .ne. 0) then
+            exitim = .true.
+            do iord = 1, nbordr
+                numord = zi(jord+iord-1)
+                call rsadpa(resul, 'L', 1, 'INST', numord,&
+                            0, sjv=iainst)
+                zr(jins+iord-1) = zr(iainst)
+            end do
+        else
+            call jenonu(jexnom(resul//'           .NOVA', 'FREQ'), iret)
+            if (iret .ne. 0) then
+                do iord = 1, nbordr
+                    numord = zi(jord+iord-1)
+                    call rsadpa(resul, 'L', 1, 'FREQ', numord, 0, sjv=iainst)
+                    zr(jins+iord-1) = zr(iainst)
+                end do
+            endif
+        endif
+        call tbcrsd(resu, 'G')
+        call tbajpa(resu, nbparr, noparr, typarr)
+    endif
+!
+    do iord = 1, nbordr
+        call jemarq()
+        call jerecu('V')
+        icheml = 0
+        numord = zi(jord+iord-1)
+        inst = zr(jins+iord-1)
+        valer(1) = inst
+        if (typres .eq. 'FOURIER_ELAS') then
+            call rsadpa(resul, 'L', 1, 'NUME_MODE', numord, 0, sjv=jnmo)
+            call meharm(modele, zi(jnmo), chharm)
+        endif
+        chtime = ' '
+        if (exitim) call mechti(noma, inst, rundf, rundf, chtime)
+!
+        if (nr .ne. 0) then
+            call rsexch(' ', resul, 'EPOT_ELEM', numord, field_elem, iret)
+            if (iret .gt. 0) then
+                call rsexch(' ', resul, 'DEPL', numord, field_node, ire1)
+                if (ire1 .gt. 0) then
+                    call rsexch(' ', resul, 'TEMP', numord, field_node, ire2)
+                    if (ire2 .gt. 0) goto 72
+                    call dismoi('TYPE_SUPERVIS', field_node, 'CHAMP', repk=typcha)
+                    call dismoi('NOM_GD', field_node, 'CHAMP', repk=nomgd)
+                else
+                    call dismoi('TYPE_SUPERVIS', field_node, 'CHAMP', repk=typcha)
+                    call dismoi('NOM_GD', field_node, 'CHAMP', repk=nomgd)
+                endif
+            else
+                call dismoi('TYPE_SUPERVIS', field_elem, 'CHAMP', repk=typcha)
+                call dismoi('NOM_GD', field_elem, 'CHAMP', repk=nomgd)
+            endif
+        endif
+!
+        if (typcha(1:7) .eq. 'CHAM_NO') then
+            if (nomgd(1:4) .eq. 'DEPL') then
+                optio2 = 'EPOT_ELEM'
+                call vrcins(modele, mate, cara, inst, chvarc, codret)
+                call vrcref(modele(1:8), mate(1:8), cara(1:8), chvref(1: 19))
+                l_temp = ASTER_FALSE
+            else if (nomgd(1:4).eq.'TEMP') then
+                optio2 = 'ETHE_ELEM'
+                l_temp = ASTER_TRUE
+            else
+                call utmess('F', 'UTILITAI3_73')
+            endif
+        else if (typcha(1:9).eq.'CHAM_ELEM') then
+            if (nomgd(1:4) .eq. 'ENER') then
+                chelem = field_elem
+                goto 30
+            else
+                call utmess('F', 'UTILITAI3_73')
+            endif
+        else
+            call utmess('F', 'UTILITAI3_73')
+        endif
+        icheml = 1
+        chelem = '&&PEEPOT.CHAM_ELEM'
+        compor = mate(1:8)//'.COMPOR'
+        ibid = 0
+        if (l_temp) then
+            chtemp = field_node
+            chdisp = ' '
+        else
+            chdisp = field_node
+            chtemp = ' '
+        endif
+        call compEnergyPotential(optio2, modele, ligrel, compor, l_temp,&
+                                 chdisp, chtemp,&
+                                 chharm, chgeom, mate  , chcara, chtime,&
+                                 chvarc, chvref, &
+                                 base  , chelem, iret)
+ 30     continue
+!
+!        --- ON CALCULE L'ENERGIE TOTALE ---
+        call peenca(chelem, nbpaep, varpep, 0, [ibid])
+!
+        do iocc = 1, nbocc
+            call getvtx(option(1:9), 'TOUT', iocc=iocc, nbval=0, nbret=nt)
+            call getvem(noma, 'MAILLE', option(1:9), 'MAILLE', iocc,&
+                        iarg, 0, k8b, nm)
+            call getvem(noma, 'GROUP_MA', option(1:9), 'GROUP_MA', iocc,&
+                        iarg, 0, k8b, ng)
+            if (nt .ne. 0) then
+                call peenca(chelem, nbpaep, varpep, 0, [ibid])
+                valk(1) = noma
+                valk(2) = 'TOUT'
+                if (nr .ne. 0) then
+                    valer(2) = varpep(1)
+                    valer(3) = varpep(2)
+                    call tbajli(resu, nbparr, noparr, [numord], valer,&
+                                [c16b], valk, 0)
+                else
+                    call tbajli(resu, nbpard, nopard, [numord], varpep,&
+                                [c16b], valk, 0)
+                endif
+            endif
+            if (ng .ne. 0) then
+                nbgrma = -ng
+                call wkvect('&&PEEPOT_GROUPM', 'V V K24', nbgrma, jgr)
+                call getvem(noma, 'GROUP_MA', option(1:9), 'GROUP_MA', iocc,&
+                            iarg, nbgrma, zk24(jgr), ng)
+                valk2(2) = 'GROUP_MA'
+                do ig = 1, nbgrma
+                    nomgrm = zk24(jgr+ig-1)
+                    call jeexin(jexnom(mlggma, nomgrm), iret)
+                    if (iret .eq. 0) then
+                        call utmess('A', 'UTILITAI3_46', sk=nomgrm)
+                        goto 40
+                    endif
+                    call jelira(jexnom(mlggma, nomgrm), 'LONUTI', nbma)
+                    if (nbma .eq. 0) then
+                        call utmess('A', 'UTILITAI3_47', sk=nomgrm)
+                        goto 40
+                    endif
+                    call jeveuo(jexnom(mlggma, nomgrm), 'L', jad)
+                    call peenca(chelem, nbpaep, varpep, nbma, zi(jad))
+                    valk2(1) = nomgrm
+                    if (nr .ne. 0) then
+                        valer(2) = varpep(1)
+                        valer(3) = varpep(2)
+                        call tbajli(resu, nbparr, noparr, [numord], valer,&
+                                    [c16b], valk2, 0)
+                    else
+                        call tbajli(resu, nbpard, nopard, [numord], varpep,&
+                                    [c16b], valk2, 0)
+                    endif
+ 40                 continue
+                end do
+                call jedetr('&&PEEPOT_GROUPM')
+            endif
+            if (nm .ne. 0) then
+                nbma = -nm
+                call wkvect('&&PEEPOT_MAILLE', 'V V K8', nbma, jma)
+                call getvem(noma, 'MAILLE', option(1:9), 'MAILLE', iocc,&
+                            iarg, nbma, zk8(jma), nm)
+                valk(2) = 'MAILLE'
+                do im = 1, nbma
+                    nommai = zk8(jma+im-1)
+                    call jeexin(jexnom(mlgnma, nommai), iret)
+                    if (iret .eq. 0) then
+                        call utmess('A', 'UTILITAI3_49', sk=nommai)
+                        goto 50
+                    endif
+                    call jenonu(jexnom(mlgnma, nommai), nume)
+                    call peenca(chelem, nbpaep, varpep, 1, [nume])
+                    valk(1) = nommai
+                    if (nr .ne. 0) then
+                        valer(2) = varpep(1)
+                        valer(3) = varpep(2)
+                        call tbajli(resu, nbparr, noparr, [numord], valer,&
+                                    [c16b], valk, 0)
+                    else
+                        call tbajli(resu, nbpard, nopard, [numord], varpep,&
+                                    [c16b], valk, 0)
+                    endif
+ 50                 continue
+                end do
+                call jedetr('&&PEEPOT_MAILLE')
+            endif
+        end do
+        call jedetr('&&PEEPOT.PAR')
+        if (icheml .ne. 0) call jedetr(chelem)
+ 72     continue
+        call jedema()
+    end do
+!
+ 80 continue
+    call jedetr(knum)
+    call jedetr(kins)
+!
+ 90 continue
+    call jedema()
+end subroutine

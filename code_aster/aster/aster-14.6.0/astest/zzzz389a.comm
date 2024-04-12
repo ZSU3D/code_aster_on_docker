@@ -1,0 +1,49 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),
+      IGNORE_ALARM=('MODELE1_63','MODELE1_64'),)
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED',)
+
+MODL=AFFE_MODELE(MAILLAGE=MAIL,
+                 AFFE=_F(TOUT='OUI',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),)
+
+RES_PRES=LIRE_RESU(TYPE_RESU='EVOL_CHAR',INFO=2,
+                   FORMAT='MED',
+                   MODELE=MODL,
+                   UNITE=20,
+                   FORMAT_MED=_F(NOM_CHAM='FSUR_3D',
+                                 NOM_CHAM_MED='Efforts',
+                                 NOM_CMP=('FX', 'FY', 'FZ',),
+                                 NOM_CMP_MED=('Component X', 'Component Y', 'Component Z',),),
+                   TOUT_ORDRE='OUI',)
+
+TEST_RESU(RESU=_F(NUME_ORDRE=142001,
+                  MAILLE='M1',
+                  REFERENCE='NON_DEFINI',
+                  RESULTAT=RES_PRES,
+                  NOM_CHAM='FSUR_3D',
+                  NOM_CMP='FX',
+                  VALE_CALC=-9.0207383937E-01,
+                  VALE_REFE=-9.0207383937E-01,),)
+
+FIN()

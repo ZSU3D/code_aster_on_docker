@@ -1,0 +1,118 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: philippe.de-bonnieres at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+L_INST =DEFI_LIST_REEL(  DEBUT=0.0,
+                        INTERVALLE=(
+                        _F( PAS = 0.002,       JUSQU_A = 0.02),
+                        _F( PAS = 0.004,       JUSQU_A = 0.06),
+                        _F( PAS = 0.01,        JUSQU_A = 0.24),
+)
+                      )
+MA = LIRE_MAILLAGE(FORMAT='MED',);
+
+MA = DEFI_GROUP(reuse =MA,
+                MAILLAGE=MA,
+                CREA_GROUP_NO =(
+                       _F(GROUP_MA = 'DAB',),
+                       _F(GROUP_MA = 'DCD',),
+                       _F(GROUP_MA = 'DBC',),
+                       _F(GROUP_MA = 'DDA',),
+                        )
+                )
+
+
+
+FONC1 = FORMULE(VALE='(X**2)*INST ',
+                NOM_PARA=['X', 'INST'],)
+
+TP1=CREA_CHAMP(OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_F',
+MAILLAGE=MA,
+                            AFFE=_F(  TOUT ='OUI',
+                                NOM_CMP = 'TEMP',
+                               VALE_F = FONC1)   )
+
+
+TEMPE=CREA_RESU(    OPERATION='AFFE', TYPE_RESU='EVOL_THER',    NOM_CHAM='TEMP',AFFE=(
+                      _F(  CHAM_GD = TP1,   LIST_INST =L_INST),)  )
+#CALCUL MECANIQUE
+
+MO = AFFE_MODELE( MAILLAGE =MA,
+                  AFFE=_F(
+                       TOUT ='OUI',
+                       PHENOMENE = 'MECANIQUE',
+                       MODELISATION = 'AXIS',)
+                 )
+
+MAT = DEFI_MATERIAU(
+            ELAS=_F( E = 1., NU = 0.3, ALPHA = 0.7),
+            LEMAITRE=_F( N = 1.,UN_SUR_K = 1.,UN_SUR_M = 0.)
+           )
+
+CHMAT = AFFE_MATERIAU (MAILLAGE = MA,
+                       AFFE =_F(TOUT='OUI',
+                                MATER = MAT,),
+                       AFFE_VARC=_F( TOUT='OUI',
+                                  EVOL=TEMPE,
+                                  NOM_VARC='TEMP',
+                                  NOM_CHAM='TEMP',VALE_REF=0.),)
+
+BLOC = AFFE_CHAR_MECA (MODELE = MO,
+                       DDL_IMPO=_F(GROUP_NO =('DAB','DCD'),
+                                   DY=0.)
+                      )
+
+RESU = STAT_NON_LINE (MODELE = MO,
+                      CHAM_MATER = CHMAT,
+                      EXCIT =(
+                         _F( CHARGE = BLOC),),
+                      COMPORTEMENT =_F(RELATION ='LEMAITRE',PARM_THETA = 0.5,
+                                    ITER_INTE_MAXI = 1000),
+                      INCREMENT =_F(LIST_INST =L_INST),
+                      NEWTON    =_F(
+                                MATRICE ='TANGENTE',
+                                REAC_ITER= 1),
+                      CONVERGENCE=_F(
+                                RESI_GLOB_RELA = 1.E-6,
+                                ITER_GLOB_MAXI = 25)
+                        )
+
+RESU = CALC_CHAMP( reuse= RESU,
+                  RESULTAT = RESU,
+                   CONTRAINTE=('SIGM_ELNO'),
+                  )
+RESU = CALC_CHAMP ( reuse= RESU,
+                  RESULTAT = RESU,
+                  CONTRAINTE='SIGM_NOEU',
+                  )
+
+TEST_RESU(RESU=_F(NUME_ORDRE=38,
+                  GROUP_NO='B',
+                  REFERENCE='ANALYTIQUE',
+                  RESULTAT=RESU,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DX',
+                  VALE_CALC=1.110626591,
+                  VALE_REFE=1.1100000000000001,),
+          )
+
+FIN()

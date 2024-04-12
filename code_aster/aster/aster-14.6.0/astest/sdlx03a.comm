@@ -1,0 +1,136 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: SDLX03A
+# SDLX03/A                 COMMANDES                             5/03/91
+# ASSEMBLAGE DE PLAQUES RECTANGULAIRES MINCES ENTRETOISEES
+# 2 PLAQUES HORIZONTALES: 0.375*0.20*0.005 M
+# 2 PLAQUES VERTICALES:   0.375*0.05*0.005 M       REF: SFM.VPCS SDLX03
+# MODELISATION DKT
+#======================================================================
+
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED', )
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+           AFFE=_F(  TOUT = 'OUI', PHENOMENE = 'MECANIQUE',
+                  MODELISATION = 'DKT') )
+
+CARELEM=AFFE_CARA_ELEM(   MODELE=MO,
+                            COQUE=_F(
+       GROUP_MA = 'TOUT',
+ EPAIS = 0.005)  )
+
+MAT=DEFI_MATERIAU( ELAS=_F(  E = 2.1E+11,  NU = 0.3,  RHO = 7800.) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',  MATER = MAT) )
+
+# --- STRUCTURE LIBRE-LIBRE ==> PAS DE CHARGE_MECA
+#
+#--------------------------------------------------------------------
+#
+MELR=CALC_MATR_ELEM(  MODELE=MO,           CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,   OPTION='RIGI_MECA' )
+
+MELM=CALC_MATR_ELEM(  MODELE=MO,           CARA_ELEM=CARELEM,
+                        CHAM_MATER=CHMAT,   OPTION='MASS_MECA'     )
+
+#
+#--------------------------------------------------------------------
+#
+NUM=NUME_DDL(  MATR_RIGI=MELR )
+
+MATASSR=ASSE_MATRICE(MATR_ELEM=MELR,NUME_DDL=NUM)
+
+MATASSM=ASSE_MATRICE(MATR_ELEM=MELM,NUME_DDL=NUM)
+
+#====================================================================
+#
+#               CALCUL MODAL
+
+MODES=CALC_MODES(MATR_RIGI=MATASSR,
+                 OPTION='BANDE',
+                 CALC_FREQ=_F(FREQ=( 1.,1200.,),
+                              ),
+                 MATR_MASS=MATASSM,
+                 )
+
+
+# --------------------------------------------------------------------
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=590.031015953,
+                   VALE_REFE=584.0,
+                   CRITERE='RELATIF',
+                   PRECISION=0.010999999999999999,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=829.400851160,
+                   VALE_REFE=826.0,
+                   CRITERE='RELATIF',
+                   PRECISION=5.0000000000000001E-3,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=848.154774824,
+                   VALE_REFE=855.0,
+                   CRITERE='RELATIF',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC=908.856583202,
+                   VALE_REFE=911.0,
+                   CRITERE='RELATIF',
+                   PRECISION=3.0000000000000001E-3,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC= 1.09765777E+03,
+                   VALE_REFE=1113.0,
+                   CRITERE='RELATIF',
+                   PRECISION=0.014999999999999999,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   REFERENCE='SOURCE_EXTERNE',
+                   RESULTAT=MODES,
+                   VALE_CALC= 1.16400881E+03,
+                   VALE_REFE=1136.0,
+                   CRITERE='RELATIF',
+                   PRECISION=0.025000000000000001,),
+                ),
+          )
+
+FIN()
+#

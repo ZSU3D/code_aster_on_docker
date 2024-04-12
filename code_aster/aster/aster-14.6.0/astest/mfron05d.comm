@@ -1,0 +1,174 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: david.haboussa at edf.fr
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),DEBUG=_F(SDVERI='OUI'))
+
+
+CREA_LIB_MFRONT(UNITE_MFRONT=38,UNITE_LIBRAIRIE=39)
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+
+MO=AFFE_MODELE(
+                MAILLAGE=MA,
+                AFFE= (
+                _F(
+                        MAILLE = ('CUBE','DROITE'),
+                        PHENOMENE = 'MECANIQUE',
+                        MODELISATION = '3D'
+                     ),
+                 _F(
+                   MAILLE = 'CUBEDEG',
+                   PHENOMENE = 'MECANIQUE',
+                   MODELISATION = '3D_JOINT'
+                   )
+                 )
+              )
+
+pena=0.001
+Youn=0.5
+delta=2*0.9/1.1*0.6/1.6
+rigin=1.1*1.1/0.9/pena
+
+MATF=DEFI_MATERIAU(
+                      ELAS=_F(E=Youn, NU=0.0),
+                      MFRONT=_F(LISTE_COEF=(rigin ,1.e4 ,1.1 ,delta ,
+                                    ),)
+                                ,)
+
+CMF=AFFE_MATERIAU(
+
+               MAILLAGE=MA,
+               AFFE=_F(
+                       TOUT = 'OUI',
+                       MATER = MATF),
+              )
+
+LIAISON=AFFE_CHAR_MECA(
+  MODELE=MO,
+  FACE_IMPO= (
+    _F(MAILLE='GAUCHE2', DX=0, DY=0, DZ=0 ),
+    )
+  )
+
+# CHARGEMENT MODE I PUR
+TRAC_1=AFFE_CHAR_MECA(
+  MODELE=MO,
+  FACE_IMPO= (
+    _F(MAILLE='DROITE', DX=2.16506350946110, DY= 1.250, DZ=0 ),
+    )
+  )
+
+
+L_INST=DEFI_LIST_REEL(
+                     DEBUT   = -1.,
+     INTERVALLE=(
+      _F( JUSQU_A = 0,       NOMBRE = 1 ),
+      _F( JUSQU_A = 2.0,     NOMBRE = 20 ),
+      )
+     )
+
+FCT2 = DEFI_FONCTION(
+  NOM_PARA = 'INST',
+  VALE     = (-1, 0, 0, 1.E-8, 4,4),
+  PROL_DROITE = 'LINEAIRE'
+  )
+
+DEF2 = DEFI_LIST_INST(  METHODE='MANUEL',
+                        DEFI_LIST=_F(LIST_INST=L_INST,),
+                        INFO=1,
+                        ECHEC=_F(SUBD_NIVEAU=10,
+                                 SUBD_PAS_MINI=0.0,
+                                 SUBD_PAS=10,
+                                 SUBD_METHODE='MANUEL',
+                                 ACTION='DECOUPE',
+                                 EVENEMENT='ERREUR',),
+                        )
+
+U_1F=STAT_NON_LINE( MODELE     = MO,
+                    CHAM_MATER = CMF,
+                    EXCIT      = (
+                                  _F(CHARGE = LIAISON  , ),
+                                  _F(CHARGE = TRAC_1 ,   FONC_MULT = FCT2,
+                                  ),
+                    ),
+                    RECH_LINEAIRE=_F(ITER_LINE_MAXI=5,METHODE='MIXTE'),
+                    COMPORTEMENT  = ( _F(RELATION='MFRONT',
+                                         NOM_ROUTINE='astertvergaard',
+                                         UNITE_LIBRAIRIE=39,
+                                         MAILLE = 'CUBEDEG',
+                                         RESI_INTE_MAXI=1.E-8,
+                                                ),
+                                      _F(RELATION = 'ELAS',
+                                         GROUP_MA = 'G_CUBE',),
+                            ),
+                    INCREMENT  = _F(LIST_INST = DEF2, ),
+                    NEWTON     = _F(MATRICE = 'TANGENTE', REAC_ITER=1,
+                    ),
+                    SUIVI_DDL=(_F(NOM_CMP    ='SIGN',
+                                NOM_CHAM   ='SIEF_ELGA',
+                                MAILLE='CUBEDEG',
+                                EVAL_ELGA  ='MAX',
+                                EVAL_CHAM ='MAX',),
+                            _F(NOM_CMP    ='V1',
+                                NOM_CHAM   ='VARI_ELGA',
+                                MAILLE='CUBEDEG',
+                                EVAL_ELGA  ='MAX',
+                                EVAL_CHAM ='MAX',),
+                                ),
+)
+
+F_DX=RECU_FONCTION( INTERPOL='LIN', RESULTAT=U_1F,
+              NOM_CHAM='DEPL',NOM_CMP='DX',GROUP_NO='TOUTSEUL')
+
+T_DX=CREA_TABLE(FONCTION=_F(FONCTION=F_DX))
+
+F_SIGN=RECU_FONCTION( INTERPOL='LIN', RESULTAT=U_1F, NOM_CHAM = 'SIEF_ELGA',
+          NOM_CMP = 'SIGN',
+          MAILLE  = 'CUBEDEG',POINT=1)
+
+T_SIGN=CREA_TABLE(FONCTION=_F(FONCTION=F_SIGN))
+
+IMPR_TABLE(TABLE=T_SIGN)
+
+IMPR_FONCTION(FORMAT='XMGRACE',UNITE=38,
+            COURBE=(_F(FONC_X=F_DX, FONC_Y=F_SIGN),),);
+
+TEST_TABLE(VALE_CALC=2.1650635257,
+           NOM_PARA='DX',
+           TABLE=T_DX,
+           FILTRE=_F(NOM_PARA='INST',VALE=1.),
+           )
+
+TEST_TABLE(VALE_CALC=1.0475348752,
+           NOM_PARA='SIGN',
+           TABLE=T_SIGN,
+           FILTRE=_F(NOM_PARA='INST',VALE=0.9),
+           )
+
+TEST_TABLE(VALE_CALC=0.00301769719547,
+           NOM_PARA='SIGN',
+           TABLE=T_SIGN,
+           FILTRE=_F(NOM_PARA='INST',VALE=1.),
+           )
+
+
+FIN()

@@ -1,0 +1,243 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# person_in_charge: mohamed-amine.hassini at edf.fr
+#
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),
+              DEBUG=_F(SDVERI='OUI'),);
+
+ALPHA = 0.0
+BETA  = 0.0
+GAMMA = 0.0
+COSA = cos(ALPHA*pi/180 )
+SINA = sin(ALPHA*pi/180 )
+COSB = cos(BETA *pi/180 )
+SINB = sin(BETA *pi/180 )
+COSG = cos(GAMMA*pi/180 )
+SING = sin(GAMMA*pi/180 )
+
+MA=LIRE_MAILLAGE(FORMAT="ASTER",);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(GROUP_MA=('P1'),
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='DIS_T',),);
+
+CARNS_G=AFFE_CARA_ELEM(
+   MODELE=MO,INFO=2,
+   DISCRET=(
+      _F(CARA='K_T_N',
+         GROUP_MA='P1',
+         REPERE='GLOBAL',
+         SYME='NON',
+         VALE=(
+         COSA*COSB*(COSA*COSB+(SING*SINB*COSA-COSG*SINA))+(SING*SINB*COSA-COSG*SINA)*(SING*SINB*COSA-COSG*SINA)+(SING*SINA+COSG*SINB*COSA)*(SING*SINA+COSG*SINB*COSA),
+         COSB*SINA*(COSA*COSB+(SING*SINB*COSA-COSG*SINA))+(COSG*COSA+SING*SINB*SINA)*(SING*SINB*COSA-COSG*SINA)+(COSG*SINB*SINA-COSA*SING)*(SING*SINA+COSG*SINB*COSA),
+         -SINB*(COSA*COSB+(SING*SINB*COSA-COSG*SINA))+(SING*COSB)*(SING*SINB*COSA-COSG*SINA)+COSG*COSB*(SING*SINA+COSG*SINB*COSA),
+         COSA*COSB*(COSB*SINA+(COSG*COSA+SING*SINB*SINA))+(SING*SINB*COSA-COSG*SINA)*(COSG*COSA+SING*SINB*SINA)+(SING*SINA+COSG*SINB*COSA)*(COSG*SINB*SINA-COSA*SING),
+         COSB*SINA*(COSB*SINA+(COSG*COSA+SING*SINB*SINA))+(COSG*COSA+SING*SINB*SINA)*(COSG*COSA+SING*SINB*SINA)+(COSG*SINB*SINA-COSA*SING)*(COSG*SINB*SINA-COSA*SING),
+         -SINB*(COSB*SINA+(COSG*COSA+SING*SINB*SINA))+(SING*COSB)*(COSG*COSA+SING*SINB*SINA)+COSG*COSB*(COSG*SINB*SINA-COSA*SING),
+         COSA*COSB*(-SINB+SING*COSB)+(SING*SINB*COSA-COSG*SINA)*(SING*COSB)+(SING*SINA+COSG*SINB*COSA)*(COSG*COSB),
+         COSB*SINA*(-SINB+SING*COSB)+(COSG*COSA+SING*SINB*SINA)*(SING*COSB)+(COSG*SINB*SINA-COSA*SING)*(COSG*COSB),
+         -SINB*(-SINB+SING*COSB)+(SING*COSB)*(SING*COSB)+COSG*COSB*(COSG*COSB),
+         ),),
+   ),
+)
+
+CARNS_L=AFFE_CARA_ELEM(
+   MODELE=MO,INFO=2,
+   DISCRET=(
+      _F(CARA='K_T_N', GROUP_MA='P1', REPERE='LOCAL', SYME='NON', VALE=(1,0,0,1,1,0,0,0,1,),),
+   ),
+   ORIENTATION=_F(GROUP_MA='P1',
+                  CARA='ANGL_NAUT',
+                  VALE=(ALPHA,BETA,GAMMA,),),
+)
+
+MAT=DEFI_MATERIAU( ELAS=_F(E=1, NU=.3, RHO=1,),);
+
+AFMA=AFFE_MATERIAU(
+   MAILLAGE=MA,
+   AFFE=_F(TOUT='OUI', MATER=MAT,),)
+
+
+DEPL=AFFE_CHAR_MECA(
+   MODELE=MO,
+   DDL_IMPO=(
+      _F( GROUP_NO='P1', DX=2.0 , DY=1.0 , DZ=3.0),
+   ),
+)
+
+FORC=AFFE_CHAR_MECA(
+   MODELE=MO,
+   FORCE_NODALE=(
+      _F( GROUP_NO='P1', FY=1.0 ),
+   ),
+)
+
+RDEPNS_G=MECA_STATIQUE(
+   MODELE=MO,
+   CHAM_MATER=AFMA,
+   CARA_ELEM=CARNS_G,
+   EXCIT=_F(CHARGE=DEPL,),
+)
+RDEPNS_G=CALC_CHAMP(reuse =RDEPNS_G,
+                 RESULTAT=RDEPNS_G,
+                 FORCE='REAC_NODA');
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_G,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DX',
+                   VALE_CALC=3.000000000,
+                   VALE_REFE=3.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_G,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DY',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_G,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DZ',
+                   VALE_CALC=3.000000000,
+                   VALE_REFE=3.0,),
+                ),
+          )
+
+RFORNS_G=MECA_STATIQUE(
+   MODELE=MO,
+   OPTION='SANS',
+   CHAM_MATER=AFMA,
+   CARA_ELEM=CARNS_G,
+   EXCIT=_F(CHARGE=FORC,),
+)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_G,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-1.000000000,
+                   VALE_REFE=-1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_G,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_G,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC= 0.00000000E+00,
+                   VALE_REFE=0,
+                   CRITERE='ABSOLU',),
+                ),
+          )
+
+RDEPNS_L=MECA_STATIQUE(
+   MODELE=MO,
+   CHAM_MATER=AFMA,
+   CARA_ELEM=CARNS_L,
+   EXCIT=_F(CHARGE=DEPL,),
+)
+RDEPNS_L=CALC_CHAMP(reuse =RDEPNS_L,
+                 RESULTAT=RDEPNS_L,
+                 FORCE='REAC_NODA');
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_L,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DX',
+                   VALE_CALC=3.000000000,
+                   VALE_REFE=3.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_L,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DY',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RDEPNS_L,
+                   NOM_CHAM='REAC_NODA',
+                   NOM_CMP='DZ',
+                   VALE_CALC=3.000000000,
+                   VALE_REFE=3.0,),
+                ),
+          )
+
+RFORNS_L=MECA_STATIQUE(
+   MODELE=MO,
+   OPTION='SANS',
+   CHAM_MATER=AFMA,
+   CARA_ELEM=CARNS_L,
+   EXCIT=_F(CHARGE=FORC,),
+)
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_L,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-1.000000000,
+                   VALE_REFE=-1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_L,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=1.000000000,
+                   VALE_REFE=1.0,),
+                _F(NUME_ORDRE=1,
+                   GROUP_NO='P1',
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RFORNS_L,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DZ',
+                   VALE_CALC= 0.00000000E+00,
+                   VALE_REFE=0,
+                   CRITERE='ABSOLU',),
+                ),
+          )
+
+FIN();

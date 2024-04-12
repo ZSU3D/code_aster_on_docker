@@ -1,0 +1,135 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION B : FISSURE CYLINDRE
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),
+      DEBUG=_F(SDVERI='OUI')
+      )
+
+# dimension du cube 
+LX = 1.
+LY = 1.
+LZ = 1.
+
+MA=LIRE_MAILLAGE(FORMAT='MED',)
+
+MOD=AFFE_MODELE(MAILLAGE=MA,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D'))
+
+# Definition de la fissure sur le maillage en entree
+r = 0.5
+x0 = LX
+y0 = LY/2.
+z0 = LZ
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA,
+                    DEFI_FISS=_F(FORM_FISS      = 'CYLINDRE',
+                                 DEMI_GRAND_AXE = r,
+                                 DEMI_PETIT_AXE = r,
+                                 CENTRE         = (x0, y0, z0),
+                                 VECT_X         = ( 0., 0.,-1.),
+                                 VECT_Y         = (-1., 0., 0.),
+                                 ))
+
+# Extraction des level sets
+LSN=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+               OPERATION='EXTR',
+               FISSURE=FISS,
+               NOM_CHAM='LNNO')
+
+LST=CREA_CHAMP(TYPE_CHAM='NOEU_NEUT_R',
+               OPERATION='EXTR',
+               FISSURE=FISS,
+               NOM_CHAM='LTNO')
+
+# IMPR_RESU(FORMAT='GMSH',UNITE=37,RESU=(_F(CHAM_GD=LSN),
+#                                        _F(CHAM_GD=LST)))
+
+LSN_P4=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P4',
+                               CHAM_GD = LSN,
+                               TOUT_CMP='OUI',
+                               INTITULE='LSN P4',
+                               OPERATION = 'EXTRACTION') )
+
+LSN_P5=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P5',
+                               CHAM_GD = LSN,
+                               TOUT_CMP='OUI',
+                               INTITULE='LSN P5',
+                               OPERATION = 'EXTRACTION') )
+                               
+IMPR_TABLE(TABLE=LSN_P4)
+IMPR_TABLE(TABLE=LSN_P5)
+
+LST_P4=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P4',
+                               CHAM_GD = LST,
+                               TOUT_CMP='OUI',
+                               INTITULE='LST P4',
+                               OPERATION = 'EXTRACTION') )
+
+LST_P5=POST_RELEVE_T(ACTION=_F(GROUP_NO = 'P5',
+                               CHAM_GD = LST,
+                               TOUT_CMP='OUI',
+                               INTITULE='LST P5',
+                               OPERATION = 'EXTRACTION') )
+                               
+IMPR_TABLE(TABLE=LST_P4)
+IMPR_TABLE(TABLE=LST_P5)
+
+ref_lsn_p4 = sqrt(LX**2+LZ**2) - r
+ref_lsn_p5 = LX-r
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=0.914213562373,
+           VALE_REFE=0.91421356237309515,
+           NOM_PARA='X1',
+           TABLE=LSN_P4,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=0.5,
+           VALE_REFE=0.5,
+           NOM_PARA='X1',
+           TABLE=LSN_P5,)
+
+ref_lst_p4 = -LY/2.
+ref_lst_p5 = -LY/2.
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=-0.5,
+           VALE_REFE=-0.5,
+           NOM_PARA='X1',
+           TABLE=LST_P4,)
+
+TEST_TABLE(CRITERE='ABSOLU',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-12,
+           VALE_CALC=-0.5,
+           VALE_REFE=-0.5,
+           NOM_PARA='X1',
+           TABLE=LST_P5,)
+
+FIN()

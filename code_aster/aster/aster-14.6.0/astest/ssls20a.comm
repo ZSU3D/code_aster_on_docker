@@ -1,0 +1,163 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: SSLS20A
+# SSLS20/A                 COMMANDES                             7/03/91
+# COQUE CYLINDRIQUE PINCEE A BORDS LIBRES
+# MAILLAGE 1/8 DE CYLINDRE
+#                                                 REF:SFM.VPCS SSLS20
+# MODELISATION DKT: 176 NOEUDS -- 300 MAILLES TRIA3
+# POINTS  A=NO176  B=NO11  C=NO1  D=NO166
+#=======================================================================
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MATERI_1=DEFI_MATERIAU( ELAS=_F(  E = 10.5E+6,      NU = 0.3125) )
+
+MAILLA_1=LIRE_MAILLAGE(FORMAT='MED',   )
+
+MAILLA_1=DEFI_GROUP( reuse=MAILLA_1,   MAILLAGE=MAILLA_1,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+CH_MAT_1=AFFE_MATERIAU(  MAILLAGE=MAILLA_1,
+                            AFFE=_F(  TOUT = 'OUI',   MATER = MATERI_1) )
+
+MODELE_1=AFFE_MODELE(  MAILLAGE=MAILLA_1, 
+                          AFFE=_F( TOUT = 'OUI', MODELISATION = 'DKT',
+                                PHENOMENE = 'MECANIQUE') )
+
+CHARGE_1=AFFE_CHAR_MECA(MODELE=MODELE_1,DDL_IMPO=(
+                  _F( GROUP_NO = 'AB',       DZ = 0.,
+                                              DRX = 0., DRY = 0.),
+                           _F( GROUP_NO = 'ADSANSA',  DX = 0.,
+                                              DRY = 0., DRZ = 0.),
+                           _F( GROUP_NO = 'BCSANSB',  DY = 0.,
+                                              DRX = 0., DRZ = 0.),
+                           _F( GROUP_NO = 'A',        DX = 0.,
+                                              DRZ = 0.),
+                           _F( GROUP_NO = 'B',        DY = 0.,
+                                              DRZ = 0.)),
+                  FORCE_NODALE=_F(  GROUP_NO = 'A',  FY = -25.) )
+
+CARAC__1=AFFE_CARA_ELEM(   MODELE=MODELE_1,
+                               COQUE=_F(
+       GROUP_MA = 'TOUT',
+  EPAIS = 0.094) )
+
+MATELE_1=CALC_MATR_ELEM(   MODELE=MODELE_1,     CHARGE=CHARGE_1,
+                               CARA_ELEM=CARAC__1,
+                               CHAM_MATER=CH_MAT_1,
+                               OPTION='RIGI_MECA' )
+
+VEL=CALC_VECT_ELEM(   CHARGE=CHARGE_1,  OPTION='CHAR_MECA' )
+
+NU=NUME_DDL(   MATR_RIGI=MATELE_1 )
+
+MATASS=ASSE_MATRICE(   MATR_ELEM=MATELE_1,   NUME_DDL=NU )
+
+VECASS=ASSE_VECTEUR(   VECT_ELEM=VEL,        NUME_DDL=NU )
+
+MATASS=FACTORISER( reuse=MATASS,  MATR_ASSE=MATASS )
+
+VECASS=RESOUDRE(reuse=VECASS, MATR=MATASS,     CHAM_NO=VECASS)
+
+#---------------------------------------------------------------------
+
+
+TEST_RESU(CHAM_NO=_F(NOEUD='NO176',
+                     CRITERE='RELATIF',
+                     REFERENCE='SOURCE_EXTERNE',
+                     NOM_CMP='DY',
+                     PRECISION=1.E-2,
+                     CHAM_GD=VECASS,
+                     VALE_CALC=-0.113282220,
+                     VALE_REFE=-0.1139,),
+          )
+
+#---------------------------------------------------------------------
+# Validation de PROJ_CHAMP / METHODE=NUAG_DEG_1/0 :
+#----------------------------------------------------------------------
+
+CH_INIT=CREA_CHAMP( OPERATION='AFFE', TYPE_CHAM='NOEU_DEPL_R', MAILLAGE=MAILLA_1,
+                         AFFE=_F(   TOUT = 'OUI',
+            NOM_CMP = (    'DX',        'DY',        'DZ',
+                          'DRX',       'DRY',       'DRZ',      ),
+            VALE = (  0.00000E+00,  0.00000E+00,  0.00000E+00,
+                        0.00000E+00,  0.00000E+00,  0.00000E+00, ))
+                    )
+
+CH_PRO0=PROJ_CHAMP( METHODE='NUAGE_DEG_0',  CHAM_GD=VECASS, CHAM_NO_REFE=CH_INIT,MAILLAGE_1=MAILLA_1, MAILLAGE_2=MAILLA_1,   )
+
+TEST_RESU(CHAM_NO=_F(NOEUD='NO176',
+                     CRITERE='RELATIF',
+                     REFERENCE='SOURCE_EXTERNE',
+                     NOM_CMP='DY',
+                     PRECISION=0.029999999999999999,
+                     CHAM_GD=CH_PRO0,
+                     VALE_CALC=-0.111412003,
+                     VALE_REFE=-0.1139,),
+          )
+
+CH_PRO1=PROJ_CHAMP( METHODE='NUAGE_DEG_1',  CHAM_GD=VECASS, CHAM_NO_REFE=CH_INIT,MAILLAGE_1=MAILLA_1, MAILLAGE_2=MAILLA_1,
+                    TITRE='CH_PRO1',)
+
+TEST_RESU(CHAM_NO=_F(NOEUD='NO176',
+                     CRITERE='RELATIF',
+                     REFERENCE='SOURCE_EXTERNE',
+                     NOM_CMP='DY',
+                     PRECISION=1.E-2,
+                     CHAM_GD=CH_PRO1,
+                     VALE_CALC=-0.113186924,
+                     VALE_REFE=-0.1139,),
+          )
+
+#-----------------------------------------------------------------------------
+# Validation de PROJ_CHAMP / METHODE=NUAG_DEG_1/0 + VIS_A_VIS (non regression)
+#------------------------------------------------------------------------------
+CH_PRO2=PROJ_CHAMP( METHODE='NUAGE_DEG_0',  CHAM_GD=VECASS, CHAM_NO_REFE=CH_INIT,MAILLAGE_1=MAILLA_1, MAILLAGE_2=MAILLA_1,
+                    VIS_A_VIS=(
+                        _F(TOUT_1     ='OUI',  TOUT_2='OUI',),
+                        _F(GROUP_MA_1 ='GMA1', MAILLE_2='MA19',),
+                        _F(GROUP_MA_1 ='GMA1', NOEUD_2='NO164',),
+                  ))
+TEST_RESU(CHAM_NO=_F(NOEUD='NO164',
+                     CRITERE='RELATIF',
+                     NOM_CMP='DY',
+                     CHAM_GD=CH_PRO2,
+                     VALE_CALC=-2.0640918954607001E-3,
+                     ),
+          )
+
+CH_PRO3=PROJ_CHAMP( METHODE='NUAGE_DEG_1',  CHAM_GD=VECASS, CHAM_NO_REFE=CH_INIT,MAILLAGE_1=MAILLA_1, MAILLAGE_2=MAILLA_1,
+                    VIS_A_VIS=(
+                        _F(TOUT_1     ='OUI',  TOUT_2='OUI',),
+                        _F(GROUP_MA_1 ='GMA1', MAILLE_2='MA19',),
+                        _F(GROUP_MA_1 ='GMA1', NOEUD_2='NO164',),
+                  ))
+TEST_RESU(CHAM_NO=_F(NOEUD='NO164',
+                     CRITERE='RELATIF',
+                     NOM_CMP='DY',
+                     CHAM_GD=CH_PRO3,
+                     VALE_CALC=2.3645308688518999E-05,
+                     ),
+          )
+
+FIN()
+#

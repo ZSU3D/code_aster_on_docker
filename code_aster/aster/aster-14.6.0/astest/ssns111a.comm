@@ -1,0 +1,338 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# MODELISATION A : DKT + GRILLE_EXCENTREE
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'), )
+
+#-----------------------------------------------------------------------
+# GRILLES EXCENTREE AVEC QUADRANGLE
+#-----------------------------------------------------------------------
+MAILL0=LIRE_MAILLAGE(FORMAT='MED',)
+
+MAILL0= MODI_MAILLAGE(reuse=MAILL0,
+   MAILLAGE=MAILL0,
+   ORIE_NORM_COQUE=_F(GROUP_MA='DALLE',VECT_NORM=(0.0,0.0,1.0,),GROUP_NO='PT0')
+)
+
+MAILTOT=CREA_MAILLAGE(
+   MAILLAGE=MAILL0,
+   CREA_MAILLE=(
+      _F(NOM='ACPLUS',  GROUP_MA='DALLE', PREF_MAILLE='C',),
+      _F(NOM='ACMOINS', GROUP_MA='DALLE', PREF_MAILLE='T',),
+   ),
+)
+
+MAILTOT=DEFI_GROUP(reuse=MAILTOT,
+   MAILLAGE=MAILTOT,
+   CREA_GROUP_NO=(
+      _F(NOM='B0X',    GROUP_MA='B0X',),
+      _F(NOM='B1X',    GROUP_MA='B1X',),
+      _F(NOM='DALLE',  GROUP_MA='DALLE',),
+   ),
+)
+
+# -----------------------------------------------------
+# DEFINITION DES MATERIAUX
+# -----------------------------------------------------
+ACIER=DEFI_MATER_GC(
+   ACIER=_F(E=2.0E+11, SY=500.0E+06, NU=0.30,),
+)
+
+BETON=DEFI_MATER_GC(
+   MAZARS=_F(CODIFICATION='ESSAI',
+            FCJ=51.0E+06, EIJ=43000.0E+06, FTJ=4.2E+06, EPSI_C=2.29922344E-03,
+            AT=0.90,),
+)
+
+# -------------------------------------------------
+# AFFECTATION DES MATERIAUX
+# -------------------------------------------------
+MATAF=AFFE_MATERIAU(
+   MAILLAGE=MAILTOT,
+   AFFE=(
+      _F(GROUP_MA=('ACPLUS','ACMOINS',), MATER=ACIER,),
+      _F(GROUP_MA='DALLE', MATER=BETON,),
+   ),
+)
+
+# -------------------------------------------------
+# AFFECTATION DES MODELES
+# -------------------------------------------------
+LEMOD=AFFE_MODELE(
+   MAILLAGE=MAILTOT,
+
+   AFFE=(
+      _F(GROUP_MA=('ACPLUS','ACMOINS',), PHENOMENE='MECANIQUE', MODELISATION='GRILLE_EXCENTRE',),
+      _F(GROUP_MA=('DALLE','B0X','B1X'), PHENOMENE='MECANIQUE', MODELISATION='DKT',),),
+)
+
+# -------------------------------------------------
+# AFFECTATION DES CARACTERISTIQUES
+# -------------------------------------------------
+Epdalle = 25.0E-02;NbCouche=5
+
+LACAR=AFFE_CARA_ELEM(
+   MODELE=LEMOD,
+   COQUE=_F(GROUP_MA=('DALLE',), EPAIS=Epdalle, COQUE_NCOU=NbCouche, ANGL_REP=(0.0,0.0,),),
+   GRILLE=(
+      _F(GROUP_MA='ACPLUS',  SECTION=  9.0478E-04, ANGL_REP_1=(0,0,), EXCENTREMENT= 0.10,),
+      _F(GROUP_MA='ACMOINS', SECTION= 39.2700E-04, ANGL_REP_1=(0,0,), EXCENTREMENT=-0.10,),
+   ),
+)
+
+# ----------------------------------------------
+# CHARGEMENT
+# ----------------------------------------------
+CLIM=AFFE_CHAR_MECA(
+   MODELE=LEMOD,
+   DDL_IMPO=(
+      _F(GROUP_MA='B0X', DX=0.0, DZ=0.0,),
+      _F(GROUP_NO=('PT0','PT1'), DY=0.0, ),
+      _F(GROUP_MA='B1X', DZ=0.0, ),
+   ),
+   FORCE_COQUE=_F(GROUP_MA='DALLE', PRES=1.0E+03)
+)
+
+Tels = 4.0
+Telu = 8.0
+Tult = 9.0
+
+FMULT=DEFI_FONCTION(
+   NOM_PARA='INST',
+   VALE=(   0.0  ,   0.0,
+            Tels ,  80.5,
+            Telu , 127.5,
+            Tult , 132.0,
+   ),
+)
+# ----------------------------------------------
+# CALCUL
+# ----------------------------------------------
+L_INST = ( Tels, Telu , Tult )
+#
+ZLIST=DEFI_LIST_REEL(
+   DEBUT=0.,
+   INTERVALLE=_F(JUSQU_A=Tult, PAS=0.1,),
+)
+
+LERESU=STAT_NON_LINE(
+   MODELE=LEMOD,
+   CHAM_MATER=MATAF,
+   CARA_ELEM=LACAR,
+   EXCIT=(
+      _F(CHARGE=CLIM, FONC_MULT=FMULT,),
+   ),
+   COMPORTEMENT=(
+      _F(RELATION='MAZARS_GC', GROUP_MA='DALLE',),
+      _F(RELATION='VMIS_CINE_GC', GROUP_MA=('ACPLUS','ACMOINS',),),
+   ),
+   INCREMENT=_F(LIST_INST=ZLIST,INST_FIN=Tult),
+   CONVERGENCE =_F(
+      # En Newton
+      RESI_GLOB_MAXI=450.0,
+      ITER_GLOB_MAXI=60,
+   ),
+   NEWTON=_F(MATRICE='TANGENTE', REAC_ITER=1,),
+   SOLVEUR=_F(METHODE='MUMPS',),
+)
+
+"""
+# Courbe dans la documentation du cas test
+# ----------------------------------------
+# Reaction d'appuis : direction Z
+LERESU=CALC_CHAMP(reuse=LERESU,RESULTAT=LERESU, FORCE='REAC_NODA', )
+TREAC0 = POST_RELEVE_T (
+   ACTION = (
+      _F(INTITULE='REAC', RESULTAT=LERESU, NOM_CHAM ='REAC_NODA',TOUT_ORDRE='OUI',
+         OPERATION='EXTRACTION',GROUP_NO='B0X', RESULTANTE=('DZ'), )
+   ),
+)
+TREAC0=CALC_TABLE(reuse=TREAC0,
+   TABLE = TREAC0,
+   ACTION=(
+      _F(OPERATION='SUPPRIME',NOM_PARA=('INTITULE','RESU','NOM_CHAM',),),
+      _F(OPERATION='RENOMME', NOM_PARA=('DZ','FZ',),),
+   ),
+)
+#
+# Deplacement maximum : direction Z
+TDEPL0=POST_RELEVE_T(
+   ACTION = (
+      _F(INTITULE='DEPL', RESULTAT=LERESU, NOM_CHAM ='DEPL',TOUT_ORDRE='OUI',
+         OPERATION='EXTREMA',GROUP_NO='DALLE', NOM_CMP=('DZ'), )
+   ),
+)
+TDEPL0=CALC_TABLE(reuse=TDEPL0,
+   TABLE = TDEPL0,
+   ACTION=(
+      _F(OPERATION='FILTRE',  NOM_PARA='EXTREMA', CRIT_COMP='EQ', VALE_K='MIN'),
+      _F(OPERATION='SUPPRIME',NOM_PARA=('INTITULE','RESU','NOM_CHAM','EXTREMA','NOEUD','CMP',),),
+      _F(OPERATION='RENOMME', NOM_PARA=('VALE','DZ',),),
+      _F(OPERATION='COMB',    TABLE=TREAC0, NOM_PARA=('NUME_ORDRE',),),
+ ),
+)
+IMPR_TABLE(TABLE=TDEPL0, UNITE=8)
+"""
+
+#
+# Resultats sur le beton comprime
+#
+DALSUPSI = POST_CHAMP(RESULTAT=LERESU, INST=L_INST, GROUP_MA='DALLE',
+   EXTR_COQUE=_F(NOM_CHAM ='SIEF_ELGA',  NUME_COUCHE=5, NIVE_COUCHE ='SUP',),)
+DALSUPVI = POST_CHAMP(RESULTAT=LERESU, INST=L_INST, GROUP_MA='DALLE',
+   EXTR_COQUE=_F(NOM_CHAM ='VARI_ELGA',  NUME_COUCHE=5, NIVE_COUCHE ='SUP',), )
+#
+TSIEFDC = CREA_TABLE(
+   RESU= _F(RESULTAT=DALSUPSI,INST=L_INST,
+            GROUP_MA='DALLE',NOM_CHAM = 'SIEF_ELGA',TOUT_CMP='OUI', ),)
+TVARIDC = CREA_TABLE(
+   RESU= _F(RESULTAT=DALSUPVI,INST=L_INST,
+            GROUP_MA='DALLE',NOM_CHAM='VARI_ELGA',TOUT_CMP='OUI', ), )
+TTSIEFDC = CALC_TABLE(
+   TABLE=TSIEFDC,
+   ACTION=( _F(OPERATION='COMB',    TABLE=TVARIDC, NOM_PARA=('MAILLE','POINT','SOUS_POINT','NUME_ORDRE',),),
+            _F(OPERATION='SUPPRIME',NOM_PARA=('RESULTAT','NOM_CHAM','NUME_ORDRE',),), ),
+)
+#
+TEST_TABLE(TABLE=TTSIEFDC,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MINI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-33103572.5793,
+   VALE_REFE =-33.10E+06 ,    PRECISION    = 2.0E-04,
+)
+TEST_TABLE(TABLE=TTSIEFDC,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='V1',  CRIT_COMP='MINI', ), ),
+   NOM_PARA='V1', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-1.08827249227,
+   VALE_REFE =-1.088,          PRECISION = 2.00E-03,
+)
+
+TEST_TABLE(TABLE=TTSIEFDC,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MINI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-48138188.9449,
+   VALE_REFE =-48.135E+06 ,  PRECISION    = 1.E-4,
+)
+TEST_TABLE(TABLE=TTSIEFDC,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='V2',  CRIT_COMP='MINI', ), ),
+   NOM_PARA='V2', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-0.383577253532,
+   VALE_REFE =-0.38357, PRECISION = 2.00E-03,
+)
+#
+# Resultats sur les aciers comprimes
+#
+TSIEFAS = CREA_TABLE(
+   RESU= _F(RESULTAT=LERESU,INST=L_INST,
+            GROUP_MA='ACPLUS',NOM_CHAM = 'SIEF_ELGA',NOM_CMP='SIXX', ), )
+TVARIAS = CREA_TABLE(
+   RESU= _F(RESULTAT=LERESU,INST=L_INST,
+            GROUP_MA='ACPLUS',NOM_CHAM='VARI_ELGA',NOM_CMP=('V1','V2'), ), )
+TTSIEFAS = CALC_TABLE(
+   TABLE=TSIEFAS,
+   ACTION=( _F(OPERATION='COMB', TABLE=TVARIAS, NOM_PARA=('MAILLE','POINT','SOUS_POINT','NUME_ORDRE',),),
+            _F(OPERATION='SUPPRIME',NOM_PARA=('RESULTAT','NOM_CHAM','NUME_ORDRE',),), ),
+)
+TEST_TABLE(TABLE=TTSIEFAS,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MINI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-102888607.115,
+   VALE_REFE =-102.8810E+06,           PRECISION    = 1.E-4,
+)
+TEST_TABLE(TABLE=TTSIEFAS,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='V1',CRIT_COMP='MINI', ), ),
+   NOM_PARA='V1', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-0.226354935654,
+   VALE_REFE =-0.2263400,              PRECISION = 2.00E-03,
+)
+TEST_TABLE(TABLE=TTSIEFAS,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MINI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC =-169693523.992,
+   VALE_REFE =-169.640E+06,            PRECISION    = 1.E-3,
+)
+TEST_TABLE(TABLE=TTSIEFAS,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='V2',  CRIT_COMP='MINI', ), ),
+   NOM_PARA='V2', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC = -0.0848467619962,
+   VALE_REFE =-0.08482,                PRECISION = 0.30E-02,
+)
+#
+# Resultat sur les aciers tendus
+#
+TSIEFAI = CREA_TABLE(
+   RESU=_F( RESULTAT=LERESU,INST=L_INST,
+            GROUP_MA='ACMOINS',NOM_CHAM = 'SIEF_ELGA',NOM_CMP='SIXX', ), )
+TVARIAI = CREA_TABLE(
+   RESU=_F( RESULTAT=LERESU,INST=L_INST,
+            GROUP_MA='ACMOINS',NOM_CHAM='VARI_ELGA',NOM_CMP=('V1','V2'), ),)
+TTSIEFAI = CALC_TABLE(
+   TABLE=TSIEFAI,
+   ACTION=( _F(OPERATION='COMB', TABLE=TVARIAI, NOM_PARA=('MAILLE','POINT','SOUS_POINT','NUME_ORDRE',),),
+            _F(OPERATION='SUPPRIME',NOM_PARA=('RESULTAT','NOM_CHAM','NUME_ORDRE',),), ),
+)
+TEST_TABLE(TABLE=TTSIEFAI,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MAXI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC = 314208947.096,
+   VALE_REFE = 313.0000E+06,   PRECISION    = 5.E-3,
+)
+TEST_TABLE(TABLE=TTSIEFAI,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tels),
+            _F(NOM_PARA='V2',CRIT_COMP='MAXI', ), ),
+   NOM_PARA='V2', REFERENCE='SOURCE_EXTERNE', CRITERE='RELATIF',
+   VALE_CALC = 0.157104473548,
+   VALE_REFE = 0.1565000, PRECISION = 5.0E-03,
+)
+TEST_TABLE(TABLE=TTSIEFAI,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='SIXX',CRIT_COMP='MAXI', ), ),
+   NOM_PARA='SIXX', REFERENCE='SOURCE_EXTERNE',
+   VALE_CALC = 500.00372351984E+06,
+   VALE_REFE = 500.0000E+06,   PRECISION    = 1.E-4,
+)
+TEST_TABLE(TABLE=TTSIEFAI,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Telu),
+            _F(NOM_PARA='V2',CRIT_COMP='MAXI', ), ),
+   NOM_PARA='V2', REFERENCE='SOURCE_EXTERNE', CRITERE='RELATIF',
+   VALE_CALC = 0.2705169631,
+   VALE_REFE = 0.2686000, PRECISION = 1.0E-02,
+)
+
+#
+# Valeur asymptotique
+TEST_TABLE(TABLE=TTSIEFAI,
+   FILTRE=( _F(NOM_PARA='INST',CRIT_COMP='EQ', VALE=Tult),
+            _F(NOM_PARA='V2',CRIT_COMP='MAXI', ), ),
+   NOM_PARA='V2', REFERENCE='SOURCE_EXTERNE', CRITERE='RELATIF',
+   VALE_CALC = 0.464037759446,
+   VALE_REFE = 0.45935, PRECISION = 1.5E-02,
+)
+
+FIN()

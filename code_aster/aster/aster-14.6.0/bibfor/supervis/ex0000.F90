@@ -1,0 +1,632 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine ex0000(nuoper)
+    implicit none
+#include "asterfort/op0000.h"
+#include "asterfort/op0001.h"
+#include "asterfort/op0002.h"
+#include "asterfort/op0003.h"
+#include "asterfort/op0004.h"
+#include "asterfort/op0005.h"
+#include "asterfort/op0006.h"
+#include "asterfort/op0007.h"
+#include "asterfort/op0008.h"
+#include "asterfort/op0009.h"
+#include "asterfort/op0010.h"
+#include "asterfort/op0011.h"
+#include "asterfort/op0012.h"
+#include "asterfort/op0013.h"
+#include "asterfort/op0014.h"
+#include "asterfort/op0015.h"
+#include "asterfort/op0016.h"
+#include "asterfort/op0017.h"
+#include "asterfort/op0018.h"
+#include "asterfort/op0019.h"
+#include "asterfort/op0020.h"
+#include "asterfort/op0021.h"
+#include "asterfort/op0022.h"
+#include "asterfort/op0023.h"
+#include "asterfort/op0024.h"
+#include "asterfort/op0025.h"
+#include "asterfort/op0026.h"
+#include "asterfort/op0027.h"
+#include "asterfort/op0028.h"
+#include "asterfort/op0029.h"
+#include "asterfort/op0030.h"
+#include "asterfort/op0031.h"
+#include "asterfort/op0032.h"
+#include "asterfort/op0033.h"
+#include "asterfort/op0034.h"
+#include "asterfort/op0035.h"
+#include "asterfort/op0036.h"
+#include "asterfort/op0037.h"
+#include "asterfort/op0038.h"
+#include "asterfort/op0039.h"
+#include "asterfort/op0040.h"
+#include "asterfort/op0041.h"
+#include "asterfort/op0042.h"
+#include "asterfort/op0043.h"
+#include "asterfort/op0044.h"
+#include "asterfort/op0045.h"
+#include "asterfort/op0046.h"
+#include "asterfort/op0047.h"
+#include "asterfort/op0048.h"
+#include "asterfort/op0049.h"
+#include "asterfort/op0050.h"
+#include "asterfort/op0051.h"
+#include "asterfort/op0052.h"
+#include "asterfort/op0053.h"
+#include "asterfort/op0054.h"
+#include "asterfort/op0055.h"
+#include "asterfort/op0056.h"
+#include "asterfort/op0057.h"
+#include "asterfort/op0058.h"
+#include "asterfort/op0059.h"
+#include "asterfort/op0060.h"
+#include "asterfort/op0061.h"
+#include "asterfort/op0062.h"
+#include "asterfort/op0063.h"
+#include "asterfort/op0064.h"
+#include "asterfort/op0065.h"
+#include "asterfort/op0066.h"
+#include "asterfort/op0067.h"
+#include "asterfort/op0068.h"
+#include "asterfort/op0069.h"
+#include "asterfort/op0070.h"
+#include "asterfort/op0071.h"
+#include "asterfort/op0072.h"
+#include "asterfort/op0073.h"
+#include "asterfort/op0074.h"
+#include "asterfort/op0075.h"
+#include "asterfort/op0076.h"
+#include "asterfort/op0077.h"
+#include "asterfort/op0078.h"
+#include "asterfort/op0079.h"
+#include "asterfort/op0080.h"
+#include "asterfort/op0081.h"
+#include "asterfort/op0082.h"
+#include "asterfort/op0083.h"
+#include "asterfort/op0084.h"
+#include "asterfort/op0085.h"
+#include "asterfort/op0086.h"
+#include "asterfort/op0087.h"
+#include "asterfort/op0088.h"
+#include "asterfort/op0089.h"
+#include "asterfort/op0090.h"
+#include "asterfort/op0091.h"
+#include "asterfort/op0092.h"
+#include "asterfort/op0093.h"
+#include "asterfort/op0094.h"
+#include "asterfort/op0095.h"
+#include "asterfort/op0096.h"
+#include "asterfort/op0097.h"
+#include "asterfort/op0098.h"
+#include "asterfort/op0099.h"
+#include "asterfort/op0100.h"
+#include "asterfort/op0101.h"
+#include "asterfort/op0102.h"
+#include "asterfort/op0103.h"
+#include "asterfort/op0104.h"
+#include "asterfort/op0105.h"
+#include "asterfort/op0106.h"
+#include "asterfort/op0107.h"
+#include "asterfort/op0108.h"
+#include "asterfort/op0109.h"
+#include "asterfort/op0110.h"
+#include "asterfort/op0111.h"
+#include "asterfort/op0112.h"
+#include "asterfort/op0113.h"
+#include "asterfort/op0114.h"
+#include "asterfort/op0115.h"
+#include "asterfort/op0116.h"
+#include "asterfort/op0117.h"
+#include "asterfort/op0118.h"
+#include "asterfort/op0119.h"
+#include "asterfort/op0120.h"
+#include "asterfort/op0121.h"
+#include "asterfort/op0122.h"
+#include "asterfort/op0123.h"
+#include "asterfort/op0124.h"
+#include "asterfort/op0125.h"
+#include "asterfort/op0126.h"
+#include "asterfort/op0127.h"
+#include "asterfort/op0128.h"
+#include "asterfort/op0129.h"
+#include "asterfort/op0130.h"
+#include "asterfort/op0131.h"
+#include "asterfort/op0132.h"
+#include "asterfort/op0133.h"
+#include "asterfort/op0134.h"
+#include "asterfort/op0135.h"
+#include "asterfort/op0136.h"
+#include "asterfort/op0137.h"
+#include "asterfort/op0138.h"
+#include "asterfort/op0139.h"
+#include "asterfort/op0140.h"
+#include "asterfort/op0141.h"
+#include "asterfort/op0142.h"
+#include "asterfort/op0143.h"
+#include "asterfort/op0144.h"
+#include "asterfort/op0145.h"
+#include "asterfort/op0146.h"
+#include "asterfort/op0147.h"
+#include "asterfort/op0148.h"
+#include "asterfort/op0149.h"
+#include "asterfort/op0150.h"
+#include "asterfort/op0151.h"
+#include "asterfort/op0152.h"
+#include "asterfort/op0153.h"
+#include "asterfort/op0154.h"
+#include "asterfort/op0155.h"
+#include "asterfort/op0156.h"
+#include "asterfort/op0157.h"
+#include "asterfort/op0158.h"
+#include "asterfort/op0159.h"
+#include "asterfort/op0160.h"
+#include "asterfort/op0161.h"
+#include "asterfort/op0162.h"
+#include "asterfort/op0163.h"
+#include "asterfort/op0164.h"
+#include "asterfort/op0165.h"
+#include "asterfort/op0166.h"
+#include "asterfort/op0167.h"
+#include "asterfort/op0168.h"
+#include "asterfort/op0169.h"
+#include "asterfort/op0170.h"
+#include "asterfort/op0171.h"
+#include "asterfort/op0172.h"
+#include "asterfort/op0173.h"
+#include "asterfort/op0174.h"
+#include "asterfort/op0175.h"
+#include "asterfort/op0176.h"
+#include "asterfort/op0177.h"
+#include "asterfort/op0178.h"
+#include "asterfort/op0179.h"
+#include "asterfort/op0180.h"
+#include "asterfort/op0181.h"
+#include "asterfort/op0182.h"
+#include "asterfort/op0183.h"
+#include "asterfort/op0184.h"
+#include "asterfort/op0185.h"
+#include "asterfort/op0186.h"
+#include "asterfort/op0187.h"
+#include "asterfort/op0188.h"
+#include "asterfort/op0189.h"
+#include "asterfort/op0190.h"
+#include "asterfort/op0191.h"
+#include "asterfort/op0192.h"
+#include "asterfort/op0193.h"
+#include "asterfort/op0194.h"
+#include "asterfort/op0195.h"
+#include "asterfort/op0196.h"
+#include "asterfort/op0197.h"
+#include "asterfort/op0198.h"
+#include "asterfort/op0199.h"
+#include "asterfort/utmess.h"
+    integer, intent(in) :: nuoper
+!     EXECUTION DES OPERATEURS (NUMEROTES DE 0 A 199)
+    integer :: vali
+!
+    select case (nuoper)
+    case (0)
+        call op0000()
+    case (1)
+        call op0001()
+    case (2)
+        call op0002()
+    case (3)
+        call op0003()
+    case (4)
+        call op0004()
+    case (5)
+        call op0005()
+    case (6)
+        call op0006()
+    case (7)
+        call op0007()
+    case (8)
+        call op0008()
+    case (9)
+        call op0009()
+    case (10)
+        call op0010()
+    case (11)
+        call op0011()
+    case (12)
+        call op0012()
+    case (13)
+        call op0013()
+    case (14)
+        call op0014()
+    case (15)
+        call op0015()
+    case (16)
+        call op0016()
+    case (17)
+        call op0017()
+    case (18)
+        call op0018()
+    case (19)
+        call op0019()
+    case (20)
+        call op0020()
+    case (21)
+        call op0021()
+    case (22)
+        call op0022()
+    case (23)
+        call op0023()
+    case (24)
+        call op0024()
+    case (25)
+        call op0025()
+    case (26)
+        call op0026()
+    case (27)
+        call op0027()
+    case (28)
+        call op0028()
+    case (29)
+        call op0029()
+    case (30)
+        call op0030()
+    case (31)
+        call op0031()
+    case (32)
+        call op0032()
+    case (33)
+        call op0033()
+    case (34)
+        call op0034()
+    case (35)
+        call op0035()
+    case (36)
+        call op0036()
+    case (37)
+        call op0037()
+    case (38)
+        call op0038()
+    case (39)
+        call op0039()
+    case (40)
+        call op0040()
+    case (41)
+        call op0041()
+    case (42)
+        call op0042()
+    case (43)
+        call op0043()
+    case (44)
+        call op0044()
+    case (45)
+        call op0045()
+    case (46)
+        call op0046()
+    case (47)
+        call op0047()
+    case (48)
+        call op0048()
+    case (49)
+        call op0049()
+    case (50)
+        call op0050()
+    case (51)
+        call op0051()
+    case (52)
+        call op0052()
+    case (53)
+        call op0053()
+    case (54)
+        call op0054()
+    case (55)
+        call op0055()
+    case (56)
+        call op0056()
+    case (57)
+        call op0057()
+    case (58)
+        call op0058()
+    case (59)
+        call op0059()
+    case (60)
+        call op0060()
+    case (61)
+        call op0061()
+    case (62)
+        call op0062()
+    case (63)
+        call op0063()
+    case (64)
+        call op0064()
+    case (65)
+        call op0065()
+    case (66)
+        call op0066()
+    case (67)
+        call op0067()
+    case (68)
+        call op0068()
+    case (69)
+        call op0069()
+    case (70)
+        call op0070()
+    case (71)
+        call op0071()
+    case (72)
+        call op0072()
+    case (73)
+        call op0073()
+    case (74)
+        call op0074()
+    case (75)
+        call op0075()
+    case (76)
+        call op0076()
+    case (77)
+        call op0077()
+    case (78)
+        call op0078()
+    case (79)
+        call op0079()
+    case (80)
+        call op0080()
+    case (81)
+        call op0081()
+    case (82)
+        call op0082()
+    case (83)
+        call op0083()
+    case (84)
+        call op0084()
+    case (85)
+        call op0085()
+    case (86)
+        call op0086()
+    case (87)
+        call op0087()
+    case (88)
+        call op0088()
+    case (89)
+        call op0089()
+    case (90)
+        call op0090()
+    case (91)
+        call op0091()
+    case (92)
+        call op0092()
+    case (93)
+        call op0093()
+    case (94)
+        call op0094()
+    case (95)
+        call op0095()
+    case (96)
+        call op0096()
+    case (97)
+        call op0097()
+    case (98)
+        call op0098()
+    case (99)
+        call op0099()
+    case (100)
+        call op0100()
+    case (101)
+        call op0101()
+    case (102)
+        call op0102()
+    case (103)
+        call op0103()
+    case (104)
+        call op0104()
+    case (105)
+        call op0105()
+    case (106)
+        call op0106()
+    case (107)
+        call op0107()
+    case (108)
+        call op0108()
+    case (109)
+        call op0109()
+    case (110)
+        call op0110()
+    case (111)
+        call op0111()
+    case (112)
+        call op0112()
+    case (113)
+        call op0113()
+    case (114)
+        call op0114()
+    case (115)
+        call op0115()
+    case (116)
+        call op0116()
+    case (117)
+        call op0117()
+    case (118)
+        call op0118()
+    case (119)
+        call op0119()
+    case (120)
+        call op0120()
+    case (121)
+        call op0121()
+    case (122)
+        call op0122()
+    case (123)
+        call op0123()
+    case (124)
+        call op0124()
+    case (125)
+        call op0125()
+    case (126)
+        call op0126()
+    case (127)
+        call op0127()
+    case (128)
+        call op0128()
+    case (129)
+        call op0129()
+    case (130)
+        call op0130()
+    case (131)
+        call op0131()
+    case (132)
+        call op0132()
+    case (133)
+        call op0133()
+    case (134)
+        call op0134()
+    case (135)
+        call op0135()
+    case (136)
+        call op0136()
+    case (137)
+        call op0137()
+    case (138)
+        call op0138()
+    case (139)
+        call op0139()
+    case (140)
+        call op0140()
+    case (141)
+        call op0141()
+    case (142)
+        call op0142()
+    case (143)
+        call op0143()
+    case (144)
+        call op0144()
+    case (145)
+        call op0145()
+    case (146)
+        call op0146()
+    case (147)
+        call op0147()
+    case (148)
+        call op0148()
+    case (149)
+        call op0149()
+    case (150)
+        call op0150()
+    case (151)
+        call op0151()
+    case (152)
+        call op0152()
+    case (153)
+        call op0153()
+    case (154)
+        call op0154()
+    case (155)
+        call op0155()
+    case (156)
+        call op0156()
+    case (157)
+        call op0157()
+    case (158)
+        call op0158()
+    case (159)
+        call op0159()
+    case (160)
+        call op0160()
+    case (161)
+        call op0161()
+    case (162)
+        call op0162()
+    case (163)
+        call op0163()
+    case (164)
+        call op0164()
+    case (165)
+        call op0165()
+    case (166)
+        call op0166()
+    case (167)
+        call op0167()
+    case (168)
+        call op0168()
+    case (169)
+        call op0169()
+    case (170)
+        call op0170()
+    case (171)
+        call op0171()
+    case (172)
+        call op0172()
+    case (173)
+        call op0173()
+    case (174)
+        call op0174()
+    case (175)
+        call op0175()
+    case (176)
+        call op0176()
+    case (177)
+        call op0177()
+    case (178)
+        call op0178()
+    case (179)
+        call op0179()
+    case (180)
+        call op0180()
+    case (181)
+        call op0181()
+    case (182)
+        call op0182()
+    case (183)
+        call op0183()
+    case (184)
+        call op0184()
+    case (185)
+        call op0185()
+    case (186)
+        call op0186()
+    case (187)
+        call op0187()
+    case (188)
+        call op0188()
+    case (189)
+        call op0189()
+    case (190)
+        call op0190()
+    case (191)
+        call op0191()
+    case (192)
+        call op0192()
+    case (193)
+        call op0193()
+    case (194)
+        call op0194()
+    case (195)
+        call op0195()
+    case (196)
+        call op0196()
+    case (197)
+        call op0197()
+    case (198)
+        call op0198()
+    case (199)
+        call op0199()
+    case default
+        vali = nuoper
+        call utmess('E', 'SUPERVIS_50', si=vali)
+    end select
+!
+end subroutine

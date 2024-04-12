@@ -1,0 +1,118 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#CAS_TEST__: SDLS07B
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MAT=DEFI_MATERIAU(ELAS=_F( E = 2.E11, NU = 0.3, RHO = 7800.))
+
+MAIL=LIRE_MAILLAGE(FORMAT='MED', )
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL, AFFE=_F(  TOUT = 'OUI', MATER = MAT) )
+
+MO=AFFE_MODELE(  MAILLAGE=MAIL, 
+         AFFE=_F( TOUT = 'OUI', MODELISATION = 'AXIS', PHENOMENE = 'MECANIQUE'))
+
+KE=CALC_MATR_ELEM(MODELE=MO, CHAM_MATER=CHMAT, OPTION='RIGI_MECA')
+
+ME=CALC_MATR_ELEM(MODELE=MO, CHAM_MATER=CHMAT, OPTION='MASS_MECA')
+
+NUM=NUME_DDL( MATR_RIGI=KE)
+
+KA=ASSE_MATRICE(MATR_ELEM=KE,NUME_DDL=NUM)
+
+MA=ASSE_MATRICE(MATR_ELEM=ME,NUME_DDL=NUM)
+
+MD=CALC_MODES(MATR_RIGI=KA,
+              OPTION='BANDE',
+              CALC_FREQ=_F(FREQ=(230.,530.,),
+                           ),
+              MATR_MASS=MA,
+              )
+
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=237.3363711,
+                   VALE_REFE=237.25,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=282.784699996,
+                   VALE_REFE=282.85000000000002,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=304.860076587,
+                   VALE_REFE=305.24000000000001,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=323.322127748,
+                   VALE_REFE=324.17000000000002,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=345.22891487,
+                   VALE_REFE=346.75999999999999,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=6,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=374.151203523,
+                   VALE_REFE=376.68000000000001,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=7,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=412.042668248,
+                   VALE_REFE=416.0,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=1.E-2,),
+                _F(NUME_ORDRE=8,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=459.78537376,
+                   VALE_REFE=465.75,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.050000000000000003,),
+                _F(NUME_ORDRE=9,
+                   PARA='FREQ',
+                   RESULTAT=MD,
+                   VALE_CALC=517.546040809,
+                   VALE_REFE=526.20000000000005,
+                   REFERENCE='NON_DEFINI',
+                   PRECISION=0.050000000000000003,),
+                ),
+          )
+
+FIN()
+#

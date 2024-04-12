@@ -1,0 +1,444 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# ----------------------------------------------------------------------
+# CALCUL DE FLUX THERMIQUE
+# MODELISATION : ELEMENTS THERMIQUES PLAN_DIAG (QUAD4,TRIA3,TRIA6,QUAD9)
+# ----------------------------------------------------------------------
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+#
+MA=LIRE_MAILLAGE(FORMAT='MED',VERI_MAIL=_F(VERIF='OUI'),)
+#
+MAIL0=CREA_MAILLAGE(MAILLAGE=MA,
+                   MODI_MAILLE=_F(OPTION = 'QUAD8_9',
+                                  GROUP_MA = 'SQU9')
+                  )
+#
+MAIL=CREA_MAILLAGE(MAILLAGE=MAIL0,
+                   MODI_MAILLE=_F(OPTION = 'QUAD8_9',
+                                  GROUP_MA = 'SQU9')
+                  )
+#
+MO=AFFE_MODELE(MAILLAGE=MAIL,
+               AFFE=_F(TOUT = 'OUI',
+                       PHENOMENE = 'THERMIQUE',
+                       MODELISATION = 'PLAN_DIAG'))
+#
+MAT=DEFI_MATERIAU(THER=_F(LAMBDA = 1.0,
+                          RHO_CP = 0.0))
+#
+CHMAT=AFFE_MATERIAU(MAILLAGE=MAIL,
+                    AFFE=_F(TOUT = 'OUI',
+                            MATER = MAT,
+                            ))
+#
+#-----------------------------------------------------------------
+# CHAMP DE TEMPERATURE LINEAIRE => FLUX CONSTANT
+# ===============================================
+FTEMPL = FORMULE(VALE='2.*X +3.*Y',
+                 NOM_PARA=['X', 'Y'],)
+#
+CHTEMPL = CREA_CHAMP(OPERATION='AFFE',
+                    TYPE_CHAM='NOEU_TEMP_F',
+                    MAILLAGE=MAIL,
+                    AFFE=_F(TOUT = 'OUI',
+                            NOM_CMP = ('TEMP',),
+                            VALE_F = (FTEMPL,))
+                 )
+#
+RESUL = CREA_RESU(OPERATION='AFFE',
+                 TYPE_RESU='EVOL_THER',
+                 NOM_CHAM='TEMP',
+                 AFFE=_F(CHAM_GD = CHTEMPL,
+                         INST = 1.0,
+                         MODELE=MO,
+                         CHAM_MATER=CHMAT,)
+                )
+#
+RESUL=CALC_CHAMP(reuse=RESUL,RESULTAT=RESUL,THERMIQUE=('FLUX_ELGA','FLUX_ELNO'))
+
+#
+# TEST TEMPERATURE :
+TEST_RESU(RESU=(_F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=3.500000000,
+                   VALE_REFE=3.5,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=11.500000000,
+                   VALE_REFE=11.5,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=17.000000000,
+                   VALE_REFE=17.0,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=25.000000000,
+                   VALE_REFE=25.0,
+                   PRECISION=1.E-3,),
+                ),
+          )
+
+#
+# TEST FLUX_ELGA :
+TEST_RESU(RESU=(_F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M820',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M820',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1581',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1581',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M2400',),
+                _F(INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   POINT=1,
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELGA',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M2400',),
+                ),
+          )
+
+#
+# TEST FLUX_ELNO :
+TEST_RESU(RESU=(_F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1',),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M820',),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M820',),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1581',),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M1581',),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-2.000000000,
+                   VALE_REFE=-2.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M2400',),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUL,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=1.E-3,
+                   MAILLE='M2400',),
+                ),
+          )
+
+#
+#
+#-----------------------------------------------------------------
+# CHAMP DE TEMPERATURE QUADRATIQUE => FLUX LINEAIRE
+# ==================================================
+FTEMPQ = FORMULE(VALE=' 2.*X*X +3.*Y*Y',
+                 NOM_PARA=['X', 'Y'],)
+#
+CHTEMPQ = CREA_CHAMP(OPERATION='AFFE',
+                    TYPE_CHAM='NOEU_TEMP_F',
+                    MAILLAGE=MAIL,
+                    AFFE=_F(TOUT = 'OUI',
+                            NOM_CMP = ('TEMP',),
+                            VALE_F = (FTEMPQ,))
+                 )
+#
+RESUQ = CREA_RESU(OPERATION='AFFE',
+                 TYPE_RESU='EVOL_THER',
+                 NOM_CHAM='TEMP',
+                 AFFE=_F(CHAM_GD = CHTEMPQ,
+                         INST = 1.0,
+                         MODELE=MO,
+                         CHAM_MATER=CHMAT,)
+                )
+#
+RESUQ=CALC_CHAMP(reuse=RESUQ,RESULTAT=RESUQ,THERMIQUE=('FLUX_ELGA','FLUX_ELNO'))
+
+#
+# TEST TEMPERATURE :
+TEST_RESU(RESU=(_F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=2.750000000,
+                   VALE_REFE=2.75,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=50.750000000,
+                   VALE_REFE=50.75,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=77.000000000,
+                   VALE_REFE=77.0,
+                   PRECISION=1.E-3,),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='TEMP',
+                   NOM_CMP='TEMP',
+                   VALE_CALC=125.000000000,
+                   VALE_REFE=125.0,
+                   PRECISION=1.E-3,),
+                ),
+          )
+
+#
+# TEST FLUX_ELNO :
+TEST_RESU(RESU=(_F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-4.000000000,
+                   VALE_REFE=-4.0,
+                   PRECISION=0.055,
+                   MAILLE='M1',),
+                _F(GROUP_NO='A',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=0.105,
+                   MAILLE='M1',),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-20.000000000,
+                   VALE_REFE=-20.0,
+                   PRECISION=0.014999999999999999,
+                   MAILLE='M820',),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-3.000000000,
+                   VALE_REFE=-3.0,
+                   PRECISION=0.105,
+                   MAILLE='M820',),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-4.200000000,
+                   VALE_REFE=-4.0,
+                   PRECISION=0.055,
+                   MAILLE='M1581',),
+                _F(GROUP_NO='J',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-29.700000000,
+                   VALE_REFE=-30.0,
+                   PRECISION=0.014999999999999999,
+                   MAILLE='M1581',),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUX',
+                   VALE_CALC=-19.800000000,
+                   VALE_REFE=-20.0,
+                   PRECISION=0.014999999999999999,
+                   MAILLE='M2400',),
+                _F(GROUP_NO='L',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESUQ,
+                   NOM_CHAM='FLUX_ELNO',
+                   NOM_CMP='FLUY',
+                   VALE_CALC=-29.700000000,
+                   VALE_REFE=-30.0,
+                   PRECISION=0.014999999999999999,
+                   MAILLE='M2400',),
+                ),
+          )
+
+#
+FIN( )
+#

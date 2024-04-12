@@ -1,0 +1,119 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+POURSUITE(CODE='OUI',
+          PAR_LOT='NON')
+
+from math import pi, sqrt
+import numpy as NP
+
+def aire(r):
+    """Aire d'un disque"""
+    return pi * r**2
+
+def vol(a1, a2, lng):
+    """Volume d'un cône tronqué"""
+    return lng / 3. * (a1 + a2 + sqrt(a1*a2))
+
+def vol_creux(a1, a2, ai1, ai2, lng):
+    """Volume d'un cône tronqué creux"""
+    return vol(a1, a2, lng) - vol(ai1, ai2, lng)
+
+def volume(r1, r2, e1, e2, lng):
+    """Volume fonction des rayons & épaisseurs"""
+    return vol_creux(aire(r1), aire(r2), aire(r1 - e1), aire(r2 - e2), lng)
+
+# caractéristiques du maillage (découpage régulier)
+longueur = 1.
+nbel = 100
+
+mcf = [_F(MAILLE='M{}'.format(i)) for i in range(1, nbel+1)]
+mcf.append(_F(GROUP_MA='ROTOR'))
+
+masse_el = POST_ELEM(MODELE=MODELE,
+                     CHAM_MATER=CHMAT,
+                     CARA_ELEM=CARELEM,
+                     MASS_INER=mcf)
+
+IMPR_TABLE(TABLE=masse_el)
+
+tab = masse_el.EXTR_TABLE()
+tmas = tab.MASSE.values()
+
+# caractéristiques du rotor (cf. AFFE_CARA_ELEM)
+rho = 7800.
+r1 = 0.10
+e1 = 0.02
+r2 = 0.05
+e2 = 0.02
+
+def rayon(i):
+    """Rayon de la section i"""
+    ratio = 1. * i / nbel
+    return (1 - ratio) * r1 + ratio * r2
+
+def epais(i):
+    """Epaisseur de la section i"""
+    ratio = 1. * i / nbel
+    return (1 - ratio) * e1 + ratio * e2
+
+# dernier = masse de 'ROTOR'
+masse_totale = tmas.pop()
+masse_refe = rho * volume(r1, r2, e1, e2, longueur)
+errtot = abs((masse_totale - masse_refe) / masse_refe * 100.)
+
+# masses de référence
+refe = []
+for i in range(0, nbel):
+    vr1 = rayon(i)
+    vr2 = rayon(i + 1)
+    ve1 = epais(i)
+    ve2 = epais(i + 1)
+    mass = rho * volume(vr1, vr2, ve1, ve2, longueur / nbel)
+    refe.append(mass)
+
+array_calc = NP.array(tmas)
+array_refe = NP.array(refe)
+erreur = NP.abs((array_calc - array_refe) / array_refe * 100.)
+
+print('Masses référence:', array_refe)
+print('Masses calculées:', array_calc)
+print('Erreurs (%):', erreur)
+print('Erreur maximale (%):', NP.max(erreur))
+
+print('Masse totale:', masse_refe, masse_totale, errtot, '%')
+
+# C'est sur le dernier élément que l'erreur est la plus grande
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=0.394518668724,
+           VALE_REFE=0.39452121,
+           NOM_PARA='MASSE',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='M100'),
+           TABLE=masse_el)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           VALE_CALC=63.7113334203,
+           VALE_REFE=63.7114990148,
+           NOM_PARA='MASSE',
+           FILTRE=_F(NOM_PARA='LIEU',
+                     VALE_K='ROTOR'),
+           TABLE=masse_el)
+
+FIN()

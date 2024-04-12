@@ -1,0 +1,282 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2020 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+! person_in_charge: nicolas.sellenet at edf.fr
+!
+subroutine irmhdf(ifi, ndim, nbnoeu, coordo, nbmail,&
+                  connex, point, nomast, typma, titre,&
+                  nbtitr, nbgrno, nomgno, nbgrma, nomgma,&
+                  nommai, nomnoe, infmed)
+!
+    use as_med_module, only: as_med_open
+    implicit none
+!
+#include "asterf_types.h"
+#include "MeshTypes_type.h"
+#include "asterfort/as_mficlo.h"
+#include "asterfort/as_mmhcre.h"
+#include "asterfort/codent.h"
+#include "asterfort/infniv.h"
+#include "asterfort/irmdes.h"
+#include "asterfort/irmmfa.h"
+#include "asterfort/irmmma.h"
+#include "asterfort/irmmno.h"
+#include "asterfort/jedema.h"
+#include "asterfort/jedetc.h"
+#include "asterfort/jemarq.h"
+#include "asterfort/lrmtyp.h"
+#include "asterfort/mdexma.h"
+#include "asterfort/mdnoma.h"
+#include "asterfort/ulisog.h"
+#include "asterfort/utmess.h"
+!
+integer :: connex(*), typma(*), point(*)
+integer :: ifi, ndim, nbnoeu, nbmail, nbgrno, nbgrma
+integer :: infmed, nbtitr
+character(len=80) :: titre(*)
+character(len=8) :: nommai(*), nomnoe(*), nomast
+character(len=24) :: nomgno(*), nomgma(*)
+real(kind=8) :: coordo(*)
+!
+! --------------------------------------------------------------------------------------------------
+!
+!     ECRITURE DU MAILLAGE - FORMAT MED
+!
+! --------------------------------------------------------------------------------------------------
+!
+!     ENTREE:
+!       IFI    : UNITE LOGIQUE D'IMPRESSION DU MAILLAGE
+!       NDIM   : DIMENSION DU PROBLEME (2  OU 3)
+!       NBNOEU : NOMBRE DE NOEUDS DU MAILLAGE
+!       COORDO : VECTEUR DES COORDONNEES DES NOEUDS
+!       NBMAIL : NOMBRE DE MAILLES DU MAILLAGE
+!       CONNEX : CONNECTIVITES
+!       POINT  : VECTEUR POINTEUR DES CONNECTIVITES (LONGUEURS CUMULEES)
+!       NOMAST : NOM DU MAILLAGE
+!       TYPMA  : VECTEUR TYPES DES MAILLES
+!       TITRE  : TITRE ASSOCIE AU MAILLAGE
+!       NBGRNO : NOMBRE DE GROUPES DE NOEUDS
+!       NBGRMA : NOMBRE DE GROUPES DE MAILLES
+!       NOMGNO : VECTEUR NOMS DES GROUPES DE NOEUDS
+!       NOMGMA : VECTEUR NOMS DES GROUPES DE MAILLES
+!       NOMMAI : VECTEUR NOMS DES MAILLES
+!       NOMNOE : VECTEUR NOMS DES NOEUDS
+!       INFMED : NIVEAU DES INFORMATIONS A IMPRIMER
+!
+! --------------------------------------------------------------------------------------------------
+!
+    character(len=6), parameter :: nompro = 'IRMHDF'
+    integer, parameter :: edlect = 0, edleaj = 1, edcrea = 3, ednstr = 0, edcart = 0
+    integer :: edmode, codret
+    integer :: nbtyp
+    med_idt :: fid, ifimed
+    integer :: nmatyp(MT_NTYMAX), nnotyp(MT_NTYMAX), typgeo(MT_NTYMAX)
+    integer :: renumd(MT_NTYMAX), modnum(MT_NTYMAX), numnoa(MT_NTYMAX, MT_NNOMAX)
+    integer :: iaux, jaux, nuanom(MT_NTYMAX, MT_NNOMAX)
+    integer :: lnomam
+    integer :: ifm, niv
+    character(len=1) :: saux01
+    character(len=6) :: saux06
+    character(len=8) :: nomtyp(MT_NTYMAX)
+    character(len=8) :: saux08
+    character(len=16) :: saux16(0:3)
+    character(len=64) :: nomamd
+    character(len=80) :: descdt
+    character(len=200) :: nofimd, desc
+    character(len=255) :: kfic
+    character(len=64) :: valk(2)
+    aster_logical :: existm, ficexi
+    character(len=16), parameter :: nocoor(3) = (/'X               ',&
+                                                  'Y               ',&
+                                                  'Z               '/)
+    character(len=16), parameter :: uncoor(3) = (/'INCONNU         ',&
+                                                  'INCONNU         ',&
+                                                  'INCONNU         '/)
+!
+! --------------------------------------------------------------------------------------------------
+!
+    call jemarq()
+!
+    call infniv(ifm, niv)
+!
+! 1.2. ==> NOM DU FICHIER MED
+!
+    call ulisog(ifi, kfic, saux01)
+    if (kfic(1:1) .eq. ' ') then
+        call codent(ifi, 'G', saux08)
+        nofimd = 'fort.'//saux08
+    else
+        nofimd = kfic(1:200)
+    endif
+!
+    if (niv .gt. 1) then
+        write (ifm,*) '<',nompro,'> NOM DU FICHIER MED : ',nofimd
+    endif
+!
+! - Generate name of mesh for MED
+!
+    call mdnoma(nomamd, lnomam, nomast, codret)
+!
+!
+! 1.4. ==> LE MAILLAGE EST-IL DEJA PRESENT DANS LE FICHIER ?
+!          SI OUI, ON NE FAIT RIEN DE PLUS QU'EMETTRE UNE INFORMATION
+!
+    iaux = 0
+    ifimed = 0
+    call mdexma(nofimd, ifimed, nomamd, iaux, existm,&
+                jaux, codret)
+!
+    if (existm) then
+!
+        valk (1) = nofimd(1:32)
+        valk (2) = nomamd
+        call utmess('A', 'MED_67', nk=2, valk=valk)
+!
+!     ------------------------------------------------------------------
+!
+    else
+!
+!====
+! 2. DEMARRAGE
+!====
+!
+! 2.1. ==> OUVERTURE FICHIER MED EN MODE
+!      SOIT 'CREATION' SI LE FICHIER N'EXISTE PAS ENCORE,
+!      SOIT 'LECTURE_AJOUT' (CELA SIGNIFIE QUE LE FICHIER EST ENRICHI).
+!
+!     TEST L'EXISTENCE DU FICHIER
+        inquire(file=nofimd,exist=ficexi)
+        if (ficexi) then
+            edmode = edlect
+            call as_med_open(fid, nofimd, edmode, codret)
+            if (codret .ne. 0) then
+                edmode = edcrea
+            else
+                edmode = edleaj
+                call as_mficlo(fid, codret)
+                if (codret .ne. 0) then
+                    saux08='mficlo'
+                    call utmess('F', 'DVP_97', sk=saux08, si=codret)
+                endif
+            endif
+        else
+            edmode = edcrea
+        endif
+        call as_med_open(fid, nofimd, edmode, codret)
+        if (codret .ne. 0) then
+            saux08='mfiope'
+            call utmess('F', 'DVP_97', sk=saux08, si=codret)
+        endif
+!
+        if (infmed .ge. 2) then
+            saux16(edlect) = 'LECTURE SEULE.  '
+            saux16(edleaj) = 'LECTURE/ECRITURE'
+            saux16(edcrea) = 'CREATION.       '
+            call codent(edmode, 'G', saux08)
+            valk(1) = saux08
+            valk(2) = saux16(edmode)
+            call utmess('I', 'MED_40', nk=2, valk=valk)
+        endif
+!
+! 2.2. ==> CREATION DU MAILLAGE AU SENS MED (TYPE MED_NON_STRUCTURE)
+!
+!GN      PRINT *,'APPEL DE as_mmhcre AVEC :'
+!GN      PRINT *,NOMAMD
+!GN      PRINT *,NDIM
+!GN      PRINT *,EDNSTR
+        desc = 'CREE PAR CODE_ASTER'
+        descdt = 'SANS UNITES'
+        call as_mmhcre(fid, nomamd, ndim, ednstr, desc,&
+                       descdt, edcart, nocoor, uncoor, codret)
+        if (codret .ne. 0) then
+            saux08='mmhcre'
+            call utmess('F', 'DVP_97', sk=saux08, si=codret)
+        endif
+!
+! 2.3. ==> . RECUPERATION DES NB/NOMS/NBNO/NBITEM DES TYPES DE MAILLES
+!            DANS CATALOGUE
+!          . RECUPERATION DES TYPES GEOMETRIE CORRESPONDANT POUR MED
+!          . VERIF COHERENCE AVEC LE CATALOGUE
+!
+        call lrmtyp(nbtyp, nomtyp, nnotyp, typgeo, renumd,&
+                    modnum, nuanom, numnoa)
+!
+!====
+! 3. LA DESCRIPTION
+!====
+!
+        if (edmode .eq. edcrea) then
+!
+            call irmdes(fid, titre, nbtitr, infmed)
+!
+        endif
+!
+!====
+! 4. LES NOEUDS
+!====
+!
+        call irmmno(fid, nomamd, ndim, nbnoeu, coordo,&
+                    nomnoe)
+!
+!====
+! 5. LES MAILLES
+!====
+!
+        saux06 = nompro
+!
+        call irmmma(fid, nomamd, nbmail, connex, point,&
+                    typma, nommai, saux06, nbtyp, typgeo,&
+                    nomtyp, nnotyp, renumd, nmatyp, infmed,&
+                    modnum, nuanom)
+!
+!====
+! 6. LES FAMILLES
+!====
+!
+        saux06 = nompro
+!
+        call irmmfa(fid, nomamd, nbnoeu, nbmail, nomast,&
+                    nbgrno, nomgno, nbgrma, nomgma, saux06,&
+                    typgeo, nomtyp, nmatyp, infmed)
+!
+!====
+! 7. LES EQUIVALENCES
+!====
+!
+!     CALL IRMMEQ ()  ! NE FAIT RIEN ...
+!
+!====
+! 8. FERMETURE DU FICHIER MED
+!====
+!
+        call as_mficlo(fid, codret)
+        if (codret .ne. 0) then
+            saux08='mficlo'
+            call utmess('F', 'DVP_97', sk=saux08, si=codret)
+        endif
+!
+!====
+! 9. LA FIN
+!====
+!
+        call jedetc('V', '&&'//nompro, 1)
+!
+    endif
+!
+    call jedema()
+!
+end subroutine

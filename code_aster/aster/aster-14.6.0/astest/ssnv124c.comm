@@ -1,0 +1,105 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_NO=_F(GROUP_MA=('LAB','LBC','LDA',),),);
+
+MA=DEFI_GROUP(reuse =MA,
+              MAILLAGE=MA,
+              CREA_GROUP_MA=_F(NOM='MATIERE',
+                               TOUT='OUI',),
+              CREA_GROUP_NO=_F(GROUP_MA='MATIERE',
+                               NOM='SOMMETS',
+                               CRIT_NOEUD='SOMMET',),);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='AXIS_INCO_UPG',),);
+
+CM=DEFI_MATERIAU(ECRO_LINE=_F(D_SIGM_EPSI=0,
+                              SY=10,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MA,
+                    AFFE=_F(TOUT='OUI',
+                            MATER=CM,),);
+# ----------- CONDITIONS AUX LIMITES --------------------------------
+
+CH_CL=AFFE_CHAR_MECA(MODELE=MO,
+                     DDL_IMPO=(_F(GROUP_NO='LBC',
+                                  DY=0.0,),
+                               _F(GROUP_NO='LDA',
+                                  DY=0.0,),),);
+
+INCOMP=AFFE_CHAR_MECA(MODELE=MO,
+                      DDL_IMPO=_F(GROUP_NO='SOMMETS',
+                                  GONF=0,),);
+# ----------- CHARGEMENT A PILOTER ----------------------------------
+
+CH1=AFFE_CHAR_MECA(MODELE=MO,
+                   FORCE_CONTOUR=_F(GROUP_MA='LAB',
+                                    FX=1.0,),);
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.69897,
+                                    NOMBRE=1,),);
+# -------------- CALCUL AVEC LA LOI DE NORTON-HOFF -----------------
+
+RESU=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=CHMAT,
+                   EXCIT=(_F(CHARGE=CH_CL,),
+                          _F(CHARGE=INCOMP,),
+                          _F(CHARGE=CH1,
+                             TYPE_CHARGE='FIXE_PILO',),),
+                   COMPORTEMENT=_F(RELATION='NORTON_HOFF',),
+                   INCREMENT=_F(LIST_INST=L_INST,),
+                   NEWTON=_F(MATRICE='TANGENTE',
+                             REAC_ITER=1,),
+                   PILOTAGE=_F(TYPE='ANA_LIM',),
+                   CONVERGENCE=_F(RESI_GLOB_MAXI=1e-05,
+                                  ITER_GLOB_MAXI=15,),
+                   SOLVEUR=_F(METHODE='MULT_FRONT',
+                              RENUM='MDA',),);
+
+ECHL=POST_ELEM(CHAR_LIMITE=_F(),NUME_ORDRE=1,
+               RESULTAT=RESU,);
+#--------------------------------------------------------------
+#      TEST DE LA CHARGE LIMITE
+#--------------------------------------------------------------
+
+TEST_TABLE(VALE_REFE=12.6857,
+           VALE_CALC=12.686379152897,
+           REFERENCE='ANALYTIQUE',
+           PRECISION=1.E-3,
+           NOM_PARA='CHAR_LIMI_SUP',
+           TABLE=ECHL,)
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=8.7215153560866,
+           VALE_REFE=8.55450,
+           REFERENCE='ANALYTIQUE',
+           NOM_PARA='CHAR_LIMI_ESTIM',
+           TABLE=ECHL,)
+
+FIN();

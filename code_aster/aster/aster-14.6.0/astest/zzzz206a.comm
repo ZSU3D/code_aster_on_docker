@@ -1,0 +1,54 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#==================================================#
+# VALIDATION DU MOT-CLE QUAD_LINE DE CREA_MAILLAGE #
+#==================================================#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MAQ=LIRE_MAILLAGE(FORMAT='MED',);
+
+MAL=CREA_MAILLAGE(MAILLAGE=MAQ,
+                                QUAD_LINE=_F(GROUP_MA=('PENTA6','HEX278','HEX208','PYRAM5',
+                               'TETRA4','QUAD94','QUAD84','TRIA3','SEG2','PEN186'),),)
+
+DEFI_FICHIER(UNITE=50, FICHIER='./REPE_OUT/zzzz206a.pos')
+
+IMPR_RESU(FORMAT='GMSH',UNITE=50,
+          RESU=_F(MAILLAGE=MAL,),)
+
+DEFI_FICHIER(ACTION='LIBERER',UNITE=50)
+
+TEST_FICHIER(FICHIER="./REPE_OUT/zzzz206a.pos",
+             NB_VALE_I=202,
+             VALE_CALC_I=323645,
+             NB_VALE=156,
+             VALE_CALC=3.9104068550e+2,
+             VALE_CALC_K="4d37dac458a3fb580fa52823e645370a"
+)
+
+DEFI_FICHIER(UNITE=50, FICHIER='./REPE_OUT/zzzz206a_resu.mail')
+
+IMPR_RESU(FORMAT='RESULTAT',UNITE=50,
+          RESU=_F(MAILLAGE=MAL,),)
+
+
+FIN();

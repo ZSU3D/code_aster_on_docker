@@ -1,0 +1,83 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), DEBUG=_F(SDVERI='OUI',), INFO=1,);
+
+Mail=LIRE_MAILLAGE(UNITE=20,
+                   FORMAT='MED',);
+
+
+Mail1=CREA_MAILLAGE(MAILLAGE=Mail,
+                   DECOUPE_LAC=_F(GROUP_MA_ESCL='Edge_1',),);
+
+
+IMPR_RESU(FORMAT='MED', UNITE=80, RESU=_F(MAILLAGE=Mail1),)
+
+
+TEST_RESU(MAILLAGE=(_F(MAILLAGE=Mail1,
+                         CARA='NB_MAILLE',
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC_I=6,
+                         VALE_REFE_I=6,
+                         ),
+                      _F(MAILLAGE=Mail1,
+                         CARA='NB_NOEUD',
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC_I=4,
+                         VALE_REFE_I=4,
+
+                         ),
+                      ),
+            )
+
+           
+           
+### TEST TRIA6
+
+Mailt6=CREA_MAILLAGE(MAILLAGE=Mail,
+                   LINE_QUAD=_F(TOUT='OUI',),);
+
+Mailt61=CREA_MAILLAGE(MAILLAGE=Mailt6,
+                   DECOUPE_LAC=_F(GROUP_MA_ESCL='Edge_1',),);
+
+
+IMPR_RESU(FORMAT='MED', UNITE=80, RESU=_F(MAILLAGE=Mailt61),)
+
+
+TEST_RESU(MAILLAGE=(_F(MAILLAGE=Mailt61,
+                         CARA='NB_MAILLE',
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC_I=4,
+                         VALE_REFE_I=4,
+                         ),
+                      _F(MAILLAGE=Mailt61,
+                         CARA='NB_NOEUD',
+                         REFERENCE='ANALYTIQUE',
+                         VALE_CALC_I=6,
+                         VALE_REFE_I=6,
+
+                        ),
+                      ),
+            )
+
+
+
+FIN()

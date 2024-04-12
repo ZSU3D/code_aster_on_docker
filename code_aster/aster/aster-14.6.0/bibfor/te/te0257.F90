@@ -1,0 +1,150 @@
+! --------------------------------------------------------------------
+! Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+! This file is part of code_aster.
+!
+! code_aster is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! code_aster is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+! --------------------------------------------------------------------
+
+subroutine te0257(option, nomte)
+!.......................................................................
+    implicit none
+!
+!     BUT: CALCUL DES MATRICES DE MASSE  ELEMENTAIRES EN MECANIQUE
+!          ELEMENTS 1D DE COUPLAGE ACOUSTICO-MECANIQUE
+!
+!          OPTION : 'MASS_MECA '
+!
+!     ENTREES  ---> OPTION : OPTION DE CALCUL
+!          ---> NOMTE  : NOM DU TYPE ELEMENT
+!.......................................................................
+!
+#include "asterf_types.h"
+#include "jeveux.h"
+#include "asterfort/elrefe_info.h"
+#include "asterfort/jevech.h"
+#include "asterfort/lteatt.h"
+#include "asterfort/rcvalb.h"
+#include "asterfort/vff2dn.h"
+!
+    integer :: icodre(1)
+    character(len=8) :: fami, poum
+    character(len=16) :: nomte, option
+    real(kind=8) :: a(3, 3, 3, 3), nx, ny, rho(1), norm(2), poids
+    integer :: igeom, imate, i, j, k, l, ik, ijkl, ldec, kco, ino, jno
+    integer :: nno, npg, kp, ndim, nnos, jgano
+    integer :: ipoids, ivf, idfde, imatuu, kpg, spt
+    aster_logical :: laxi
+!
+!
+!-----------------------------------------------------------------------
+    real(kind=8) :: r
+!-----------------------------------------------------------------------
+    call elrefe_info(fami='RIGI', ndim=ndim, nno=nno, nnos=nnos, npg=npg,&
+                     jpoids=ipoids, jvf=ivf, jdfde=idfde, jgano=jgano)
+!
+    laxi = .false.
+    if (lteatt('AXIS','OUI')) laxi = .true.
+!
+    call jevech('PGEOMER', 'L', igeom)
+    call jevech('PMATERC', 'L', imate)
+    call jevech('PMATUUR', 'E', imatuu)
+    fami='FPG1'
+    kpg=1
+    spt=1
+    poum='+'
+    call rcvalb(fami, kpg, spt, poum, zi(imate),&
+                ' ', 'FLUIDE', 0, ' ', [0.d0],&
+                1, 'RHO', rho, icodre, 1)
+!
+!     INITIALISATION DE LA MATRICE
+!
+    do 40 k = 1, 3
+        do 30 l = 1, 3
+            do 20 i = 1, nno
+                do 10 j = 1, i
+                    a(k,l,i,j) = 0.d0
+ 10             continue
+ 20         continue
+ 30     continue
+ 40 end do
+!
+!    BOUCLE SUR LES POINTS DE GAUSS
+!
+    do 90 kp = 1, npg
+        ldec = (kp-1)*nno
+!
+        call vff2dn(ndim, nno, kp, ipoids, idfde,&
+                    zr(igeom), nx, ny, poids)
+!
+        norm(1) = nx
+        norm(2) = ny
+!
+        if (laxi) then
+            r = 0.d0
+            do 50 i = 1, nno
+                r = r + zr(igeom+2* (i-1))*zr(ivf+ldec+i-1)
+ 50         continue
+            poids = poids*r
+        endif
+!
+!CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+!       CALCUL DU TERME PHI*(U.N DS)       C
+!CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+!
+        do 80 ino = 1, nno
+            do 70 jno = 1, ino
+                do 60 kco = 1, 2
+!
+                    a(kco,3,ino,jno) = a(kco,3,ino,jno) + poids*norm( kco)*rho(1)* zr(ivf+ldec+in&
+                                       &o-1)* zr(ivf+ldec+jno-1)
+!
+!
+!
+!
+ 60             continue
+ 70         continue
+ 80     continue
+!
+ 90 end do
+!
+    do 120 ino = 1, nno
+        do 110 jno = 1, ino
+            do 100 kco = 1, 2
+                a(3,kco,ino,jno) = a(kco,3,ino,jno)
+100         continue
+110     continue
+120 end do
+!
+!
+! PASSAGE DU STOCKAGE RECTANGULAIRE (A) AU STOCKAGE TRIANGULAIRE (ZR)
+!
+    ijkl = 0
+    ik = 0
+    do 160 k = 1, 3
+        do 150 l = 1, 3
+            do 140 i = 1, nno
+                ik = ((3*i+k-4)* (3*i+k-3))/2
+                do 130 j = 1, i
+                    ijkl = ik + 3* (j-1) + l
+                    zr(imatuu+ijkl-1) = a(k,l,i,j)
+!
+!
+!
+!
+130             continue
+140         continue
+150     continue
+160 end do
+!
+end subroutine

@@ -1,0 +1,202 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+
+MA0=LIRE_MAILLAGE(INFO=1,
+                  FORMAT='MED');
+
+
+MA0=DEFI_GROUP(reuse =MA0,
+                    MAILLAGE=MA0,
+                   CREA_GROUP_NO=(_F(GROUP_MA='VOL'),
+                                   _F(GROUP_MA='SURFSUP')))
+
+MA0=MODI_MAILLAGE(reuse =MA0,
+                       MAILLAGE=MA0,
+                       ORIE_PEAU_3D=_F(GROUP_MA=('SURFSUP','SURFINF')))
+
+MODELEIN=AFFE_MODELE(MAILLAGE=MA0,
+                     AFFE=(_F(GROUP_MA=('VOL'),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D'),
+                           _F(GROUP_MA=('SURFINF','SURFSUP'),
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D')));
+
+
+LN = FORMULE(VALE='Z-17.5',
+             NOM_PARA=['X', 'Y', 'Z'],)
+
+
+FISS=DEFI_FISS_XFEM(MAILLAGE=MA0,
+                    TYPE_DISCONTINUITE='INTERFACE',
+                    DEFI_FISS=_F(FONC_LN=LN));
+
+
+#----------------------------------------------
+MODELEK=MODI_MODELE_XFEM(MODELE_IN=MODELEIN,
+                         FISSURE=FISS,
+                         CONTACT='STANDARD',
+                         INFO=1);
+
+
+CTXFEM = DEFI_CONTACT(MODELE         = MODELEK,
+                      FORMULATION    = 'XFEM',
+                      FROTTEMENT     = 'COULOMB',
+                      ITER_CONT_MAXI = 4,
+                      ITER_FROT_MAXI = 6,
+                      REAC_GEOM      = 'SANS',
+                      ZONE=(
+                            _F(
+                               FISS_MAIT    = FISS,
+                               INTEGRATION  = 'GAUSS',
+                               ORDRE_INT=3,
+                               CONTACT_INIT = 'OUI',
+                               COULOMB      = 1.0,
+                               SEUIL_INIT   = -5,
+                               ALGO_CONT    = 'STANDARD',
+                               COEF_CONT    = 100.,
+                               ALGO_FROT    = 'STANDARD',
+                               COEF_FROT    = 1000.,
+                             ),
+                         ),
+                   );
+
+E=1.0E11
+nu=0.
+ACIER=DEFI_MATERIAU(ELAS=_F(E=E,NU=nu,RHO=7800.0));
+
+CHAMPMAT=AFFE_MATERIAU(MAILLAGE=MA0,
+                       MODELE=MODELEK,
+                       AFFE=_F(GROUP_MA=('VOL','SURFINF','SURFSUP'),
+                                MATER=ACIER,
+                                ));
+
+PRES=100.
+FCTPRES = FORMULE(VALE='(PRES-(Y-10.)*(Y-10.)/2.)*E/1e6',
+                  PRES=PRES,
+                  E=E,
+                  NOM_PARA=['X', 'Y', 'Z'],)
+
+CH1=AFFE_CHAR_MECA(MODELE=MODELEK,
+                   DDL_IMPO=(_F(GROUP_MA='SURFINF',DX=0.0,DY=0.0,DZ=0.0),
+                             _F(GROUP_MA='SURFSUP',DX=0.0,DY=0.0)),
+                    INFO=1);
+
+CHF=AFFE_CHAR_MECA_F(MODELE=MODELEK,
+                     PRES_REP=_F(GROUP_MA='SURFSUP',
+                                 PRES=FCTPRES),
+                      );
+
+L_INST=DEFI_LIST_REEL(DEBUT=0.0,
+                      INTERVALLE=_F(JUSQU_A=1.0,
+                                    NOMBRE=1));
+
+UTOT1=STAT_NON_LINE(MODELE=MODELEK,
+                   CHAM_MATER=CHAMPMAT,
+                   EXCIT=(_F(CHARGE=CH1),
+                          _F(CHARGE=CHF),),
+                   CONTACT  = CTXFEM ,
+                   COMPORTEMENT=_F(RELATION='ELAS',
+                                GROUP_MA='VOL'),
+                   INCREMENT=_F(LIST_INST=L_INST),
+                   SOLVEUR=_F(METHODE='MUMPS',
+
+                              ),
+                              NEWTON=_F(REAC_ITER=1),
+                   ARCHIVAGE=_F(CHAM_EXCLU='VARI_ELGA'),
+                   INFO=1);
+
+
+# -------------------------------------------------------------
+#            POST-TRAITEMENT POUR LA VISUALISATION X-FEM
+# -------------------------------------------------------------
+
+MA_XFEM=POST_MAIL_XFEM(MODELE        = MODELEK,
+                       PREF_GROUP_CO = 'NFISSU',
+                       INFO          = 2)
+
+MOD_VISU=AFFE_MODELE(MAILLAGE=MA_XFEM,
+                     AFFE=_F(TOUT='OUI',
+                              PHENOMENE='MECANIQUE',
+                              MODELISATION='3D',),)
+
+RES_XFEM=POST_CHAM_XFEM(MODELE_VISU   = MOD_VISU,
+                        RESULTAT      = UTOT1,
+                        INFO          = 2)
+
+
+
+LAG=POST_RELEVE_T(ACTION=_F(INTITULE='DEPLE',
+                             GROUP_NO='NFISSU',
+                             RESULTAT=RES_XFEM,
+                             NOM_CHAM='DEPL',
+                             NUME_ORDRE=1,
+                             NOM_CMP=('LAGS_C'),
+                             OPERATION='EXTRACTION'));
+
+IMPR_TABLE(TABLE=LAG);
+
+# TESTS
+LAREF=-9.52844E6
+
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-4,
+           VALE_CALC=-9525090.62615,
+           VALE_REFE=-9.528440E6,
+           NOM_PARA='LAGS_C',
+           TYPE_TEST='MAX',
+           TABLE=LAG,
+           FILTRE=(_F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_X',
+                      VALE=0.0,),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_Y',
+                      VALE=10.0,),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_Z',
+                      VALE=17.5,),
+                   ),
+           )
+
+TEST_TABLE(CRITERE='RELATIF',
+           REFERENCE='ANALYTIQUE',
+           PRECISION=5.0000000000000001E-4,
+           VALE_CALC=-9525090.62615,
+           VALE_REFE=-9.528440E6,
+           NOM_PARA='LAGS_C',
+           TABLE=LAG,
+           TYPE_TEST='MIN',
+           FILTRE=(_F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_X',
+                      VALE=0.0,),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_Y',
+                      VALE=10.0,),
+                   _F(CRIT_COMP='EQ',
+                      NOM_PARA='COOR_Z',
+                      VALE=17.5),
+                   ),
+           )
+
+FIN();

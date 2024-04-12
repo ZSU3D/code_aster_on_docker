@@ -1,0 +1,100 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+POURSUITE(CODE='OUI')
+
+AMODE2=CALC_MODES(MATR_RIGI=MATRRIGI,
+                  MATR_MASS=MATRMASS,
+                  CALC_FREQ=_F(  NMAX_FREQ = 10),
+                  #VERI_MODE=_F(  STOP_ERREUR='NON')
+                 );
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=AMODE2,
+                   VALE_CALC=3.84980812311,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=AMODE2,
+                   VALE_CALC=3.85737512084,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=AMODE2,
+                   VALE_CALC=4.77883519831,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=AMODE2,
+                   VALE_CALC=4.78053960261,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=AMODE2,
+                   VALE_CALC=7.12105014579,
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+AMODE3=CALC_MODES(MATR_RIGI=MATRRIGB,
+                  MATR_MASS=MATRMASB,
+                  CALC_FREQ=_F(  NMAX_FREQ = 10),
+                  #VERI_MODE=_F(  STOP_ERREUR='NON')
+                 );
+
+TEST_RESU(RESU=(_F(NUME_ORDRE=1,
+                   PARA='FREQ',
+                   RESULTAT=AMODE3,
+                   VALE_CALC=3.85979994809,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=2,
+                   PARA='FREQ',
+                   RESULTAT=AMODE3,
+                   VALE_CALC=3.86752331394,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=3,
+                   PARA='FREQ',
+                   RESULTAT=AMODE3,
+                   VALE_CALC=4.77969494954,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=4,
+                   PARA='FREQ',
+                   RESULTAT=AMODE3,
+                   VALE_CALC=4.78134075159,
+                   CRITERE='RELATIF',
+                   ),
+                _F(NUME_ORDRE=5,
+                   PARA='FREQ',
+                   RESULTAT=AMODE3,
+                   VALE_CALC=7.05951839631,
+                   CRITERE='RELATIF',
+                   ),
+                ),
+          )
+
+FIN( );

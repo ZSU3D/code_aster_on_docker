@@ -1,0 +1,113 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2017 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',), DEBUG=_F(SDVERI='OUI',), INFO=1,);
+
+Mail=LIRE_MAILLAGE(UNITE=20,
+                   FORMAT='MED',);
+
+### TEST HEXA20/Edge 
+
+Mailh8=CREA_MAILLAGE(MAILLAGE=Mail,
+                   LINE_QUAD=_F(TOUT='OUI',),);
+
+
+###TEST HEXA8/Face
+
+Mail12=CREA_MAILLAGE(MAILLAGE=Mail,
+                   DECOUPE_LAC=_F(GROUP_MA_ESCL='Face_2',
+                                  DECOUPE_HEXA="HEXA",),);
+
+
+IMPR_RESU(FORMAT='MED', UNITE=80, RESU=_F(MAILLAGE=Mail12),)
+
+
+TEST_RESU(MAILLAGE=(
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mail12,
+           CARA='NB_MAILLE', VALE_REFE_I=28, VALE_CALC_I=28,),
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mail12,
+           CARA='NB_NOEUD', VALE_REFE_I=16, VALE_CALC_I=16,),))
+
+Mail12b=CREA_MAILLAGE(MAILLAGE=Mail,
+                      DECOUPE_LAC=_F(GROUP_MA_ESCL='Face_2',),);
+
+
+TEST_RESU(MAILLAGE=(
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mail12b,
+           CARA='NB_MAILLE', VALE_REFE_I=26, VALE_CALC_I=26,),
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mail12b,
+           CARA='NB_NOEUD', VALE_REFE_I=9, VALE_CALC_I=9,),))
+
+
+
+### TEST HEXA20/Face
+
+Mailh20=CREA_MAILLAGE(MAILLAGE=Mailh8,
+                   DECOUPE_LAC=_F(GROUP_MA_ESCL='Face_2',
+                                  DECOUPE_HEXA="HEXA",),);
+
+
+IMPR_RESU(FORMAT='MED', UNITE=80, RESU=_F(MAILLAGE=Mailh20),)
+
+
+TEST_RESU(MAILLAGE=(
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh20,
+           CARA='NB_MAILLE', VALE_REFE_I=28, VALE_CALC_I=28,),
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh20,
+           CARA='NB_NOEUD', VALE_REFE_I=48, VALE_CALC_I=48,),))
+
+Mailh20b=CREA_MAILLAGE(MAILLAGE=Mailh8,
+                       DECOUPE_LAC=_F(GROUP_MA_ESCL='Face_2',),);
+
+
+TEST_RESU(MAILLAGE=(
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh20b,
+           CARA='NB_MAILLE', VALE_REFE_I=26, VALE_CALC_I=26,),
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh20b,
+           CARA='NB_NOEUD', VALE_REFE_I=29, VALE_CALC_I=29,),))
+
+
+
+
+### TEST HEXA27/Face 
+
+Mailh27=CREA_MAILLAGE(MAILLAGE=Mailh8,
+                    HEXA20_27=_F(TOUT='OUI',
+                                        PREF_NOEUD='NN',
+                                        PREF_NUME=1,),
+                    );
+ 
+Mailh82=CREA_MAILLAGE(MAILLAGE=Mailh27,
+                    DECOUPE_LAC=_F(GROUP_MA_ESCL='Face_2',),);
+
+
+IMPR_RESU(FORMAT='MED', UNITE=80, RESU=_F(MAILLAGE=Mailh82),)
+
+TEST_RESU(MAILLAGE=(
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh82,
+           CARA='NB_MAILLE', VALE_REFE_I=19, VALE_CALC_I=19,),
+       _F( REFERENCE='ANALYTIQUE', MAILLAGE=Mailh82,
+           CARA='NB_NOEUD', VALE_REFE_I=27, VALE_CALC_I=27,),))
+
+
+
+
+FIN()

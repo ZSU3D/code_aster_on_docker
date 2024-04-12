@@ -1,0 +1,111 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',);
+
+MO=AFFE_MODELE(MAILLAGE=MA,
+               AFFE=_F(TOUT='OUI',
+                       PHENOMENE='MECANIQUE',
+                       MODELISATION='D_PLAN_INCO_UPG',),);
+
+MA=MODI_MAILLAGE(reuse =MA,
+                 MAILLAGE=MA,
+                 ORIE_PEAU_2D=_F(GROUP_MA=('LBC','LDA',),),
+                 );
+
+L = 100.;
+
+B = 100.;
+
+
+FSZ = FORMULE(VALE='(1. - 4.*Y**2/B**2)',
+              B=B,
+              NOM_PARA='Y',)
+
+FSX = FORMULE(VALE='8.*L*Y/B**2',
+              L=L,
+              B=B,
+              NOM_PARA='Y',)
+
+MATERIAU=DEFI_MATERIAU(ELAS=_F(E=100.,
+                               NU=0.4999,),);
+
+CH_MATER=AFFE_MATERIAU(MAILLAGE=MA,
+                       AFFE=_F(TOUT='OUI',
+                               MATER=MATERIAU,),);
+
+SYMETRIE=AFFE_CHAR_MECA(MODELE=MO,
+                        DDL_IMPO=(_F(GROUP_NO='A',
+                                     DY=0.0,),
+                                  _F(GROUP_NO='D',
+                                     DX=0,),),
+                        FACE_IMPO=_F(GROUP_MA='LAB',
+                                     DX=0,),);
+
+CHARGE=AFFE_CHAR_MECA_F(MODELE=MO,
+                        PRES_REP=(_F(GROUP_MA='LBC',
+                                    CISA_2D=FSZ,),
+                                  _F(GROUP_MA='LDA',
+                                     CISA_2D=FSZ,
+                                     PRES=FSX),
+                                 ),
+                           );
+
+INSTANTS=DEFI_LIST_REEL(DEBUT=0.0,
+                        INTERVALLE=_F(JUSQU_A=1.0,
+                                      NOMBRE=1,),);
+
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                    VALE=(0.0,  0.0,
+                          1.0,  1.0,),);
+
+RESU=STAT_NON_LINE(MODELE=MO,
+                   CHAM_MATER=CH_MATER,
+                   EXCIT=(_F(CHARGE=CHARGE,
+                             FONC_MULT=RAMPE,),
+                          _F(CHARGE=SYMETRIE,),),
+                   COMPORTEMENT=_F(RELATION='ELAS',),
+                   INCREMENT=_F(LIST_INST=INSTANTS,),
+                   NEWTON=_F(REAC_ITER=1,),
+                   ARCHIVAGE=_F(LIST_INST=INSTANTS,),);
+
+TEST_RESU(RESU=(_F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DX',
+                   VALE_CALC=-1.500199980,
+                   VALE_REFE=-1.5,
+                   PRECISION=1.3999999999999999E-4,),
+                _F(GROUP_NO='C',
+                   INST=1.0,
+                   REFERENCE='ANALYTIQUE',
+                   RESULTAT=RESU,
+                   NOM_CHAM='DEPL',
+                   NOM_CMP='DY',
+                   VALE_CALC=4.249730338,
+                   VALE_REFE=4.25,
+                   PRECISION=6.9999999999999994E-05,),
+                ),
+          )
+
+FIN();

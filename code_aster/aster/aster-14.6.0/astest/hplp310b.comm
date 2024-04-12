@@ -1,0 +1,1028 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'),DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(FORMAT='MED',)
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+      AFFE=_F( GROUP_MA = ('VTOT','L_EA'),PHENOMENE = 'MECANIQUE',MODELISATION = 'D_PLAN'))
+
+
+MAT=DEFI_MATERIAU(ELAS=_F(  E = 1000., NU = 0.3, ALPHA = 1.E-6))
+
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,CREA_GROUP_NO=(
+                     _F(
+                   GROUP_MA = ( 'L_AB',  'L_DE',  'L_EA',  'LPOP8',
+                                'LP9P10S',  'LPOP8S',  'VTOT', )),
+                     _F(  GROUP_MA = 'TOT')),
+                     CREA_GROUP_MA=_F(  NOM = 'TOT', TOUT = 'OUI')
+                 )
+
+#
+E=1000.
+
+SIGMA0=1.
+
+NU=.3
+
+R1=1.
+
+ALPHA=1.E-6
+
+RHO=2.
+
+#
+TP=0.
+
+#
+T1F = FORMULE(VALE="""TPV+((4.*SIGMA0*(1.-NU)*log(RHO/R1))
+                                /(sqrt(3.)*E*ALPHA)) """,
+              SIGMA0=SIGMA0,
+              NU=NU,
+              RHO=RHO,
+              R1=R1,
+              E=E,
+              ALPHA=ALPHA,
+              NOM_PARA='TPV',)
+
+#
+# ATTENTION : LA GENERATION DU MAILLAGE .MGIB A PARTIR DU FICHIER
+# .DATG FAIT APPARAITRE DES NOEUDS EN 0. A SUPPRIMER, SINON LE
+# LOG N'EST PAS DEFINI.
+#
+F_T = FORMULE(VALE="""(T1F(TP)-((T1F(TP)-TP)*
+               log((sqrt((X*X)+(Y*Y)))/R1))/(log(RHO/R1)))""",
+              T1F=T1F,
+              TP=TP,
+              R1=R1,
+              RHO=RHO,
+              NOM_PARA=['X', 'Y'],)
+
+TEMP0=CREA_CHAMP(  OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_R',
+                         MAILLAGE=MA,
+                         AFFE=_F( GROUP_NO = 'TOT',
+                               NOM_CMP = 'TEMP',
+                               VALE=0.)
+                        )
+TEMP_IMP=CREA_CHAMP(  OPERATION='AFFE', TYPE_CHAM='NOEU_TEMP_F',
+                         MAILLAGE=MA,
+                         AFFE=_F( GROUP_NO = 'TOT',
+                               NOM_CMP = 'TEMP',
+                               VALE_F = F_T)
+                        )
+
+TEMP_EV=CREA_RESU(    OPERATION='AFFE', TYPE_RESU='EVOL_THER',
+                        NOM_CHAM='TEMP',
+                        AFFE=_F(  CHAM_GD = TEMP0,
+                                  INST = 0.)
+                    )
+TEMP_EV=CREA_RESU(    reuse=TEMP_EV,
+                      RESULTAT=TEMP_EV,
+                      OPERATION='AFFE', TYPE_RESU='EVOL_THER',
+                        NOM_CHAM='TEMP',
+                        AFFE=_F(  CHAM_GD = TEMP_IMP,
+                                  INST = (1.,10.,),)
+                    )
+
+CL=AFFE_CHAR_MECA(   MODELE=MO,
+            DDL_IMPO=_F( GROUP_NO = ( 'L_AB',  'L_DE', ), DY = 0.),
+            LIAISON_DDL=_F(  GROUP_NO = ('PA',  'PE',),
+                          DDL = ('DX',  'DX',),
+                          COEF_MULT = (1., 1.,),
+                          COEF_IMPO = 0.),
+                     )
+
+F_IMPO = DEFI_CONSTANTE ( VALE = 0.0 )
+F_MULT = DEFI_CONSTANTE ( VALE = -1.0 )
+
+CHAR1 = DEFI_CONTACT(MODELE      = MO,
+                     FORMULATION = 'LIAISON_UNIL',
+                     ZONE        = _F(
+                         GROUP_MA      = ('LPOP8',),
+                         SANS_GROUP_NO = ('P0',),
+                         NOM_CMP       = ('DY',),
+                         COEF_IMPO     = F_IMPO,
+                         COEF_MULT     = F_MULT,
+                                   ),
+                     )
+
+
+CH10=AFFE_CHAR_MECA(   MODELE=MO,
+              PRES_REP=_F(  GROUP_MA = 'L_EA',   PRES = -1.)
+                            )
+
+# champ de materiau sans temperature :
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=
+            _F( TOUT = 'OUI', MATER = MAT),
+                         )
+
+
+# champ de materiau avec temperature :
+CHMAT2=AFFE_MATERIAU(  MAILLAGE=MA,AFFE=(
+            _F( TOUT = 'OUI', MATER = MAT),
+            ),
+            AFFE_VARC=_F(NOM_VARC='TEMP',TOUT='OUI',EVOL=TEMP_EV,VALE_REF=0.),
+                         )
+
+INSTMECA=DEFI_LIST_REEL(VALE=1.)
+
+
+# -------------------------------------------------------------
+# CALCUL AVEC LES CHARGEMENTS 1 ET 2 DE LA FICHE (SANS CONTACT)
+# -------------------------------------------------------------
+
+CHAMDEPP=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT,EXCIT=(
+              _F( CHARGE = CH10),
+              _F( CHARGE = CL)),
+                          )
+
+CHAMDEPT=MECA_STATIQUE(   MODELE=MO,   CHAM_MATER=CHMAT2,EXCIT=(
+              _F( CHARGE = CL)),
+              LIST_INST=INSTMECA,
+                          )
+
+# -----------------------------------------------------------
+# CALCUL AVEC LE CHARGEMENT 3 DE LA FICHE POUR DIFFERENTES
+# VALEUR DU PARAMETRE ALPHA (AVEC CONTACT)
+# -----------------------------------------------------------
+RAMPE=DEFI_FONCTION(NOM_PARA='INST',
+                      VALE=(1., 0.30,
+                            2., 0.32,
+                            3., 0.33,
+                            4., 0.335,
+                            5., 0.34,
+                            6., 0.345,
+                            7., 0.35,
+                            8., 0.36,
+                            9., 0.38,
+                            10., 0.40,),
+                      PROL_DROITE='LINEAIRE',
+                      PROL_GAUCHE='LINEAIRE',);
+
+L_INST=DEFI_LIST_REEL(
+                             DEBUT=0.,
+                              INTERVALLE=_F( JUSQU_A = 10., NOMBRE = 10)
+                           )
+
+CHAMDEP0=STAT_NON_LINE(MODELE=MO,
+                       CHAM_MATER=CHMAT2,
+                       EXCIT=(_F( CHARGE = CH10,
+                                 FONC_MULT=RAMPE),
+                              _F( CHARGE = CL)),
+                       CONTACT = CHAR1,
+                       COMPORTEMENT=_F(RELATION = 'ELAS'),
+                       NEWTON=_F(MATRICE = 'ELASTIQUE'),
+                       INCREMENT=_F(LIST_INST = L_INST,),
+                       CONVERGENCE=_F(
+                ITER_GLOB_MAXI = 20),
+              )
+
+FOND=DEFI_FOND_FISS(    MAILLAGE=MA,
+                        FOND_FISS=_F( GROUP_NO = ('P0',)),
+                        SYME='OUI',
+                        LEVRE_SUP=_F(MAILLE='M1609'),
+                      )
+
+#  RT = 0.01 (RAYON DU MAILLAGE RAYONNANT)
+#  NOMBRE DE COURONNES DU MAILLAGE RAYONNANT = 4
+#  LONGUEUR DE LA LEVRE = 0.05
+
+
+# PREMIERE COURONNE DE QUADRANGLES
+# --------------------------------
+
+#
+# DEUXIEME COURONNE DE QUADRANGLES
+# --------------------------------
+
+# TROISIEME COURONNE DE QUADRANGLES
+# --------------------------------
+
+# COURONNE QUELCONQUE
+# -------------------
+
+# ------------------------------------------------
+# CALCUL DE G AVEC CHARGEMENT 1 DE LA FICHE
+# ------------------------------------------------
+#
+# COURONNE 0
+# ----------
+
+G0_P=CALC_G(    RESULTAT=CHAMDEPP,
+                        THETA=_F(
+                                 R_INF=0.0025,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.005,),
+                    )
+
+GK0_P=CALC_G(    RESULTAT=CHAMDEPP,
+                         THETA=_F(
+                                   R_INF = 0.0025,
+                                   R_SUP = 0.005,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 1
+# ----------
+
+G1_P=CALC_G(    RESULTAT=CHAMDEPP,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.0075,),
+                    )
+
+GK1_P=CALC_G(    RESULTAT=CHAMDEPP,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.0075,
+                                   FOND_FISS=FOND,),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 2
+# ----------
+
+G2_P=CALC_G(    RESULTAT=CHAMDEPP,
+                        THETA=_F(
+                                 R_INF=0.0075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.01,),
+                    )
+
+GK2_P=CALC_G(    RESULTAT=CHAMDEPP,
+                         THETA=_F(
+                                   R_INF = 0.0075,
+                                   R_SUP = 0.01,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 3
+# ----------
+
+G3_P=CALC_G(    RESULTAT=CHAMDEPP,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.03,),
+                    )
+
+GK3_P=CALC_G(    RESULTAT=CHAMDEPP,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.03,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 4
+# ----------
+
+GK4_P=CALC_G(    RESULTAT=CHAMDEPP,
+                         THETA=_F(
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# ------------------------------------------------
+# CALCUL DE G AVEC CHARGEMENT 2 DE LA FICHE
+# ------------------------------------------------
+#
+# COURONNE 0
+# ----------
+
+G0_T=CALC_G(    RESULTAT=CHAMDEPT,
+                        THETA=_F(
+                                 R_INF=0.0025,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.005,),
+                    )
+
+GK0_T=CALC_G(    RESULTAT=CHAMDEPT,
+                         THETA=_F(
+                                   R_INF = 0.0025,
+                                   R_SUP = 0.005,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 1
+# ----------
+
+G1_T=CALC_G(    RESULTAT=CHAMDEPT,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.0075,),
+                    )
+
+GK1_T=CALC_G(    RESULTAT=CHAMDEPT,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.0075,
+                                   FOND_FISS=FOND,),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 2
+# ----------
+
+G2_T=CALC_G(    RESULTAT=CHAMDEPT,
+                        THETA=_F(
+                                 R_INF=0.0075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.01,),
+                    )
+
+GK2_T=CALC_G(    RESULTAT=CHAMDEPT,
+                         THETA=_F(
+                                   R_INF = 0.0075,
+                                   R_SUP = 0.01,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 3
+# ----------
+
+G3_T=CALC_G(    RESULTAT=CHAMDEPT,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.03,),
+                    )
+
+GK3_T=CALC_G(    RESULTAT=CHAMDEPT,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.03,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 3
+# ----------
+
+GK4_T=CALC_G(    RESULTAT=CHAMDEPT,
+                         THETA=_F(
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# ------------------------------------------------
+# CALCUL DE G AVEC CHARGEMENT 3 DE LA FICHE
+# ------------------------------------------------
+
+# COURONNE 0
+# ----------
+
+G0_C=CALC_G(   RESULTAT=CHAMDEP0,
+                        THETA=_F(
+                                 R_INF=0.0025,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.005,),
+                    )
+
+GK0_C=CALC_G(   RESULTAT=CHAMDEP0,
+                         THETA=_F(
+                                   R_INF = 0.0025,
+                                   R_SUP = 0.005,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 1
+# ----------
+
+G1_C=CALC_G(   RESULTAT=CHAMDEP0,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.0075,),
+                    )
+
+GK1_C=CALC_G(   RESULTAT=CHAMDEP0,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.0075,
+                                   FOND_FISS=FOND,),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 2
+# ----------
+
+G2_C=CALC_G(   RESULTAT=CHAMDEP0,
+                        THETA=_F(
+                                 R_INF=0.0075,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.01,),
+                    )
+
+GK2_C=CALC_G(   RESULTAT=CHAMDEP0,
+                         THETA=_F(
+                                   R_INF = 0.0075,
+                                   R_SUP = 0.01,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 3
+# ----------
+
+G3_C=CALC_G(   RESULTAT=CHAMDEP0,
+                        THETA=_F(
+                                 R_INF=0.005,
+                                 FOND_FISS=FOND,
+                                 R_SUP=0.03,),
+                    )
+
+GK3_C=CALC_G(   RESULTAT=CHAMDEP0,
+                         THETA=_F(
+                                   R_INF = 0.005,
+                                   R_SUP = 0.03,
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# COURONNE 4
+# ----------
+
+GK4_C=CALC_G(   RESULTAT=CHAMDEP0,
+                         THETA=_F(
+                                   FOND_FISS=FOND),
+                         OPTION='CALC_K_G'
+                     )
+
+# *******************************************************
+## IMPRESSION DES RESULTATS CHARGEMENT 1 SANS CONTACT
+## ----------------------------------------------------
+
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=1.12883723416,
+           VALE_REFE=1.1482000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_P,)
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=1.12882856813,
+           VALE_REFE=1.1482000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_P,)
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=1.12885539233,
+           VALE_REFE=1.1482000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_P,)
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=1.12884882926,
+           VALE_REFE=1.1482000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_P,)
+
+TEST_TABLE(PRECISION=0.02,
+           VALE_CALC=1.12884125888,
+           VALE_REFE=1.1482000000000001,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_P,)
+
+## IMPRESSION DES RESULTATS CHARGEMENT 2 SANS CONTACT
+## ----------------------------------------------------
+
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=-0.384783858938,
+           VALE_REFE=-0.41236899999999999,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_T,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=-0.384780802999,
+           VALE_REFE=-0.41236899999999999,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_T,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=-0.384789923462,
+           VALE_REFE=-0.41236899999999999,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_T,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=-0.384787024236,
+           VALE_REFE=-0.41236899999999999,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_T,)
+
+TEST_TABLE(PRECISION=0.070000000000000007,
+           VALE_CALC=-0.384784996926,
+           VALE_REFE=-0.41236899999999999,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_T,)
+
+## IMPRESSION DES RESULTATS CHARGEMENT CH3 AVEC CONTACT
+## ----------------------------------------------------
+IMPR_TABLE(       TABLE=GK0_C,)
+IMPR_TABLE(       TABLE=GK1_C,)
+IMPR_TABLE(       TABLE=GK2_C,)
+IMPR_TABLE(       TABLE=GK3_C,)
+
+# ALPHA = 0.30
+# ------------
+
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-1.30904139912E-14,
+           NOM_PARA='G',
+           TABLE=G0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-4.22922925629E-16,
+           NOM_PARA='G',
+           TABLE=G1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-1.1580329523E-15,
+           NOM_PARA='G',
+           TABLE=G2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=4.45158115084E-13,
+           NOM_PARA='G',
+           TABLE=G3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=1,),
+           )
+
+# ALPHA = 0.32
+# ------------
+
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-1.21995714616E-14,
+           NOM_PARA='G',
+           TABLE=G0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=2,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-3.22987483942E-16,
+           NOM_PARA='G',
+           TABLE=G1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=2,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=-9.62382529286E-16,
+           NOM_PARA='G',
+           TABLE=G2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=2,),
+           )
+
+TEST_TABLE(CRITERE='ABSOLU',
+           VALE_CALC=4.23052273023E-13,
+           NOM_PARA='G',
+           TABLE=G3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=2,),
+           )
+
+# ALPHA = 0.33
+# ------------
+
+
+TEST_TABLE(PRECISION=0.044999999999999998,
+           VALE_CALC=0.00125344243562,
+           VALE_REFE=1.2075E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=3,),
+           )
+
+TEST_TABLE(PRECISION=0.044999999999999998,
+           VALE_CALC=0.00125351842813,
+           VALE_REFE=1.2075E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=3,),
+           )
+
+TEST_TABLE(PRECISION=0.044999999999999998,
+           VALE_CALC=0.00125357213196,
+           VALE_REFE=1.2075E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=3,),
+           )
+
+TEST_TABLE(PRECISION=0.044999999999999998,
+           VALE_CALC=0.00125349775959,
+           VALE_REFE=1.2075E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=3,),
+           )
+
+# ALPHA = 0.335
+# ------------
+
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00310472508222,
+           VALE_REFE=3.0187E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=4,),
+           )
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00310479143229,
+           VALE_REFE=3.0187E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=4,),
+           )
+
+TEST_TABLE(PRECISION=0.029999999999999999,
+           VALE_CALC=0.00310488392847,
+           VALE_REFE=3.0187E-3,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=4,),
+           )
+
+TEST_TABLE(PRECISION=0.10000000000000001,
+           VALE_CALC=0.00279899918548,
+           VALE_REFE=3.0187E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=4,),
+           )
+
+TEST_TABLE(PRECISION=0.10000000000000001,
+           VALE_CALC=0.00310496018465,
+           VALE_REFE=3.0187E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=4,),
+           )
+
+# ALPHA = 0.34
+# ------------
+
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.00545510761239,
+           VALE_REFE=5.4336000000000002E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=5,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.00545515998391,
+           VALE_REFE=5.4336000000000002E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=5,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.00545531034776,
+           VALE_REFE=5.4336000000000002E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=5,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.00542282214584,
+           VALE_REFE=5.4336000000000002E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=5,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.00545535476415,
+           VALE_REFE=5.4336000000000002E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=5,),
+           )
+
+# ALPHA = 0.345
+# -------------
+
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.0082683724539,
+           VALE_REFE=8.5865000000000004E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=6,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.00826840677412,
+           VALE_REFE=8.5865000000000004E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=6,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.00826862518335,
+           VALE_REFE=8.5865000000000004E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=6,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.00826915509265,
+           VALE_REFE=8.5865000000000004E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=6,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.00826863261738,
+           VALE_REFE=8.5865000000000004E-3,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=6,),
+           )
+
+# ALPHA = 0.35
+# ------------
+
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.0116189912029,
+           VALE_REFE=0.012075000000000001,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=7,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.011619002546,
+           VALE_REFE=0.012075000000000001,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=7,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.0116193013392,
+           VALE_REFE=0.012075000000000001,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=7,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.0116198825575,
+           VALE_REFE=0.012075000000000001,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=7,),
+           )
+
+TEST_TABLE(PRECISION=0.040000000000000001,
+           VALE_CALC=0.0116192655168,
+           VALE_REFE=0.012075000000000001,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=7,),
+           )
+
+# ALPHA = 0.36
+# ------------
+
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0215975453575,
+           VALE_REFE=0.021756999999999999,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=8,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0215974815294,
+           VALE_REFE=0.021756999999999999,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=8,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0215980177768,
+           VALE_REFE=0.021756999999999999,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=8,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0215985542958,
+           VALE_REFE=0.021756999999999999,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=8,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0215978562724,
+           VALE_REFE=0.021756999999999999,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=8,),
+           )
+
+# ALPHA = 0.40
+# ------------
+
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0667510347237,
+           VALE_REFE=0.066477999999999995,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK0_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=10,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0667506242547,
+           VALE_REFE=0.066477999999999995,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK1_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=10,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.06675223347,
+           VALE_REFE=0.066477999999999995,
+
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK2_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=10,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.066752507466,
+           VALE_REFE=0.066477999999999995,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK3_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=10,),
+           )
+
+TEST_TABLE(PRECISION=1.E-2,
+           VALE_CALC=0.0667515066278,
+           VALE_REFE=0.066477999999999995,
+           REFERENCE='NON_DEFINI',
+           NOM_PARA='K1',
+           TABLE=GK4_C,
+           FILTRE=_F(NOM_PARA='NUME_ORDRE',
+                     VALE_I=10,),
+           )
+
+FIN();

@@ -1,0 +1,324 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+#
+# --------------------------------------------------------------------------------------------------
+#
+#                   DISCRET COMPORTEMENT ECROUISSAGE TRACTION
+#
+#   Validation du comportement avec DYNA_VIBRA Schéma RK54
+#
+#
+# --------------------------------------------------------------------------------------------------
+import numpy as NU
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',))
+
+MAIL=LIRE_MAILLAGE(FORMAT="ASTER",)
+#
+# Modèle
+Modele=AFFE_MODELE(
+    MAILLAGE=MAIL,
+    AFFE=(
+        _F(GROUP_MA=('MASSE','GM0203'), PHENOMENE='MECANIQUE', MODELISATION='DIS_T',),
+        _F(MAILLE=('PT01'), PHENOMENE='MECANIQUE', MODELISATION='DIS_T',),
+    ),
+)
+
+U01   = 2.00
+Sy    = 200.0
+Su    = Sy + 250.0
+Kp    = 4.0*Sy/U01
+Puiss = 1.50
+Masse = 200.0
+
+def FctRp(p):
+    return Sy + Kp*p/pow(1.0+pow(Kp*p/(Su-Sy),Puiss),1.0/Puiss)
+
+Lt_p  = NU.arange(0.0,U01*20.0,0.01)
+Lt_rp = list(map( FctRp , Lt_p ))
+Lt_p += Sy/Kp
+Lt_p = list(Lt_p)
+Lt_p.insert(0, 0.0)
+Lt_rp.insert(0, 0.0)
+
+fctsy = DEFI_FONCTION(NOM_PARA='DX',
+    ABSCISSE = Lt_p,
+    ORDONNEE = Lt_rp,
+)
+
+# Caractéristiques : Ressorts / Masse
+caraElem=AFFE_CARA_ELEM(
+    MODELE=Modele,
+    DISCRET=(
+        _F( REPERE='LOCAL',CARA='M_T_D_N', MAILLE='PT01', VALE=( 0.0, ), ),
+        _F( REPERE='LOCAL',CARA='K_T_D_N', MAILLE='PT01', VALE=( Kp,0.0,0.0,), ),
+
+        _F( REPERE='LOCAL',CARA='M_T_D_N', GROUP_MA='MASSE', VALE=( Masse ), ),
+        _F( REPERE='LOCAL',CARA='K_T_D_N', GROUP_MA='MASSE', VALE=( 0.0,0.0,0.0,), ),
+
+        _F( REPERE='LOCAL',CARA='M_T_D_L', GROUP_MA='GM0203', VALE=( 0.0,), ),
+        _F( REPERE='LOCAL',CARA='K_T_D_L', GROUP_MA='GM0203', VALE=( Kp, 400.0, 400.0,), ),
+    ),
+)
+#
+# condition aux limites en déplacement
+Blocage=AFFE_CHAR_MECA(
+   MODELE=Modele,
+   DDL_IMPO= (
+        _F(NOEUD='N01', DX=0.0, DY=0.0, DZ=0.0,),
+        _F(NOEUD='N02',         DY=0.0, DZ=0.0,),
+        _F(NOEUD='N03', DX=0.0, DY=0.0, DZ=0.0,),
+    ),
+)
+#
+Frequence = 0.50
+Pulsation = 2.0*pi*Frequence
+Amplitude = U01*3.0
+#
+Tsignal = 4.0/Frequence
+LinstF = DEFI_LIST_REEL(
+    DEBUT=0.,
+    INTERVALLE=_F(JUSQU_A = 4.0*Tsignal, PAS = 0.5/Frequence/80.0),
+)
+#
+DEPL = FORMULE(VALE='Amplitude*sin(Pulsation*INST)/(Pulsation**2)',
+               Amplitude=Amplitude,
+               Pulsation=Pulsation,
+               NOM_PARA='INST',)
+
+VITE  = FORMULE(VALE='''Amplitude*cos(Pulsation*INST)/Pulsation''',
+                Amplitude=Amplitude,
+                Pulsation=Pulsation,
+                NOM_PARA='INST',)
+
+ACCE  = FORMULE(VALE='''-Amplitude*sin(Pulsation*INST)''',
+                Amplitude=Amplitude,
+                Pulsation=Pulsation,
+                NOM_PARA='INST',)
+#
+DEPLI = CALC_FONC_INTERP(NOM_RESU='DEPL',
+    FONCTION=DEPL, LIST_PARA=LinstF, NOM_PARA = 'INST',
+    PROL_GAUCHE='CONSTANT', PROL_DROITE='CONSTANT',
+)
+#
+VITEI = CALC_FONC_INTERP(NOM_RESU='VITE',
+    FONCTION=VITE, LIST_PARA=LinstF, NOM_PARA = 'INST',
+    PROL_GAUCHE='CONSTANT', PROL_DROITE='CONSTANT',
+)
+ACCEI = CALC_FONC_INTERP(NOM_RESU='ACCE',
+    FONCTION=ACCE, LIST_PARA=LinstF, NOM_PARA = 'INST',
+    PROL_GAUCHE='CONSTANT', PROL_DROITE='CONSTANT',
+)
+#
+ASSEMBLAGE(
+    MODELE=Modele, CARA_ELEM=caraElem, CHARGE=Blocage,
+    NUME_DDL=CO('NumeDDL'),
+    MATR_ASSE=(
+        _F(MATRICE=CO('Rigidite'), OPTION='RIGI_MECA',),
+        _F(MATRICE=CO('Masse'),    OPTION='MASS_MECA',),
+    ),
+)
+#
+# Mode de la structure
+ModeStr=CALC_MODES(
+    MATR_RIGI=Rigidite, OPTION='BANDE',
+    CALC_FREQ=_F( FREQ=(0.0,3.0,), ),
+    MATR_MASS=Masse,
+)
+#
+# calcul des modes statiques aux points d'ancrage et des chargements sismiques
+ModeSta=MODE_STATIQUE(
+    MATR_RIGI=Rigidite,
+    MATR_MASS=Masse,
+    MODE_STAT=_F(GROUP_NO=('GPT01','GPT03'),AVEC_CMP='DX',),
+)
+#
+DeplSis1=CALC_CHAR_SEISME(
+    MATR_MASS=Masse,
+    MODE_STAT=ModeSta, NOEUD='N01',
+    DIRECTION=(1.0, 0.0, 0.0),
+)
+#
+DeplSis3=CALC_CHAR_SEISME(
+    MATR_MASS=Masse,
+    MODE_STAT=ModeSta, NOEUD='N03',
+    DIRECTION=(1.0, 0.0, 0.0),
+)
+
+# projection des matrices et vecteurs sur la base modale
+PROJ_BASE(
+    BASE=ModeStr,
+    STOCKAGE='DIAG',
+    MATR_ASSE_GENE=(
+        _F(MATRICE = CO("MasseGen"), MATR_ASSE = Masse),
+        _F(MATRICE = CO("RigidGen"), MATR_ASSE = Rigidite),
+    ),
+    VECT_ASSE_GENE=(
+        _F(VECTEUR = CO("Depl1Gen"), VECT_ASSE = DeplSis1, TYPE_VECT='FORC'),
+        _F(VECTEUR = CO("Depl3Gen"), VECT_ASSE = DeplSis3, TYPE_VECT='FORC'),
+    ),
+)
+#
+# --------------------------------------------------------------------------------------------------
+#
+dt = 0.5/Frequence/4000.0
+archivedInstants = (1.2750000000e+00,
+                    2.5250000000e+00,
+                    3.6250000000e+00,
+                    4.5250000000e+00,
+                    5.3750000000e+00,
+                    6.4000000000e+00,
+                    7.5250000000e+00,
+                    8.5500000000e+00,
+                    9.5000000000e+00,
+                    1.0450000000e+01,
+                    1.1450000000e+01,
+                    1.2525000000e+01,
+                    1.3525000000e+01,
+                    1.4500000000e+01,
+                    1.5475000000e+01,
+                    1.6475000000e+01,
+                    1.7500000000e+01,
+                    1.8525000000e+01,
+                    1.9500000000e+01,
+                    2.0500000000e+01,
+                    2.1475000000e+01,
+                    2.2500000000e+01,
+                    2.3525000000e+01,
+                    2.4525000000e+01,
+                    2.5500000000e+01,
+                    2.7475000000e+01,
+                    2.8500000000e+01,
+                    2.9525000000e+01,
+                    3.0500000000e+01,
+                    3.1500000000e+01)
+
+
+unite = 38
+Resultat=DYNA_VIBRA(
+    TYPE_CALCUL='TRAN', BASE_CALCUL='GENE',
+    MATR_MASS=MasseGen, MATR_RIGI=RigidGen,
+    SCHEMA_TEMPS=_F(SCHEMA='RUNGE_KUTTA_54', PAS_MINI=dt, PAS_MAXI=dt),
+    INCREMENT=_F(PAS=dt, INST_INIT=0.0, INST_FIN=4.0*Tsignal),
+    MODE_STAT=ModeSta,
+    EXCIT=(
+        _F(VECT_ASSE_GENE=Depl1Gen, ACCE=ACCEI, VITE=VITEI, DEPL=DEPLI),
+        _F(VECT_ASSE_GENE=Depl3Gen, ACCE=ACCEI, VITE=VITEI, DEPL=DEPLI),
+    ),
+    COMPORTEMENT=_F(RELATION='DIS_ECRO_TRAC',
+                    NOEUD_1='N01', NOEUD_2='N02',FX= fctsy),
+    ARCHIVAGE=_F(PAS_ARCH=1.E8, INST=archivedInstants),
+    IMPRESSION=_F(UNITE_DIS_ECRO_TRAC =unite),
+)
+
+# dans unite=38 : INST FORCE DEPLVISC DEPL PUISS
+Forc =LIRE_FONCTION(UNITE=unite, NOM_PARA='INST', NOM_RESU='Forc',
+    INDIC_PARA=[1,1], INDIC_RESU=[1,2])
+Depl =LIRE_FONCTION(UNITE=unite, NOM_PARA='INST', NOM_RESU='Depl',
+    INDIC_PARA=[1,1], INDIC_RESU=[1,3])
+Puiss=LIRE_FONCTION(UNITE=unite, NOM_PARA='INST', NOM_RESU='Puiss',
+    INDIC_PARA=[1,1], INDIC_RESU=[1,8])
+
+#NUME_ORDRE
+#       INST               Force              Ux                 Puiss
+ResuIntgr = {
+ 1: ( 1.2750000000e+00,  4.0518740236e+02,  1.7698015276e+00,  2.7734834978e+02,),
+ 2: ( 2.5250000000e+00, -4.3582912726e+02, -2.0648757759e+00,  1.0140662250e+03,),
+ 3: ( 3.6250000000e+00,  4.3921107599e+02,  7.7218942654e-01,  1.2983031315e+03,),
+ 4: ( 4.5250000000e+00, -9.1478381784e+01, -5.5453421789e-01,  1.2983031315e+03,),
+ 5: ( 5.3750000000e+00,  3.5606416545e+02,  5.6432215021e-01,  1.2983031315e+03,),
+ 6: ( 6.4000000000e+00, -4.3979316667e+02, -1.5725469233e+00,  1.3630098041e+03,),
+ 7: ( 7.5250000000e+00,  4.4217637172e+02,  1.4184536073e+00,  1.7097266231e+03,),
+ 8: ( 8.5500000000e+00, -4.4220270597e+02, -8.0338570155e-01,  1.7145427812e+03,),
+ 9: ( 9.5000000000e+00,  2.2749841532e+02,  8.7086710166e-01,  1.7145427812e+03,),
+10: ( 1.0450000000e+01, -4.0784744847e+02, -7.1749755780e-01,  1.7145427812e+03,),
+11: ( 1.1450000000e+01,  4.1834388837e+02,  1.3479807843e+00,  1.7145427812e+03,),
+12: ( 1.2525000000e+01, -4.4303839862e+02, -1.1860129583e+00,  1.8829817237e+03,),
+13: ( 1.3525000000e+01,  4.0984820595e+02,  9.4620355313e-01,  1.8829817237e+03,),
+14: ( 1.4500000000e+01, -3.2995693895e+02, -9.0330930913e-01,  1.8829817237e+03,),
+15: ( 1.5475000000e+01,  3.8963392034e+02,  8.9566783909e-01,  1.8829817237e+03,),
+16: ( 1.6475000000e+01, -4.2731664080e+02, -1.1467085638e+00,  1.8829817237e+03,),
+17: ( 1.7500000000e+01,  4.4325707678e+02,  1.1421263296e+00,  1.9327919033e+03,),
+18: ( 1.8525000000e+01, -4.2313655725e+02, -1.0238577554e+00,  1.9327919033e+03,),
+19: ( 1.9500000000e+01,  3.6607681470e+02,  9.4917567444e-01,  1.9327919033e+03,),
+20: ( 2.0500000000e+01, -3.7880104186e+02, -9.1301896697e-01,  1.9327919033e+03,),
+21: ( 2.1475000000e+01,  4.0796445912e+02,  1.0538947855e+00,  1.9327919033e+03,),
+22: ( 2.2500000000e+01, -4.4331880345e+02, -1.1071432058e+00,  1.9473449759e+03,),
+23: ( 2.3525000000e+01,  4.3376974297e+02,  1.0855781603e+00,  1.9473449759e+03,),
+24: ( 2.4525000000e+01, -3.9590140110e+02, -9.8859969994e-01,  1.9473449759e+03,),
+25: ( 2.5500000000e+01,  3.7186114905e+02,  9.3080667545e-01,  1.9473449759e+03,),
+26: ( 2.7475000000e+01,  4.3092147714e+02,  1.0784574957e+00,  1.9473449759e+03,),
+27: ( 2.8500000000e+01, -4.4332400707e+02, -1.1099092344e+00,  1.9485654485e+03,),
+28: ( 2.9525000000e+01,  4.1637863975e+02,  1.0393473826e+00,  1.9485654485e+03,),
+29: ( 3.0500000000e+01, -3.7902427448e+02, -9.4915990295e-01,  1.9485654485e+03,),
+30: ( 3.1500000000e+01,  3.7763177185e+02,  9.4248021287e-01,  1.9485654485e+03,),
+}
+
+ResuCalc = {
+ 1: ( 1.2750000000E+00,  4.0488913151E+02,  1.7698015185E+00, 2.7761584657E+02, ),
+ 2: ( 2.5250000000E+00, -4.3561384847E+02, -2.0647488879E+00, 1.0148609295E+03, ),
+ 3: ( 3.6250000000E+00,  4.3922358796E+02,  7.7296791458E-01, 1.2996130460E+03, ),
+ 4: ( 4.5250000000E+00, -9.2191379991E+01, -5.5542392865E-01, 1.2996769868E+03, ),
+ 5: ( 5.3750000000E+00,  3.5611548451E+02,  5.6534323261E-01, 1.2996769868E+03, ),
+ 6: ( 6.4000000000E+00, -4.3980527510E+02, -1.5716822132E+00, 1.3643845599E+03, ),
+ 7: ( 7.5250000000E+00,  4.4218288121E+02,  1.4182590182E+00, 1.7108836949E+03, ),
+ 8: ( 8.5500000000E+00, -4.4221384804E+02, -8.0447108474E-01, 1.7165452753E+03, ),
+ 9: ( 9.5000000000E+00,  2.2850594731E+02,  8.7186811306E-01, 1.7167488224E+03, ),
+10: ( 1.0450000000E+01, -4.0808988908E+02, -7.1962147791E-01, 1.7167488224E+03, ),
+11: ( 1.1450000000E+01,  4.1860406623E+02,  1.3471134104E+00, 1.7167488224E+03, ),
+12: ( 1.2525000000E+01, -4.4296916162E+02, -1.1859087056E+00, 1.8845500254E+03, ),
+13: ( 1.3525000000E+01,  4.1017472669E+02,  9.4695101522E-01, 1.8845500254E+03, ),
+14: ( 1.4500000000E+01, -3.3052654492E+02, -9.0480216380E-01, 1.8845500254E+03, ),
+15: ( 1.5475000000E+01,  3.9001303409E+02,  8.9654678371E-01, 1.8845500254E+03, ),
+16: ( 1.6475000000E+01, -4.2726758634E+02, -1.1466547674E+00, 1.8845500254E+03, ),
+17: ( 1.7500000000E+01,  4.4326342211E+02,  1.1417965112E+00, 1.9342382838E+03, ),
+18: ( 1.8525000000E+01, -4.2334649413E+02, -1.0245824415E+00, 1.9343029284E+03, ),
+19: ( 1.9500000000E+01,  3.6671819976E+02,  9.5057929325E-01, 1.9343029284E+03, ),
+20: ( 2.0500000000E+01, -3.7923485056E+02, -9.1430333255E-01, 1.9343029284E+03, ),
+21: ( 2.1475000000E+01,  4.0802897048E+02,  1.0538562200E+00, 1.9343029284E+03, ),
+22: ( 2.2500000000E+01, -4.4325186355E+02, -1.1068051610E+00, 1.9486919475E+03, ),
+23: ( 2.3525000000E+01,  4.3388530777E+02,  1.0860377673E+00, 1.9486919475E+03, ),
+24: ( 2.4525000000E+01, -3.9645857730E+02, -9.8982194537E-01, 1.9486919475E+03, ),
+25: ( 2.5500000000E+01,  3.7236788201E+02,  9.3224420290E-01, 1.9486919475E+03, ),
+26: ( 2.7475000000E+01,  4.3073605410E+02,  1.0781646331E+00, 1.9486919475E+03, ),
+27: ( 2.8500000000E+01, -4.4332991350E+02, -1.1098333431E+00, 1.9499479191E+03, ),
+28: ( 2.9525000000E+01,  4.1679364010E+02,  1.0404006700E+00, 1.9499811116E+03, ),
+29: ( 3.0500000000E+01, -3.7970419864E+02, -9.5084392682E-01, 1.9499811116E+03, ),
+30: ( 3.1500000000E+01,  3.7800091336E+02,  9.4341885317E-01, 1.9499811116E+03, ),
+}
+
+for nume_ordre in list(ResuIntgr.keys()):
+    TEST_FONCTION(
+        VALEUR= (
+            _F(FONCTION=Forc,  NOM_PARA='INST', VALE_PARA=ResuIntgr[nume_ordre][0],
+               VALE_CALC=ResuCalc[nume_ordre][1],
+               REFERENCE='AUTRE_ASTER', VALE_REFE=ResuIntgr[nume_ordre][1], PRECISION=1.0E-02,),
+            _F(FONCTION=Depl,  NOM_PARA='INST', VALE_PARA=ResuIntgr[nume_ordre][0],
+               VALE_CALC=ResuCalc[nume_ordre][2],
+               REFERENCE='AUTRE_ASTER', VALE_REFE=ResuIntgr[nume_ordre][2], PRECISION=1.0E-02,),
+            _F(FONCTION=Puiss, NOM_PARA='INST', VALE_PARA=ResuIntgr[nume_ordre][0],
+               VALE_CALC=ResuCalc[nume_ordre][3],
+               REFERENCE='AUTRE_ASTER', VALE_REFE=ResuIntgr[nume_ordre][3], PRECISION=1.0E-02,),
+        ),
+    )
+
+
+FIN()

@@ -1,0 +1,205 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# QUART DE FISSURE. TEST DE POST_K1_K2_K3. MAILLAGE BARSOUM
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+MA=LIRE_MAILLAGE(VERI_MAIL=_F(VERIF='OUI'),FORMAT='MED',)
+
+MA=DEFI_GROUP( reuse=MA,   MAILLAGE=MA,
+                     CREA_GROUP_NO=_F(
+                      GROUP_MA = ('LP8P9', 'LP8P9S', 'LP0P11', 'LP0P8', 'LP0P8S',))
+                 )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,
+                      AFFE=_F(  TOUT = 'OUI',
+                             PHENOMENE = 'MECANIQUE',
+                             MODELISATION = 'AXIS') )
+
+MAT=DEFI_MATERIAU(ELAS=_F(  E = 2.E11,
+                             NU = 0.3,
+                             ALPHA = 0.,
+                             RHO = 7850,
+                     ) )
+
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MA,
+                       AFFE=_F(  TOUT = 'OUI',
+                              MATER = MAT) )
+
+SYMETRIE=AFFE_CHAR_MECA(  MODELE=MO,DDL_IMPO=(
+                _F(  GROUP_NO = ('LP8P9', 'LP8P9S',), DX = 0.),
+                         _F(  GROUP_NO = 'LP0P11',  DY = 0.))
+                         )
+
+PRESSION=AFFE_CHAR_MECA(    MODELE=MO,FORCE_CONTOUR=(
+                  _F(  GROUP_MA = 'LP9P10',  FY = 1.E6),
+                  _F(  GROUP_MA = 'LP9P10S', FY = -1.E6))
+                          )
+
+CHAMDEPL=MECA_STATIQUE(        MODELE=MO,
+                              CHAM_MATER=CHMAT,EXCIT=(
+                              _F( CHARGE = PRESSION),
+                              _F( CHARGE = SYMETRIE))
+                           )
+
+CHAMDEPL=CALC_CHAMP(reuse=CHAMDEPL,CONTRAINTE=('SIGM_ELNO'),RESULTAT=CHAMDEPL)
+
+
+FISS=DEFI_FOND_FISS(MAILLAGE=MA,SYME='NON',
+                    FOND_FISS=_F( GROUP_NO = ('P0',)),
+                    LEVRE_SUP=_F(  GROUP_MA = 'LP0P8'),
+                    LEVRE_INF=_F(  GROUP_MA = 'LP0P8S'),
+                   )
+
+RSUP=0.25
+RINF=0.05
+
+
+G0=CALC_G(RESULTAT=CHAMDEPL,
+          THETA=_F(R_INF=RINF,
+                   FOND_FISS=FISS,
+                   R_SUP=RSUP,
+                   ),
+          INFO=2)
+
+
+GK0=CALC_G(RESULTAT=CHAMDEPL,
+           THETA=_F(R_INF=RINF,
+                    FOND_FISS=FISS,
+                    R_SUP=RSUP,
+                    ),
+           OPTION='CALC_K_G')
+
+IMPR_TABLE(TABLE=GK0)
+
+# POST_K1_K2_K3
+TABL_K1=POST_K1_K2_K3(RESULTAT=CHAMDEPL,
+                      FOND_FISS=FISS,
+                      INFO=2,
+                      )
+
+IMPR_TABLE(TABLE=TABL_K1)
+
+
+# ---------------
+# VALEUR DE REFERENCE MILIEU INFINI : G=145.6
+GLOC=11.58648
+K1=1.595769E6
+
+# POUR UN RADIAN
+GREF=23.17296
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.017999999999999999,
+           VALE_CALC=23.563767881,
+           VALE_REFE=23.17296,
+           NOM_PARA='G',
+           TABLE=G0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.017999999999999999,
+           VALE_CALC=11.7818839405,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=GK0,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=1643188.1524,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=GK0,)
+
+TEST_TABLE(
+           VALE_CALC=1643188.1524,
+           NOM_PARA='K1',
+           TABLE=GK0,
+           )
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.014999999999999999,
+           VALE_CALC=1610581.9344,
+           VALE_REFE=1.595769E6,
+           NOM_PARA='K1',
+           TABLE=TABL_K1,)
+
+TEST_TABLE(REFERENCE='ANALYTIQUE',
+           PRECISION=0.029999999999999999,
+           VALE_CALC=11.8025824617,
+           VALE_REFE=11.58648,
+           NOM_PARA='G',
+           TABLE=TABL_K1,)
+
+# -------------------------------------------------------------
+#           ON AJOUTE LA ROTATION POUR CALCULER K
+#                    SOUS LA FORCE CONTRIGUGE
+# -------------------------------------------------------------
+# LA VITESSE DE TOTATIO EST 150 TRS/MINUTE
+VAL_ROT = 15.708
+
+CHAR_ROT=AFFE_CHAR_MECA(  MODELE=MO,
+                        DDL_IMPO=(
+                          _F(  GROUP_NO = ('LP8P9', 'LP8P9S',), DX = 0.),
+                          _F(  GROUP_NO = 'LP0P11',  DY = 0.)  ),
+
+                        FORCE_CONTOUR=(
+                          _F(  GROUP_MA = 'LP9P10',  FY = 1.E6),
+                          _F(  GROUP_MA = 'LP9P10S', FY = -1.E6)),
+
+                        ROTATION=_F(VITESSE = VAL_ROT,
+                                AXE = (0.,1.,0.,),
+                                CENTRE =(0.,0.,0.,),
+                                  ),
+
+                                 );
+
+DEPL_ROT=MECA_STATIQUE(MODELE=MO,
+                       CHAM_MATER=CHMAT,
+                       EXCIT=_F(CHARGE=CHAR_ROT,),
+                       INST=1.,
+                       INFO=1,);
+
+IMPR_RESU(FORMAT='MED',UNITE=80,RESU=_F(RESULTAT=DEPL_ROT));
+
+G1=CALC_G(RESULTAT=DEPL_ROT,
+          THETA=_F(R_INF=RINF,
+                   FOND_FISS=FISS,
+                   R_SUP=RSUP,
+                   ),
+          )
+
+GK1=CALC_G(THETA=_F(R_INF=RINF,
+                    FOND_FISS=FISS,
+                    R_SUP=RSUP,
+                    ),
+          RESULTAT=DEPL_ROT,
+          OPTION='CALC_K_G')
+
+IMPR_TABLE(TABLE=GK1)
+
+# POST_K1_K2_K3
+TABL_K2=POST_K1_K2_K3(RESULTAT=DEPL_ROT,
+                      FOND_FISS=FISS,
+                      )
+
+IMPR_TABLE(TABLE=TABL_K2)
+
+FIN()
+#

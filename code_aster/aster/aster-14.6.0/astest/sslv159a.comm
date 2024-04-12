@@ -1,0 +1,137 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(
+              NIV_PUB_WEB='INTERNET',
+              ),);
+
+MBI=LIRE_MAILLAGE(FORMAT='ASTER');
+
+MOD=AFFE_MODELE(MAILLAGE=MBI,
+                AFFE=(
+                      _F(GROUP_MA='P1L',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='POU_D_T',),
+                      _F(GROUP_MA='P1C',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='POU_D_T',),
+                      _F(GROUP_MA='P3C',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),
+                      _F(GROUP_MA='P3L',
+                         PHENOMENE='MECANIQUE',
+                         MODELISATION='3D',),
+                      ),);
+
+MATL=DEFI_MATERIAU(ELAS=_F(E=2.E11,
+                           NU=0.3,
+                           RHO=7800.0,),);
+
+MATC=DEFI_MATERIAU(ELAS=_F(E=2.E11*0.5,
+                           NU=0.3,
+                           RHO=7800*0.5,),);
+
+CHMAT=AFFE_MATERIAU(MAILLAGE=MBI,
+                    AFFE=(
+                          _F(GROUP_MA=('P1L','P3L'),
+                             MATER=MATL,),
+                          _F(GROUP_MA=('P1C','P3C'),
+                             MATER=MATC,),),);
+
+CARA_POU=AFFE_CARA_ELEM(MODELE=MOD,
+                        POUTRE=_F(GROUP_MA=('P1L','P1C',),
+                                  SECTION='RECTANGLE',
+                                  CARA='H',
+                                  VALE=(.02),),);
+
+CL=AFFE_CHAR_MECA(MODELE=MOD,
+                  DDL_IMPO=_F(GROUP_NO='Encas',DX=0,DY=0,DZ=0,),);
+
+ARLE=AFFE_CHAR_MECA(MODELE=MOD,
+                    LIAISON_ELEM=_F(OPTION='3D_POU_ARLEQUIN',
+                                    GROUP_MA_1='P3C',
+                                    GROUP_MA_2='P1C',
+                                    CARA_ELEM=CARA_POU,
+                                    CHAM_MATER=CHMAT,),);
+
+ASSEMBLAGE(MODELE=MOD,
+           CHAM_MATER=CHMAT,
+           CARA_ELEM=CARA_POU,
+           CHARGE=(CL,ARLE),
+           NUME_DDL=CO('NUMEDDL'),
+           MATR_ASSE=(_F(MATRICE=CO('RIGIDITE'),
+                         OPTION='RIGI_MECA',),
+                      _F(MATRICE=CO('MASSE'),
+                         OPTION='MASS_MECA',),),
+           );
+
+FORCE=AFFE_CHAR_MECA(MODELE=MOD,
+                     FORCE_NODALE=_F(GROUP_NO='ForNod',
+                                     FZ=-500.0,),);
+
+FONC = FORMULE(VALE='sin(0.025*pi*INST)',
+               NOM_PARA='INST',)
+
+LINST=DEFI_LIST_REEL(DEBUT=0.0,
+                     INTERVALLE=_F(JUSQU_A=80.0,
+                                   PAS=1,),);
+
+TRANSI=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='PHYS',
+                  MODELE=MOD,
+                  CHAM_MATER=CHMAT,
+                  CARA_ELEM=CARA_POU,
+                  MATR_MASS=MASSE,
+                  MATR_RIGI=RIGIDITE,
+                  SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+                  EXCIT=(_F(CHARGE=FORCE,
+                            FONC_MULT=FONC,),
+                         _F(CHARGE=CL,),
+                         _F(CHARGE=ARLE,),
+                         ),
+                  INCREMENT=_F(LIST_INST=LINST,),);
+
+DZ_DIS=RECU_FONCTION(RESULTAT=TRANSI,
+                     NOM_CHAM='DEPL',
+                     NOM_CMP='DZ',
+                     GROUP_NO='ForNod',
+                     INTERPOL='LIN',);
+
+IMPR_FONCTION(FORMAT='XMGRACE',
+              UNITE=38,
+              COURBE=(_F(FONCTION=DZ_DIS, MARQUEUR=0,),
+              ),);
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=-0.002579744,
+                        VALE_REFE=-0.0026865359,
+                        VALE_PARA=20,
+                        REFERENCE='AUTRE_ASTER',
+                        PRECISION=7.E-2,
+                        FONCTION=DZ_DIS,),
+              )
+
+TEST_FONCTION(VALEUR=_F(VALE_CALC=0.002579660,
+                        VALE_REFE=0.002686443,
+                        REFERENCE='AUTRE_ASTER',
+                        VALE_PARA=60,
+                        PRECISION=7.E-2,
+                        FONCTION=DZ_DIS,
+                        ),
+              )
+
+FIN();

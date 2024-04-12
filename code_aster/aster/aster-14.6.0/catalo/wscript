@@ -1,0 +1,207 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+import os
+import os.path as osp
+from functools import partial
+from itertools import chain
+import shutil
+from waflib import TaskGen, Logs, Utils, Errors, Task, Context
+
+
+def build(self):
+    env = self.all_envs[self.variant].derive()
+    if self.variant == "debug":
+        env.OPTDEBUG = '-g'
+    if self.cmd.startswith('uninstall'):
+        elem = osp.join(env.ASTERLIBDIR, 'elem.1')
+        try:
+            os.remove(elem)
+        except OSError:
+            pass
+        return
+
+    self(
+        features = 'catalo',
+            name = 'cataelem',
+          target = 'elem.1',
+             env = env,
+            vars = ['CATALO_CMD'],
+    install_path = self.options.destdir + env.ASTERLIBDIR,
+    )
+
+@TaskGen.feature('catalo')
+@TaskGen.before('process_source')
+def pre_build_catalo(self):
+    catalo = self.path
+    deps = catalo.ant_glob('**/*.py')
+    catalo.get_bld().mkdir()
+    ojb = catalo.get_bld().make_node('cata_ele.ojb')
+    self.create_task('printcata', src=[catalo] + deps, tgt=ojb)
+    self.source = [ojb] # bypass the execution of process_source
+
+
+class printcata(Task.Task):
+
+    def run(self):
+        """Execute the command"""
+        environ = os.environ.copy()
+        # add src/bibpyt + catalo in PYTHONPATH
+        python_path = self.env["BIBPYTPATH"] + ":" + self.inputs[0].abspath()
+        add_to_env_paths(environ, "PYTHONPATH", python_path)
+        exec_pyaster(self.generator.bld,
+                     osp.join(self.inputs[0].abspath(), "build_cata.py"),
+                     env=environ,
+                     args=[self.env['OPTDEBUG'] or "",
+                           "-o", self.outputs[0].abspath()])
+
+    def sig_explicit_deps(self):
+        self.dep_nodes[:] = self.inputs[1:]
+        catalo = self.inputs[0]
+        # put catalo/*.py files into self.inputs in order to let the
+        # original sig_explicit_deps compute their signature which is
+        # used to rebuild on any changes.
+        self.inputs[:] = catalo.ant_glob('**/*.py')
+        super(printcata, self).sig_explicit_deps()
+        self.inputs[:] = [catalo]
+
+
+@TaskGen.extension('.ojb')
+def buildcata(self, node):
+    if not getattr(self.bld, 'is_install', None) \
+        or not getattr(self, 'install_path', None):
+        return
+    install_path = osp.join(self.install_path, self.target)
+    post = partial(build_cata_ele, ojb=node, install_path=install_path)
+    self.bld.add_post_fun(post)
+
+def build_cata_ele(self, ojb, install_path):
+    """Build the catalog of elements"""
+    bldnode = self.path.get_bld()
+    Logs.info('+ build the elements catalog %s using installed aster (from %s)'
+              % ('elem.1', ojb))
+
+    # generate the command file
+    comm = bldnode.make_node('fort.1')
+    content = os.linesep.join([
+        "DEBUT(CATALOGUE=_F(FICHIER='CATAELEM', UNITE=4), ",
+        "      ERREUR=_F(ERREUR_F='ABORT'), PAR_LOT='NON')",
+        "MAJ_CATA(ELEMENT=_F())",
+        "FIN()", ""
+    ])
+    comm.write(content, 'w')
+
+    # .ojb -> fort.4
+    before = ojb.abspath()
+    after= bldnode.make_node('fort.4').abspath()
+    os.rename(before, after)
+
+    try:
+        #  generate the command line
+        exec_pyaster(self, 'Execution/E_SUPERV.py', cwd=bldnode.abspath(),
+                     args=['-commandes', comm.abspath(),
+                           '-memjeveux', '500',
+                           '-tpmax', '120'],
+                     with_aster=True)
+    finally: # fort.4 -> .ojb
+        os.rename(after, before)
+
+    elem = bldnode.find_node('elem.1')
+    shutil.copy(elem.abspath(), install_path)
+    os.chmod(install_path, Utils.O644)
+
+def exec_pyaster(self, pyfile, args, with_aster=False, **kwargs):
+    """Execute aster depending on the configuration"""
+    env = self.all_envs[self.variant]
+    if "env" in kwargs:
+        environ = kwargs["env"]
+        del kwargs["env"]
+    else:
+        environ = os.environ.copy()
+    cmdenv = []
+    if with_aster and env.ASTER_EMBEDS and 'bibc' in env.ASTER_EMBEDS:
+        exec_task = self.get_tgen_by_name('asterexec')
+        python = osp.join(exec_task.install_task.dest, exec_task.target)
+    else:
+        python = list(env.PYTHON)[0]
+
+    ld_paths = get_ld_paths(self)
+    if ld_paths:
+        add_to_env_paths(environ, 'LD_LIBRARY_PATH', ld_paths)
+        # add to cli as it could contain variable (``$LIBDIR`` for example)
+        cmdenv.append('LD_LIBRARY_PATH="%s"' % environ['LD_LIBRARY_PATH'])
+
+    destdir = self.options.destdir
+    python_path = destdir + self.get_tgen_by_name('bibpyt').install_path
+    add_to_env_paths(environ, 'LIBDIR', destdir + env['LIBDIR'])
+    add_to_env_paths(environ, 'BINDIR', destdir + env['BINDIR'])
+    add_to_env_paths(environ, 'PYTHONARCHDIR', env['PYTHONARCHDIR'])
+    add_to_env_paths(environ, 'PYTHONDIR', env['PYTHONDIR'])
+    add_to_env_paths(environ, 'PYTHONPATH', python_path)
+    add_to_env_paths(environ, 'PYTHONHOME', env['CFG_PYTHONHOME'])
+    add_to_env_paths(environ, 'ASTER_ROOT', env['PREFIX'])
+
+    cmdexe = [python, osp.join(python_path, pyfile)] + args
+    # this position allows CATALO_CMD to define an environment variable
+    # or a prefix to wrap the executable
+    cmdprefix = Utils.to_list(env['CATALO_CMD'])
+    if self.env.BUILD_PARALLEL and not cmdprefix:
+        cmdprefix = ['mpirun', '-n', '1']
+    cmds = ' '.join(cmdenv + cmdprefix + cmdexe)
+    Logs.debug('os environ: %r' % environ)
+    # do not confuse with installed elementsdir
+    environ['ASTER_ELEMENTSDIR'] = ''
+    kwargs['output'] = Context.BOTH
+    try:
+        out, err = self.cmd_and_log(cmds, env=environ, shell=True, quiet=0, **kwargs)
+        #Logs.warn(out)
+        #Logs.warn(err)
+    except Exception as err:
+        Logs.warn('stdout: %s' % err.stdout)
+        Logs.warn('stderr: %s' % err.stderr)
+        Logs.info('To run manually, use:')
+        Logs.info('BINDIR="%s"' % environ['BINDIR'])
+        Logs.info('LIBDIR="%s"' % environ['LIBDIR'])
+        Logs.info('PYTHONDIR="%s"' % environ['PYTHONDIR'])
+        Logs.info('export LD_LIBRARY_PATH="%s"' % environ['LD_LIBRARY_PATH'])
+        Logs.info('export PYTHONPATH="%s"' % environ['PYTHONPATH'])
+        Logs.info(' '.join(cmdprefix + cmdexe))
+        raise
+
+def get_ld_paths(self):
+    # Add *LIBPATH paths to LD_LIBRARY_PATH
+    env = self.all_envs[self.variant]
+    ld_path = list(chain(*[Utils.to_list(env[name])
+                           for name in ('LIBPATH', 'LIBDIR', 'ASTERLIBDIR')
+                           if env[name]]))
+    # add path where built libs are installed
+    try:
+        ld_path.insert(0, self.get_tgen_by_name('asterlib').install_task.dest)
+    except Errors.WafError:# depends on --embed-* options
+        pass
+    return [self.options.destdir + p for p in ld_path]
+
+def add_to_env_paths(environ, name, path):
+    if not path:
+        return
+    paths = [path] if isinstance(path, str) else path
+    raw = environ.get(name, None)
+    if raw is not None:
+        paths += [p for p in raw.split(os.pathsep)]
+    environ[name] = os.pathsep.join(p for p in paths)

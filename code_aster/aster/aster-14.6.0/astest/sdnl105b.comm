@@ -1,0 +1,638 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2019 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+# CAS_TEST__: SDNL105B
+#
+# CALCUL DE LA REPONSE TRANSITOIRE NON-LINEAIRE DE TROIS POUTRES
+# EN FLEXION CHOQUANT EN LEUR MILIEU PAR SOUS-STRUCTURATION
+#
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET'), DEBUG=_F(SDVERI='OUI'))
+
+#
+MAYA=LIRE_MAILLAGE(FORMAT="ASTER", )
+
+MAYA=DEFI_GROUP( reuse=MAYA,   MAILLAGE=MAYA,
+  CREA_GROUP_MA=_F(  NOM = 'TOUT', TOUT = 'OUI'))
+
+#
+MATERIO1=DEFI_MATERIAU(  ELAS=_F( RHO = 1.E08,  NU = 0.3,  E = 1.E10))
+
+MATERIO2=DEFI_MATERIAU(  ELAS=_F( RHO = 0.,     NU = 0.,   E = 1.E15))
+
+#
+CHMAT=AFFE_MATERIAU(  MAILLAGE=MAYA,AFFE=(
+                              _F( TOUT = 'OUI',      MATER = MATERIO1),
+                              _F( GROUP_MA = 'RIGIDE', MATER = MATERIO2)))
+
+#
+BARRE=AFFE_MODELE(  MAILLAGE=MAYA,
+                            AFFE=_F( TOUT = 'OUI',
+                                  MODELISATION = 'POU_D_E',
+                                  PHENOMENE = 'MECANIQUE'))
+
+#
+CARA=AFFE_CARA_ELEM(  MODELE=BARRE,
+                           POUTRE=_F(
+       GROUP_MA = 'TOUT',
+    SECTION = 'CERCLE',
+                                   CARA = ('R', 'EP',),  VALE = (0.1, 0.01,)))
+
+#
+###
+###### CHAQUE BARRE EST IDENTIQUE => UNE SEULE SOUS-STRUCTURE
+###
+#
+GUIDAGE=AFFE_CHAR_MECA(    MODELE=BARRE,DDL_IMPO=(
+                           _F( TOUT = 'OUI',
+                                     DX = 0., DZ = 0., DRX = 0., DRY = 0.),
+                           _F( GROUP_NO = 'L1',  DY = 0., DRZ = 0.)))
+
+#
+CHARGE=AFFE_CHAR_MECA(    MODELE=BARRE,
+                           DDL_IMPO=_F( GROUP_NO = 'L2',  DY = 0., DRZ = 0.))
+
+#
+CHARTRAN=AFFE_CHAR_MECA(        MODELE=BARRE,
+                           FORCE_NODALE=_F( NOEUD = 'N8',  FY = 1000.))
+
+#
+K_ELEM=CALC_MATR_ELEM(      MODELE=BARRE,
+                             CARA_ELEM=CARA,
+                            CHAM_MATER=CHMAT,
+                               OPTION='RIGI_MECA',
+                               CHARGE=(GUIDAGE,  CHARGE,))
+
+#
+M_ELEM=CALC_MATR_ELEM(      MODELE=BARRE,
+                             CARA_ELEM=CARA,
+                            CHAM_MATER=CHMAT,
+                               OPTION='MASS_MECA',
+                               CHARGE=(GUIDAGE,  CHARGE,))
+
+#
+V_ELEM=CALC_VECT_ELEM( OPTION='CHAR_MECA',
+                            CHARGE=CHARTRAN)
+
+#
+NUM=NUME_DDL(  MATR_RIGI=K_ELEM)
+
+#
+K_ASSE=ASSE_MATRICE(  MATR_ELEM=K_ELEM,
+                           NUME_DDL=NUM)
+
+#
+M_ASSE=ASSE_MATRICE(  MATR_ELEM=M_ELEM,
+                           NUME_DDL=NUM)
+
+#
+V_ASSE=ASSE_VECTEUR(  VECT_ELEM=V_ELEM,
+                           NUME_DDL=NUM)
+
+#
+MODES=CALC_MODES(MATR_RIGI=K_ASSE,
+                 MATR_MASS=M_ASSE,
+                 CALC_FREQ=_F(NMAX_FREQ=5,
+                              ),
+                 )
+
+
+#
+INTERF1=DEFI_INTERF_DYNA(   NUME_DDL=NUM,
+                             INTERFACE=_F( NOM = 'LIAI1',
+                                        TYPE = 'CRAIGB',
+                                        MASQUE = ('DX', 'DZ', 'DRX', 'DRY',),
+                                        GROUP_NO = 'L2')
+                              )
+
+#
+BAMO1=DEFI_BASE_MODALE( CLASSIQUE=_F( INTERF_DYNA = INTERF1,
+                                        MODE_MECA = MODES,
+                                        NMAX_MODE = 10)
+                              )
+
+#
+MACRO1=MACR_ELEM_DYNA(  BASE_MODALE=BAMO1, )
+
+#
+INTERF2=DEFI_INTERF_DYNA(   NUME_DDL=NUM,INTERFACE=(
+                             _F( NOM = 'LIAI2',
+                                        TYPE = 'CRAIGB',
+                                        MASQUE = ('DX', 'DZ', 'DRX', 'DRY',),
+                                        GROUP_NO = 'L2'),
+                             _F( NOM = 'LIAI3',
+                                        TYPE = 'CRAIGB',
+                                        MASQUE = ('DX', 'DZ', 'DRX', 'DRY',),
+                                        GROUP_NO = 'L1'))
+                             )
+
+#
+BAMO2=DEFI_BASE_MODALE( CLASSIQUE=_F( INTERF_DYNA = INTERF2,
+                                        MODE_MECA = MODES,
+                                        NMAX_MODE = 10)
+                             )
+
+#
+MACRO2=MACR_ELEM_DYNA(  BASE_MODALE=BAMO2, )
+
+#
+###
+###### MODELE GENERALISE :
+###
+#
+MODEGE=DEFI_MODELE_GENE( SOUS_STRUC=(_F( NOM = 'BARRE1',
+                                         MACR_ELEM_DYNA = MACRO1,
+                                         ANGL_NAUT = (0., 0., 0.,),
+                                         TRANS=(0.,0.,0.),),
+                             _F( NOM = 'BARRE2',
+                                         MACR_ELEM_DYNA = MACRO2,
+                                         ANGL_NAUT = (0., 0., 0.,),
+                                         TRANS=(0.,0.2,0.),),
+                             _F( NOM = 'BARRE3',
+                                         MACR_ELEM_DYNA = MACRO1,
+                                         TRANS=(0.,0.4,0.),
+                                         ANGL_NAUT = (0., 0., 180.,))),
+                          LIAISON=(
+                                _F( SOUS_STRUC_1 = 'BARRE1',
+                                         SOUS_STRUC_2 = 'BARRE2',
+                                         INTERFACE_1 = 'LIAI1',
+                                         INTERFACE_2 = 'LIAI3'),
+                                _F( SOUS_STRUC_1 = 'BARRE2',
+                                         SOUS_STRUC_2 = 'BARRE3',
+                                         INTERFACE_1 = 'LIAI2',
+                                         INTERFACE_2 = 'LIAI1')))
+
+#
+NUMEGE=NUME_DDL_GENE(  MODELE_GENE=MODEGE)
+
+#
+K_GENE=ASSE_MATR_GENE(  NUME_DDL_GENE=NUMEGE,
+                                  OPTION='RIGI_GENE')
+
+#
+M_GENE=ASSE_MATR_GENE(  NUME_DDL_GENE=NUMEGE,
+                                  OPTION='MASS_GENE')
+
+#
+F_GENE=ASSE_VECT_GENE(    NUME_DDL_GENE=NUMEGE,
+                           CHAR_SOUS_STRUC=_F( SOUS_STRUC = 'BARRE1',
+                                            VECT_ASSE = V_ASSE))
+
+#
+###
+###### CALCUL MODAL :
+###
+#
+RESGEN=CALC_MODES(MATR_RIGI=K_GENE,
+                  MATR_MASS=M_GENE,
+                  CALC_FREQ=_F(NMAX_FREQ=15,
+                               ),
+                  )
+
+
+#
+SQUEL=DEFI_SQUELETTE(  MODELE_GENE=MODEGE,SOUS_STRUC=(
+                            _F( NOM = 'BARRE1',  TOUT = 'OUI'),
+                            _F( NOM = 'BARRE2',  TOUT = 'OUI'),
+                            _F( NOM = 'BARRE3',  TOUT = 'OUI')))
+
+#
+MODGLO=REST_SOUS_STRUC(   RESU_GENE=RESGEN,
+                             SQUELETTE=SQUEL)
+
+#
+MODSST=REST_SOUS_STRUC(   RESU_GENE=RESGEN,
+                           SOUS_STRUC='BARRE2')
+
+#
+###
+###### PROJECTIONS SUR BASE MODALE :
+###
+#
+NUMEMODE=NUME_DDL_GENE(       BASE=RESGEN,
+                           STOCKAGE='DIAG')
+
+#
+K_PROJ=PROJ_MATR_BASE(            BASE=RESGEN,
+                             NUME_DDL_GENE=NUMEMODE,
+                            MATR_ASSE_GENE=K_GENE)
+
+#
+M_PROJ=PROJ_MATR_BASE(            BASE=RESGEN,
+                             NUME_DDL_GENE=NUMEMODE,
+                            MATR_ASSE_GENE=M_GENE)
+
+#
+F_PROJ=PROJ_VECT_BASE(            BASE=RESGEN,
+                             NUME_DDL_GENE=NUMEMODE,
+                            VECT_ASSE_GENE=F_GENE, TYPE_VECT='FORC')
+
+#
+# DEFINITION DE L'OBSTACLE
+#
+OBSTACLE=DEFI_OBSTACLE( TYPE='BI_PLAN_Y')
+
+#
+###
+###### CALCULS TRANSITOIRES SUR BASE MODALE
+###
+#
+
+LIST_R  =DEFI_LIST_REEL(DEBUT=0., INTERVALLE=_F( JUSQU_A = 1., NOMBRE = 10))
+LISTINST=DEFI_LIST_REEL(DEBUT=0., INTERVALLE=_F( JUSQU_A = 1.,NOMBRE = 250))
+
+TRAN_GE1=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DIFF_CENTRE',),
+                             MATR_MASS=M_PROJ,
+                             MATR_RIGI=K_PROJ,
+                                EXCIT=_F(VECT_ASSE_GENE = F_PROJ,
+                                       COEF_MULT = 1000.),
+                             INCREMENT=_F(  INST_INIT = 0.,
+                                         INST_FIN = 1.0,
+                                         PAS = 2.E-4),
+                            ARCHIVAGE=_F( PAS_ARCH = 1.E8, LIST_INST=LISTINST),
+                            COMPORTEMENT=(
+                                    _F(RELATION='DIS_CHOC', 
+                                       INTITULE = 'CHOC1',                                  
+                                       SOUS_STRUC_1 = 'BARRE1',
+                                       NOEUD_1 = 'N8',
+                                       SOUS_STRUC_2 = 'BARRE2',
+                                       GROUP_NO_2 = 'GROUP1',
+                                       OBSTACLE = OBSTACLE,
+                                       REPERE = 'GLOBAL',
+                                       NORM_OBST = (1., 0., 0.,),
+                                       DIST_1 = 0.0995,
+                                       DIST_2 = 0.0995,
+                                       RIGI_NOR = 1.E+8),
+                                    _F(RELATION='DIS_CHOC', 
+                                       INTITULE = 'CHOC2',                                  
+                                       SOUS_STRUC_1 = 'BARRE2',
+                                       GROUP_NO_1 = 'GROUP1',
+                                       SOUS_STRUC_2 = 'BARRE3',
+                                       NOEUD_2 = 'N8',
+                                       OBSTACLE = OBSTACLE,
+                                       REPERE = 'BARRE3',
+                                       ORIG_OBST = (0.5, 0.1, 0.,),
+                                       NORM_OBST = (1., 0., 0.,),
+                                       DIST_1 = 0.0995,
+                                       DIST_2 = 0.0995,
+                                       RIGI_NOR = 1.E+8)), INFO=2
+                            )
+
+#
+TRAN_GE2=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='DEVOGE', TOLERANCE=1.E-9, PAS_MAXI=2.E-5),
+                             MATR_MASS=M_PROJ,
+                             MATR_RIGI=K_PROJ,
+                                EXCIT=_F(VECT_ASSE_GENE = F_PROJ,
+                                       COEF_MULT = 1000.),
+                             INCREMENT=_F(  INST_INIT = 0.,
+                                         INST_FIN = 1.0,
+                                         PAS = 1.E-5),
+                            ARCHIVAGE=_F( PAS_ARCH = 1.E8, LIST_INST=LISTINST),
+                            COMPORTEMENT=(  _F(RELATION='DIS_CHOC', 
+                                               INTITULE = 'CHOC1',                                  
+                                               SOUS_STRUC_1 = 'BARRE1',
+                                               NOEUD_1 = 'N8',
+                                               SOUS_STRUC_2 = 'BARRE2',
+                                               NOEUD_2 = 'N8',
+                                               OBSTACLE = OBSTACLE,
+                                               NORM_OBST = (1., 0., 0.,),
+                                               DIST_1 = 0.0995,
+                                               DIST_2 = 0.0995,
+                                               RIGI_NOR = 1.E+8),
+        
+                                            _F(RELATION='DIS_CHOC', 
+                                               INTITULE = 'CHOC2',                                  
+                                               SOUS_STRUC_1 = 'BARRE2',
+                                               GROUP_NO_1 = 'GROUP1',
+                                               SOUS_STRUC_2 = 'BARRE3',
+                                               GROUP_NO_2 = 'GROUP1',
+                                               OBSTACLE = OBSTACLE,
+                                               NORM_OBST = (1., 0., 0.,),
+                                               DIST_1 = 0.0995,
+                                               DIST_2 = 0.0995,
+                                               RIGI_NOR = 1.E+8)), INFO=2
+                            )
+
+#
+TRAN_GE3=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+                             SCHEMA_TEMPS=_F(SCHEMA='ADAPT_ORDRE2',
+                                         PAS_MAXI = 1.E-4,),
+                             MATR_MASS=M_PROJ,
+                             MATR_RIGI=K_PROJ,
+                             EXCIT=_F(VECT_ASSE_GENE = F_PROJ,
+                                       COEF_MULT = 1000.),
+                             INCREMENT=_F(  INST_INIT = 0.,
+                                         INST_FIN = 1.0,
+                                         PAS = 1.E-4),
+                            ARCHIVAGE=_F( PAS_ARCH = 1.E8, LIST_INST=LISTINST),
+                            COMPORTEMENT=(
+                                    _F(RELATION='DIS_CHOC', 
+                                       INTITULE = 'CHOC1',
+                                       SOUS_STRUC_1 = 'BARRE1',
+                                       NOEUD_1 = 'N8',
+                                       SOUS_STRUC_2 = 'BARRE2',
+                                       NOEUD_2 = 'N8',
+                                       OBSTACLE = OBSTACLE,
+                                       NORM_OBST = (1., 0., 0.,),
+                                       DIST_1 = 0.0995,
+                                       DIST_2 = 0.0995,
+                                       RIGI_NOR = 1.E+8),
+                                    _F(RELATION='DIS_CHOC', 
+                                       INTITULE = 'CHOC2',
+                                       SOUS_STRUC_1 = 'BARRE2',
+                                       NOEUD_1 = 'N8',
+                                       SOUS_STRUC_2 = 'BARRE3',
+                                       NOEUD_2 = 'N8',
+                                       OBSTACLE = OBSTACLE,
+                                       NORM_OBST = (1., 0., 0.,),
+                                       DIST_1 = 0.0995,
+                                       DIST_2 = 0.0995,
+                                       RIGI_NOR = 1.E+8)), INFO=2
+                            )
+
+#
+TRAN1=REST_GENE_PHYS(   RESU_GENE=TRAN_GE1,
+                            TOUT_CHAM='OUI',
+                             LIST_INST=LIST_R,
+                             INTERPOL='LIN',
+                             MODE_MECA=MODGLO )
+
+#
+TRAN2=REST_GENE_PHYS(   RESU_GENE=TRAN_GE2,
+                            TOUT_CHAM='OUI',
+                             LIST_INST=LIST_R,
+                             INTERPOL='LIN',
+                             MODE_MECA=MODGLO )
+
+#
+TRAN3=REST_GENE_PHYS(   RESU_GENE=TRAN_GE3,
+                            TOUT_CHAM='OUI',
+                             LIST_INST=LIST_R,
+                             INTERPOL='LIN',
+                             MODE_MECA=MODGLO )
+
+#
+TEST_RESU(RESU=(
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0164294825003,
+                  VALE_REFE=0.016429482567223,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4, 
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0254158331165,
+                  VALE_REFE=0.025415803241973,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.011167695875,
+                  VALE_REFE=0.011167695859929,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0442640537157,
+                  VALE_REFE=0.044264003005645,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00589756730618,
+                  VALE_REFE=5.8975672775191E-3,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN1,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.104582604485,
+                  VALE_REFE=0.10458258732287,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.016426418061,
+                  VALE_REFE=0.016426416903430,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0254154584012,
+                  VALE_REFE=0.025415533783830,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0111626795019,
+                  VALE_REFE=0.011162681225834,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.044119710709,
+                  VALE_REFE=0.044119727748667,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00588735619197,
+                  VALE_REFE=5.887355556664E-3,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN2,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.104550179119,
+                  VALE_REFE=0.10454997181750,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0164265481653,
+                  VALE_REFE=0.016426941407286,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=5.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO8',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0254169055226,
+                  VALE_REFE=0.025410985444505,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=5.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.011162825563,
+                  VALE_REFE=0.011163261855857,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO23',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.0441568943882,
+                  VALE_REFE=0.044259071807201,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=5.E-3,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='DEPL',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.00588729548172,
+                  VALE_REFE=5.8871162027632E-3,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=1.E-4,               
+                  ),
+               _F(INST=1.0,
+                  RESULTAT=TRAN3,
+                  NOM_CHAM='VITE',
+                  NOEUD='NO38',
+                  NOM_CMP='DY',
+                  VALE_CALC=0.104557330296,
+                  VALE_REFE=0.10458711265535,
+                  REFERENCE = 'AUTRE_ASTER',
+                  PRECISION=5.E-4,               
+                  ),))
+
+#
+## RESTITUTION D'UN DEPLACEMENT - ACTUELLEMENT, ELLE NE PEUT ETRE
+## REALISEE QU'EN 2 ETAPES APRES RESTITUTION SUR UNE SOUS-STRUCTURE
+##                                               ------------------
+#
+#
+TRAN4=REST_GENE_PHYS(   RESU_GENE=TRAN_GE1,
+                            TOUT_CHAM='OUI',
+                             LIST_INST=LISTINST,
+                             INTERPOL='LIN',
+                             MODE_MECA=MODSST )
+
+#
+FONC1=RECU_FONCTION(   RESULTAT=TRAN4,
+                        NOM_CHAM='DEPL',
+                        LIST_INST=LISTINST,
+                            NOEUD='N8',
+                             NOM_CMP='DY',
+                        INTERPOL='LIN'
+                       )
+
+#
+## RESTITUTION D'UN PARAMETRE DE CHOC
+#
+FONC2=RECU_FONCTION(   RESU_GENE=TRAN_GE1,
+                        NOEUD_CHOC='N8',
+                       SOUS_STRUC='BARRE2',
+                         LIST_PARA=LISTINST,
+                           PARA_X='INST',
+                           PARA_Y='FN',
+                         INTITULE='CHOC1')
+
+#
+## IMPRESSION D'UN DEPLACEMENT
+#
+IMPR_FONCTION(FORMAT='XMGRACE',
+              PILOTE='POSTSCRIPT',
+              TITRE='EULER - DY NOEUD N8',
+              LEGENDE_X='TEMPS(S)',
+              LEGENDE_Y='DEPLACEMENT(M)',
+              COURBE=_F( FONCTION = FONC1))
+
+#
+## IMPRESSION D'UN PARAMETRE DE CHOC
+#
+IMPR_FONCTION(FORMAT='XMGRACE', UNITE=30,
+              PILOTE='POSTSCRIPT',
+              TITRE='EULER - FN NOEUD N8',
+              LEGENDE_X='TEMPS(S)',
+              LEGENDE_Y='DEPLACEMENT(M)',
+              COURBE=_F( FONCTION = FONC2),)
+
+#
+## CALCULS STATISTIQUES
+#
+TABLE=POST_DYNA_MODA_T(  RESU_GENE=TRAN_GE1,
+                      CHOC=_F( INST_INIT = 0.,
+                            INST_FIN = 1.,
+                            NB_BLOC = 10,
+                            SEUIL_FORCE = 0.,
+                            DUREE_REPOS = 0.))
+
+#
+FIN()
+#

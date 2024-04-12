@@ -1,0 +1,312 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2018 - EDF R&D - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+DEBUT(CODE=_F(NIV_PUB_WEB='INTERNET',),PAR_LOT='OUI',DEBUG=_F(SDVERI='OUI'))
+
+tfin = 7
+nbpas =  10*tfin
+nbarch = nbpas/2
+
+young = 100
+nu=0.0
+tenac = 0.9
+sigc  = 3
+pen=0.00001
+
+deply = 1.0
+deplx = 0.0
+deplz = 0.0
+
+
+
+MA = LIRE_MAILLAGE(FORMAT='GMSH',
+                   UNITE=19,
+                   )
+
+MA  =  DEFI_GROUP(
+  reuse  = MA,
+  MAILLAGE = MA,
+
+  CREA_GROUP_MA = (
+
+# VOLUME DCB GAUCHE
+    _F(NOM = 'DCB_1',   GROUP_MA = 'GM1015'),
+# VOLUME DCB DROITE
+    _F(NOM = 'DCB_2',   GROUP_MA = 'GM1016'),
+# VOLUME DCB JOINT
+    _F(NOM = 'DCB_J',   GROUP_MA = 'GM1020'),
+
+# SURFACES
+    _F(NOM = 'DCB_G',   GROUP_MA = 'GM1012'),
+    _F(NOM = 'DCB_D',   GROUP_MA = 'GM1013'),
+    _F(NOM = 'DCB2_B',   GROUP_MA = 'GM1014'),
+    _F(NOM = 'JOINT_B', GROUP_MA = 'GM1019'),
+    _F(NOM = 'JOINT_H', GROUP_MA = 'GM1014'),
+
+# LIGNE BAS DE LA FACE DCB GAUCHE BAS
+    _F(NOM = 'DCB_GB'  ,   GROUP_MA = 'GM1018'),
+   ),
+
+   CREA_GROUP_NO = (
+    _F(NOM = 'JOINT_B', GROUP_MA = 'GM1019'),
+    _F(NOM = 'NO7',     GROUP_MA = 'GM954'),
+    _F(NOM = 'DCB_GB',  GROUP_MA = 'GM1018'),
+
+  )
+)
+
+
+MA=MODI_MAILLAGE(reuse =MA,
+                   MAILLAGE=MA,
+                   ORIE_FISSURE=_F(GROUP_MA='DCB_J'),
+                   INFO=2
+                   )
+
+
+IMPR_RESU(
+  FORMAT  = 'RESULTAT',
+  RESU=_F(MAILLAGE=MA),
+  UNITE=20
+         )
+
+
+MO=AFFE_MODELE(
+
+                MAILLAGE=MA,
+                AFFE= (
+                _F(
+                        GROUP_MA = ('DCB_1','DCB_2','DCB_G','DCB_GB'),
+                        PHENOMENE = 'MECANIQUE',
+                        MODELISATION = '3D'
+                     ),
+                _F(
+                        GROUP_MA = 'DCB_J',
+                        PHENOMENE = 'MECANIQUE',
+                        MODELISATION = '3D_JOINT'
+                       ),
+
+                 )
+              )
+
+ACIER=DEFI_MATERIAU(
+
+     ELAS=_F(
+              E =  young,
+              NU = nu),
+     RUPT_FRAG = _F(
+                     GC = tenac,
+                     SIGM_C = sigc,
+                     PENA_ADHERENCE=pen,
+                    )
+            )
+
+
+CM=AFFE_MATERIAU(
+
+               MAILLAGE=MA,
+               AFFE=_F(
+                       GROUP_MA = ('DCB_1','DCB_2','DCB_J'),
+                       MATER = ACIER),
+              )
+
+
+
+SYMETRIE = AFFE_CHAR_MECA(
+  MODELE = MO,
+  DDL_IMPO = (
+               _F(GROUP_NO='JOINT_B',DY=0)
+             ))
+
+
+TRACTION = AFFE_CHAR_MECA(
+ MODELE = MO,
+
+  FACE_IMPO= (
+      _F(GROUP_MA  = 'DCB_GB' , DY = deply ,
+                                DX = deplx ,
+                                DZ = deplz ),
+         ))
+
+
+L_INST=DEFI_LIST_REEL(
+
+                     DEBUT   = -1,
+     INTERVALLE=(
+      _F( JUSQU_A = 0,        NOMBRE = 1 ),
+      _F( JUSQU_A = tfin  ,   NOMBRE = nbpas ),
+
+      )
+     )
+
+INS_ARCH=DEFI_LIST_REEL(
+
+                     DEBUT   = -1,
+     INTERVALLE=(
+      _F( JUSQU_A = 0,        NOMBRE = 1 ),
+      _F( JUSQU_A = tfin  ,   NOMBRE = nbarch),
+
+      )
+     )
+
+
+
+FCT = DEFI_FONCTION(
+  NOM_PARA = 'INST',
+  VALE     = (-1,0 ,  0,0.0001,tfin,tfin  ),
+                )
+
+
+
+U=STAT_NON_LINE(
+  MODELE     = MO,
+  CHAM_MATER = CM,
+  EXCIT      = (
+                 _F(CHARGE = SYMETRIE),
+                 _F(CHARGE = TRACTION , FONC_MULT = FCT),
+               ),
+  COMPORTEMENT  = (
+                _F(RELATION = 'ELAS'      , GROUP_MA = ('DCB_1','DCB_2')),
+                _F(RELATION = 'CZM_LIN_REG',    GROUP_MA = 'DCB_J', ),
+                ),
+  INCREMENT  = _F(LIST_INST = L_INST, INST_FIN = 0.),
+  CONVERGENCE= _F(ITER_GLOB_MAXI = 5),
+  NEWTON     = _F(MATRICE = 'TANGENTE', REAC_ITER=1),
+  )
+
+
+
+U=STAT_NON_LINE(reuse=U,
+  ETAT_INIT  = _F(EVOL_NOLI = U),
+  MODELE     = MO,
+  CHAM_MATER = CM,
+  EXCIT      = (
+                 _F(CHARGE = SYMETRIE),
+                 _F(CHARGE = TRACTION , TYPE_CHARGE = 'FIXE_PILO'),
+               ),
+  COMPORTEMENT  = (
+                _F(RELATION = 'ELAS'      , GROUP_MA = ('DCB_1','DCB_2')),
+                _F(RELATION = 'CZM_LIN_REG',    GROUP_MA = 'DCB_J', ),
+                ),
+  INCREMENT  = _F(LIST_INST = L_INST,
+                  INST_FIN = tfin,
+                 ),
+  NEWTON     = _F(MATRICE    = 'TANGENTE'  , REAC_ITER=1 ,
+                   ),
+
+  PILOTAGE   = _F(
+                  SELECTION = 'RESIDU',
+                  TYPE = 'PRED_ELAS',
+                  GROUP_MA = 'DCB_J',
+                  COEF_MULT = 1,
+                  ETA_PILO_R_MIN = 0.),
+
+  CONVERGENCE = _F(
+                   RESI_GLOB_MAXI = 5.E-5,
+                   ITER_GLOB_MAXI = 20,
+                  ),
+
+  ARCHIVAGE = _F(
+    LIST_INST     = INS_ARCH
+  ))
+
+IMPR_RESU(FORMAT='MED',
+          RESU=_F(RESULTAT=U,
+                  NOM_CHAM='SIEF_ELGA',
+                  GROUP_MA='DCB_J',),)
+
+U = CALC_CHAMP(reuse = U,
+
+
+  RESULTAT = U,
+  FORCE='FORC_NODA',
+  GROUP_MA='DCB_1'
+  )
+
+
+# DEPLACEMENT PILOTE
+UPILO = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'U_PILOTE',
+   OPERATION    = 'EXTRACTION',
+   GROUP_NO     = 'NO7',
+   NOM_CHAM     = 'DEPL',
+   NOM_CMP      = 'DY',
+   RESULTAT     =  U,
+   TOUT_ORDRE   = 'OUI',
+    ))
+
+# FORCE RESULTANTE DANS LA DIRECTION Y:
+FRES = POST_RELEVE_T(
+ ACTION = _F(
+   INTITULE     = 'F_RESULTANTE',
+   OPERATION    = 'EXTRACTION',
+   GROUP_NO     = 'DCB_GB',
+   NOM_CHAM     = 'FORC_NODA',
+   RESULTANTE   = 'DY',
+   RESULTAT     =  U,
+   TOUT_ORDRE   = 'OUI',
+    ))
+
+
+TEST_RESU(RESU=_F(GROUP_NO='NO7',
+                  INST=3.0,
+                  RESULTAT=U,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=4.618671260,),
+          )
+
+TEST_TABLE(VALE_CALC=7.131642915,
+           NOM_PARA='DY',
+           TABLE=FRES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=3.0,),
+           )
+
+TEST_RESU(RESU=_F(GROUP_NO='NO7',
+                  INST=5.0,
+                  RESULTAT=U,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=6.904142377,),
+          )
+
+TEST_TABLE(VALE_CALC=5.831866022,
+           NOM_PARA='DY',
+           TABLE=FRES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=5.0,),
+           )
+
+TEST_RESU(RESU=_F(GROUP_NO='NO7',
+                  INST=7.0,
+                  RESULTAT=U,
+                  NOM_CHAM='DEPL',
+                  NOM_CMP='DY',
+                  VALE_CALC=9.625956831,),
+          )
+
+TEST_TABLE(VALE_CALC=4.945223815,
+           NOM_PARA='DY',
+           TABLE=FRES,
+           FILTRE=_F(NOM_PARA='INST',
+                     VALE=7.0,),
+           )
+
+FIN(FORMAT_HDF='OUI')

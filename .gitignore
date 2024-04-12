@@ -1,2 +1,4 @@
 /.vs
 .vscode
+/code_aster/aster/*.gz
+/code_aster/aster/*.tgz

@@ -110,11 +110,13 @@ RUN mkdir mumps && tar xf ${MUMPS_SRC} -C mumps --strip-components 1 && \
 
 # Build parallel aster
 COPY --chown=aster:aster data/cfg.py /tmp/cfg.py
+# This line copies the path file into the temp folder that is created
 COPY --chown=aster:aster data/aster_zs.patch /tmp/aster_zs.patch
 RUN . ${ASTER_ROOT}/${ASTER_VER}/share/aster/profile_mfront.sh && \
     . ${ASTER_ROOT}/etc/codeaster/profile.sh && \
     mkdir aster && tar xf ${ASTER_SRC} -C aster --strip-components 1 && \
-    patch -s -p0 < aster_zs.patch && \
+    #This line applies the changes as a patch 
+    patch -s -p0 < aster_zs.patch && \   
     cd aster && \
     export INCLUDES="/usr/include/superlu \
     ${PUBLIC}/hdf5-${HDF5_VER}/include \
@@ -141,6 +143,8 @@ RUN . ${ASTER_ROOT}/${ASTER_VER}/share/aster/profile_mfront.sh && \
     # --use-config-dir=/tmp --use-config=cfg --prefix=${ASTER_ROOT}/${ASTER_VER}_mpi --install-tests --enable-mpi && \
     ./waf build && \
     ./waf install 
+#This is commented to not remove the temp folder so that i can check if the changes were done
+# to go to tmp folder type "cd /tmp/"
 # RUN  rm -rf /tmp/*
 
 # Add a welcome message and a script for testcases

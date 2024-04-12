@@ -2,7 +2,7 @@
 
 Welcome to Code_Aster!
 
-This image provides a GCC-based build of the 14.4 version of Code_Aster containing the following
+This image provides a GCC-based build of the 14.6 version of Code_Aster containing the following
 components:
 
 - hdf5 1.10.3

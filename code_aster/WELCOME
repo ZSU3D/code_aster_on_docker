@@ -1,4 +1,4 @@
-# Code_Aster 14.4
+# Code_Aster 14.6
 
 Welcome to Code_Aster!
 
@@ -14,7 +14,7 @@ components:
 - mfront 3.2.1
 - mumps 5.1.2
 - homard 11.12
-- aster 14.4.0
+- aster 14.6.0
 
 To execute an "export" file, just run
 

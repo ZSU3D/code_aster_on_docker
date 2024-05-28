@@ -18,4 +18,4 @@ components:
 
 To execute an "export" file, just run
 
-    as_run foo.export
+    as_run test.export

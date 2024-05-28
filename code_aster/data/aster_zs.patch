@@ -14,20 +14,10 @@
      nomc(22)= 'RI_CYC  '
      nomc(23)= 'DILA    '
      nomc(24)= 'PTRAC   '
-+    nomc(25)= 'DFUNC   '
++    nomc(25)= 'DRATE   '
  !af fin
  !
      materf(:,:)=0.d0
 
 
---- aster/bibfor/comport/hujpxd.F90
-+++ aster/aster-14.6.0/bibfor/comport/hujpxd.F90
-@@ -68,7 +68,7 @@ subroutine hujpxd(k, mater, sig, vin, prox,&
-     pcref = mater(7, 2)
-     pa = mater(8, 2)
-     ptrac = mater(21,2)
--    pcr = pcref*exp(-beta*epsvp)
-+    pcr = 100*pcref*exp(-beta*epsvp)
-     m = sin(degr*phi)
- !
- !     
+
